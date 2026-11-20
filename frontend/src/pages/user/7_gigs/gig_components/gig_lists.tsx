@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
-import { Star, Clock, Bookmark, Users, Flag, Edit2, Wrench, ShoppingCart, Heart, Send, CircleCheck, TrendingUp, Layers, Check, Sparkles } from "lucide-react";
+import { Star, Clock, Bookmark, Users, Flag, Edit2, Wrench, ShoppingCart, Heart, Send, CircleCheck, TrendingUp, Layers, Check, Sparkles, Flame } from "lucide-react";
 import { computeGigRankingBreakdown } from "../gig_ranking";
+import { NewListingBadge } from "./NewListingBadge";
 import { useNavigate, useOutletContext } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { CreditIcon } from "@/components/ui/credit-icon";
@@ -244,11 +245,15 @@ export const GigList: React.FC<GigListProps> = ({
                         </div>
                       )}
 
-                      {/* Top-left: Orders and Ordered status tag (matches Jobs Proposals & Applied tag) */}
+                      {/* Top-left: Orders, Completed, and Ordered status tag */}
                       <div className="absolute top-2 left-2 flex items-center gap-1.5 z-10 flex-wrap">
                         <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-black/50 backdrop-blur-sm text-white text-[10px] font-semibold border border-white/10">
                           <ShoppingCart className="h-3 w-3" />
                           <span>{gig.ordersCount || 0} Orders</span>
+                        </div>
+                        <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-black/50 backdrop-blur-sm text-white text-[10px] font-semibold border border-white/10">
+                          <CircleCheck className="h-3 w-3 text-emerald-400" />
+                          <span>{gig.completedOrdersCount || 0} Completed</span>
                         </div>
                         {gig.hasPendingOrder && (
                           <div className="flex items-center gap-1 px-2 py-1 rounded-md bg-emerald-600/90 backdrop-blur-sm text-white text-[10px] font-bold border border-emerald-400/30 shadow-xs">
@@ -258,27 +263,24 @@ export const GigList: React.FC<GigListProps> = ({
                         )}
                       </div>
 
-                      {/* Bottom-left Tiers Count Tag (matches Jobs Team/Individual tag) */}
-                      {gig.tiers && gig.tiers.length > 0 && (
-                        <div className="absolute bottom-2 left-2 z-10">
+                      {/* Bottom-left Tiers Count & Service Rating Tags */}
+                      <div className="absolute bottom-2 left-2 z-10 flex items-center gap-1.5">
+                        {gig.tiers && gig.tiers.length > 0 && (
                           <span className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-white/95 dark:bg-black/80 text-gray-700 dark:text-zinc-300 border border-gray-200 dark:border-white/15 backdrop-blur-md text-[9px] font-semibold shadow-xs">
                             <Layers className="h-2.5 w-2.5 text-gray-500 dark:text-zinc-400" />
                             <span>{gig.tiers.length} {gig.tiers.length === 1 ? "Tier" : "Tiers"}</span>
                           </span>
-                        </div>
-                      )}
-
-                      {/* Bottom-right Service Rating Badge */}
-                      <div className="absolute bottom-2 right-2 z-10 flex items-center gap-1.5">
-                        <div className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-black/60 backdrop-blur-sm text-white text-[10px] font-semibold border border-white/15 shadow-xs">
-                          <Star className={`h-3 w-3 ${hasServiceRating ? "fill-yellow-400 text-yellow-400" : "fill-gray-400 text-gray-400"}`} />
-                          <span className={hasServiceRating ? "text-yellow-400 font-bold" : "text-gray-300 dark:text-zinc-400"}>
-                            {hasServiceRating ? `${gig.clientRating} (${gig.ratingCount})` : rankInfo.isNewListing ? "New" : "N/A"}
+                        )}
+                        <span className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-white/95 dark:bg-black/80 text-gray-700 dark:text-zinc-300 border border-gray-200 dark:border-white/15 backdrop-blur-md text-[9px] font-semibold shadow-xs">
+                          <Star className={`h-2.5 w-2.5 ${hasServiceRating ? "fill-yellow-400 text-yellow-400" : "text-gray-500 dark:text-zinc-400"}`} />
+                          <span>
+                            {hasServiceRating ? `${gig.clientRating} (${gig.ratingCount})` : "No Rating"}
                           </span>
-                        </div>
+                        </span>
                       </div>
 
                       <div className="absolute top-2 right-2 flex items-center gap-1.5 z-10">
+                        {rankInfo.isNewListing && <NewListingBadge />}
                         {!gig.isOwnGig && !isGuestMode && (
                           <button
                             type="button"
@@ -487,11 +489,15 @@ export const GigList: React.FC<GigListProps> = ({
                     </div>
                   )}
 
-                  {/* Top-left: Orders and Ordered status tag (matches Jobs Proposals & Applied tag) */}
+                  {/* Top-left: Orders, Completed, and Ordered status tag */}
                   <div className="absolute top-2 left-2 flex items-center gap-1.5 z-10 flex-wrap">
                     <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-black/50 backdrop-blur-sm text-white text-[10px] font-semibold border border-white/10">
                       <ShoppingCart className="h-3 w-3" />
                       <span>{gig.ordersCount || 0} Orders</span>
+                    </div>
+                    <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-black/50 backdrop-blur-sm text-white text-[10px] font-semibold border border-white/10">
+                      <CircleCheck className="h-3 w-3 text-emerald-400" />
+                      <span>{gig.completedOrdersCount || 0} Completed</span>
                     </div>
                     {gig.hasPendingOrder && (
                       <div className="flex items-center gap-1 px-2 py-1 rounded-md bg-emerald-600/90 backdrop-blur-sm text-white text-[10px] font-bold border border-emerald-400/30 shadow-xs">
@@ -501,27 +507,24 @@ export const GigList: React.FC<GigListProps> = ({
                     )}
                   </div>
 
-                  {/* Bottom-left Tiers Count Tag on Thumbnail */}
-                  {gig.tiers && gig.tiers.length > 0 && (
-                    <div className="absolute bottom-2 left-2 z-10">
+                  {/* Bottom-left Tiers Count & Service Rating Tags on Thumbnail */}
+                  <div className="absolute bottom-2 left-2 z-10 flex items-center gap-1.5">
+                    {gig.tiers && gig.tiers.length > 0 && (
                       <span className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-white/95 dark:bg-black/80 text-gray-700 dark:text-zinc-300 border border-gray-200 dark:border-white/15 backdrop-blur-md text-[9px] font-semibold shadow-xs">
                         <Layers className="h-2.5 w-2.5 text-gray-500 dark:text-zinc-400" />
                         <span>{gig.tiers.length} {gig.tiers.length === 1 ? "Tier" : "Tiers"}</span>
                       </span>
-                    </div>
-                  )}
-
-                  {/* Bottom-right Service Rating Badge */}
-                  <div className="absolute bottom-2 right-2 z-10 flex items-center gap-1.5">
-                    <div className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-black/60 backdrop-blur-sm text-white text-[10px] font-semibold border border-white/15 shadow-xs">
-                      <Star className={`h-3 w-3 ${hasServiceRating ? "fill-yellow-400 text-yellow-400" : "fill-gray-400 text-gray-400"}`} />
-                      <span className={hasServiceRating ? "text-yellow-400 font-bold" : "text-gray-300 dark:text-zinc-400"}>
-                        {hasServiceRating ? `${gig.clientRating} (${gig.ratingCount})` : rankInfo.isNewListing ? "New" : "N/A"}
+                    )}
+                    <span className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-white/95 dark:bg-black/80 text-gray-700 dark:text-zinc-300 border border-gray-200 dark:border-white/15 backdrop-blur-md text-[9px] font-semibold shadow-xs">
+                      <Star className={`h-2.5 w-2.5 ${hasServiceRating ? "fill-yellow-400 text-yellow-400" : "text-gray-500 dark:text-zinc-400"}`} />
+                      <span>
+                        {hasServiceRating ? `${gig.clientRating} (${gig.ratingCount})` : "No Rating"}
                       </span>
-                    </div>
+                    </span>
                   </div>
 
                   <div className="absolute top-2 right-2 flex items-center gap-1.5 z-10">
+                    {rankInfo.isNewListing && <NewListingBadge />}
                     {!gig.isOwnGig && !isGuestMode && (
                       <button
                         type="button"

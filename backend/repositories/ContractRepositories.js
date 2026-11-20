@@ -4,12 +4,22 @@ const {
     freezeContractEscrowForDispute,
     assertNoOpenContractDispute,
     getPendingPayoutContractDispute,
+    getPendingPayoutDisputesForContracts,
+    pendingPayoutDisputeVisible,
+    disputeRoundStartSql,
+    decisionsTableExists,
+    hasPendingContractDecision,
     isContractEnded,
     DISPUTE_FILING_WINDOW_DAYS,
     disputeFilingBlock,
 } = require('../lib/DisputeEscrow');
 const NotificationRepositories = require('./NotificationRepositories');
 const TeamProjectRepositories = require('./TeamProjectRepositories');
+const {
+    syncContractDisputeHold,
+    disputeHoldForContracts,
+    decisionsForContracts,
+} = require('./ContractDisputeHoldRepositories');
 
 async function sendJobOffer(clientIds, proposalId, rateCredits, startsAt, customMilestones = null) {
     const client = await pool.connect();
@@ -610,8 +620,10 @@ async function openDisputesForContracts(contractIds, viewerAccountIds) {
 /**
  * Whether the viewer may file a new dispute on each contract, under the same rules
  * `createContractDispute` enforces (an open dispute is reported separately as `active_dispute`):
- * { canFile, code, reason, endedAt, windowEndsAt, previousDispute }. `previousDispute` is the
- * viewer's own earlier case, so its id and number are theirs to see.
+ * { canFile, code, reason, endedAt, windowEndsAt, previousDispute, pendingPayout }.
+ * `previousDispute` is the viewer's own earlier case, so its id and number are theirs to see.
+ * `pendingPayout` is the case (by either side) whose ruled payout still holds the contract's
+ * credits; its id and number are included only when the viewer may open that case.
  */
 async function disputeFilingForContracts(contractIds, viewerAccountIds) {
     const map = new Map();
@@ -619,10 +631,16 @@ async function disputeFilingForContracts(contractIds, viewerAccountIds) {
     const viewers = [...new Set((viewerAccountIds || []).filter(Boolean).map(String))];
     if (!ids.length || !viewers.length) return map;
 
+    // Only disputes since both parties last chose to continue count toward "one per side".
+    const hasDecisions = await decisionsTableExists(pool);
+    const roundClause = hasDecisions ? `AND created_at > ${disputeRoundStartSql('disputes.contract_id')}` : '';
+
     let contractsRes;
     let previousRes;
+    let pendingPayouts;
+    let decisionsRes;
     try {
-        [contractsRes, previousRes] = await Promise.all([
+        [contractsRes, previousRes, pendingPayouts, decisionsRes] = await Promise.all([
             pool.query(`
                 SELECT
                     contract_id,
@@ -645,8 +663,17 @@ async function disputeFilingForContracts(contractIds, viewerAccountIds) {
                 WHERE contract_id = ANY($1::uuid[])
                   AND by_account_id = ANY($2::uuid[])
                   AND deleted_at IS NULL
+                  ${roundClause}
                 ORDER BY contract_id, created_at DESC
             `, [ids, viewers]),
+            getPendingPayoutDisputesForContracts(pool, ids),
+            hasDecisions
+                ? pool.query(
+                    `SELECT contract_id FROM contract_dispute_decisions
+                     WHERE contract_id = ANY($1::uuid[]) AND status = 'pending'`,
+                    [ids]
+                )
+                : Promise.resolve({ rows: [] }),
         ]);
     } catch (err) {
         // Before migration 1828800000000_contract-ended-at the column is missing; the contract
@@ -656,12 +683,18 @@ async function disputeFilingForContracts(contractIds, viewerAccountIds) {
     }
 
     const previousByContract = new Map(previousRes.rows.map((row) => [String(row.contract_id), row]));
+    const decisionPendingIds = new Set(decisionsRes.rows.map((row) => String(row.contract_id)));
     for (const row of contractsRes.rows) {
         const previous = previousByContract.get(String(row.contract_id)) || null;
+        const pending = pendingPayouts.get(String(row.contract_id)) || null;
+        const pendingVisible = pendingPayoutDisputeVisible(pending, viewers);
         const ended = isContractEnded(row.status);
         const block = disputeFilingBlock({
             previousDispute: previous,
             windowClosed: ended && Boolean(row.window_closed),
+            pendingPayout: pending,
+            decisionPending: !ended && decisionPendingIds.has(String(row.contract_id)),
+            viewerAccountIds: viewers,
         });
         map.set(String(row.contract_id), {
             canFile: !block,
@@ -677,6 +710,17 @@ async function disputeFilingForContracts(contractIds, viewerAccountIds) {
                     status: previous.status,
                     viewerRole: 'disputer',
                     filedByViewer: true,
+                }
+                : null,
+            pendingPayout: pending
+                ? {
+                    id: pendingVisible ? pending.dispute_id : null,
+                    number: pendingVisible ? pending.dispute_number || null : null,
+                    visibility: Boolean(pending.visibility),
+                    status: pending.status,
+                    filedByViewer: viewers.includes(String(pending.by_account_id)),
+                    payoutStatus: pending.payout_status,
+                    releaseAt: pending.release_at || null,
                 }
                 : null,
         });
@@ -892,14 +936,18 @@ async function getContractsByUserId(accountIds) {
     const res = await pool.query(query, [accountIds]);
     const rows = res.rows;
     const contractIds = rows.map((row) => row.contract_id);
-    const [disputes, filing] = await Promise.all([
+    const [disputes, filing, holds, decisions] = await Promise.all([
         openDisputesForContracts(contractIds, accountIds),
         disputeFilingForContracts(contractIds, accountIds),
+        disputeHoldForContracts(contractIds, accountIds),
+        decisionsForContracts(rows, accountIds),
     ]);
     return rows.map((row) => ({
         ...row,
         active_dispute: disputes.get(String(row.contract_id)) || null,
         dispute_filing: filing.get(String(row.contract_id)) || null,
+        dispute_hold: holds.get(String(row.contract_id)) || null,
+        dispute_decision: decisions.get(String(row.contract_id)) || null,
     }));
 }
 
@@ -977,14 +1025,8 @@ async function createContractDispute(accountIds, contractId, { reason, details, 
         if (existing.rows.length) throw openDisputeError();
         // A closed case whose payout is still scheduled keeps the contract's credits earmarked;
         // a second case would see them as unsettled escrow and could split them again.
+        // Reported through disputeFilingBlock below (DISPUTE_PAYOUT_PENDING).
         const pendingPayout = await getPendingPayoutContractDispute(client, contractId);
-        if (pendingPayout) {
-            const error = new Error(
-                `Dispute ${pendingPayout.dispute_number || ''} on this contract has a payout scheduled. A new dispute can be filed once it is paid, or contact Support to appeal it.`
-            );
-            error.statusCode = 409;
-            throw error;
-        }
 
         // An ended contract can still be disputed (to report conduct) for a limited window, but
         // its milestone payments are final: the case is flagged so staff can only record an
@@ -999,19 +1041,27 @@ async function createContractDispute(accountIds, contractId, { reason, details, 
         `, [contractId, DISPUTE_FILING_WINDOW_DAYS]);
         const contractEndedAtFiling = isContractEnded(statusRes.rows[0]?.status);
 
-        // Each side files one dispute per contract; rulings are final and are reopened, not refiled.
+        // Each side files one dispute per round; rulings are final and are reopened, not refiled.
+        // A round starts when both parties choose to continue the contract after a dispute.
+        const hasDecisions = await decisionsTableExists(client);
         const previousRes = await client.query(`
             SELECT dispute_id, dispute_number
             FROM disputes
             WHERE contract_id = $1
               AND by_account_id = $2
               AND deleted_at IS NULL
+              ${hasDecisions ? `AND created_at > ${disputeRoundStartSql('$1::uuid')}` : ''}
             ORDER BY created_at DESC
             LIMIT 1
         `, [contractId, userAccId]);
+        // After a case closes, the parties first choose whether to continue the contract.
+        const decisionPending = !contractEndedAtFiling && (await hasPendingContractDecision(client, contractId));
         const filingBlock = disputeFilingBlock({
             previousDispute: previousRes.rows[0] || null,
             windowClosed: contractEndedAtFiling && Boolean(statusRes.rows[0]?.window_closed),
+            pendingPayout,
+            decisionPending,
+            viewerAccountIds: accountIds,
         });
         if (filingBlock) {
             const error = new Error(filingBlock.message);
@@ -1055,6 +1105,16 @@ async function createContractDispute(accountIds, contractId, { reason, details, 
             disputeId: disputeRes.rows[0].dispute_id,
             contractId,
         });
+        // The contract goes on hold with the filing: its clock stops until the case is decided.
+        // A savepoint keeps a missing column (migration not run yet) from failing the filing.
+        await client.query('SAVEPOINT dispute_hold_start');
+        try {
+            await syncContractDisputeHold(contractId, { db: client });
+            await client.query('RELEASE SAVEPOINT dispute_hold_start');
+        } catch (holdErr) {
+            await client.query('ROLLBACK TO SAVEPOINT dispute_hold_start');
+            if (holdErr.code !== '42703' && holdErr.code !== '42P01') throw holdErr;
+        }
         await client.query('COMMIT');
         createdDispute = { ...disputeRes.rows[0], ...frozen };
     } catch (err) {

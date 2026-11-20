@@ -19,6 +19,7 @@ import { continueIfAccountVerified } from "@/lib/accountVerification";
 import useGlobalState from "@/lib/global_state";
 import { GuestLoginModal } from "@/components/ui/GuestLoginModal";
 import { SubscriptionIcon } from "@/components/ui/SubscriptionIcon";
+import { ThreeWayWorkflowModal } from "@/components/ui/ThreeWayWorkflowModal";
 
 export type ScoreOrigin = "all" | "job_post" | "account" | "market";
 
@@ -42,6 +43,7 @@ export const JobPostsInfoGuide: React.FC = () => {
   const [isGuestModalOpen, setIsGuestModalOpen] = useState(false);
   const [isCheckingAccess, setIsCheckingAccess] = useState(false);
   const [originFilter, setOriginFilter] = useState<ScoreOrigin>("all");
+  const [isWorkflowModalOpen, setIsWorkflowModalOpen] = useState(false);
 
   const scoringFactors: ScoreBasisFactor[] = [
     // --- Group 1: Job Post Content (You Control / Editable Anytime) ---
@@ -255,19 +257,32 @@ export const JobPostsInfoGuide: React.FC = () => {
     <div className="space-y-6 w-full animate-fade-in font-['Plus_Jakarta_Sans',sans-serif]">
       {/* ================= HEADER BOX ================= */}
       <div className="bg-white dark:bg-dark-surface border border-zinc-200 dark:border-white/10 rounded-2xl p-6 shadow-xs">
-        <div className="flex items-center gap-2 mb-2">
-          <span className="p-1.5 rounded-lg bg-zinc-100 dark:bg-white/10 text-zinc-800 dark:text-zinc-200">
-            <SlidersHorizontal className="w-4 h-4" />
-          </span>
-          <h1 className="text-xl font-bold text-zinc-900 dark:text-white">
-            How Job Market Ranking & Discovery Work
-          </h1>
+        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-2 mb-2">
+              <span className="p-1.5 rounded-lg bg-zinc-100 dark:bg-white/10 text-zinc-800 dark:text-zinc-200">
+                <SlidersHorizontal className="w-4 h-4" />
+              </span>
+              <h1 className="text-xl font-bold text-zinc-900 dark:text-white">
+                How Job Market Ranking & Discovery Work
+              </h1>
+            </div>
+            <p className="text-xs sm:text-sm text-zinc-600 dark:text-zinc-400 leading-relaxed max-w-4xl">
+              Jobs on Ensemble are ordered using a <strong>100-Point Type-Aware Discovery Algorithm</strong> combining{" "}
+              <strong>Job Post Content (25 pts)</strong>, <strong>Poster Account Standing (35 pts)</strong>, and{" "}
+              <strong>Live Market Signals (40 pts)</strong>, supported by automated escrow protections and guaranteed refund policies.
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setIsWorkflowModalOpen(true)}
+            className="shrink-0 self-start inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-zinc-900 text-white dark:bg-white dark:text-zinc-900 hover:opacity-90 text-xs font-bold shadow-xs transition cursor-pointer"
+          >
+            <Zap className="w-3.5 h-3.5" />
+            <span>How the 3-Way Works</span>
+          </button>
         </div>
-        <p className="text-xs sm:text-sm text-zinc-600 dark:text-zinc-400 leading-relaxed max-w-4xl">
-          Jobs on Ensemble are ordered using a <strong>100-Point Type-Aware Discovery Algorithm</strong> combining{" "}
-          <strong>Job Post Content (25 pts)</strong>, <strong>Poster Account Standing (35 pts)</strong>, and{" "}
-          <strong>Live Market Signals (40 pts)</strong>, supported by automated escrow protections and guaranteed refund policies.
-        </p>
 
         {/* 3-Step Architecture Pipeline */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5 mt-5 pt-5 border-t border-zinc-100 dark:border-white/5">
@@ -758,6 +773,12 @@ export const JobPostsInfoGuide: React.FC = () => {
       <GuestLoginModal
         isOpen={isGuestModalOpen}
         onClose={() => setIsGuestModalOpen(false)}
+      />
+
+      <ThreeWayWorkflowModal
+        isOpen={isWorkflowModalOpen}
+        mode="jobs"
+        onClose={() => setIsWorkflowModalOpen(false)}
       />
     </div>
   );

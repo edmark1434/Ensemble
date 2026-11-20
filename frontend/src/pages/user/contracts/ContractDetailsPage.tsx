@@ -50,7 +50,15 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { DetailedContract, MilestoneItem, MilestoneStatus, ContractStatus, CancellationRequest } from "./contracts";
 import { ActiveMilestoneTimerCard } from "./ActiveMilestoneTimerCard";
-import { contractDisputeBlockLabel, contractDisputeDetail, contractDisputePath } from "./contractDispute";
+import {
+  contractDisputeBlockLabel,
+  contractDisputeBlockingDispute,
+  contractDisputeDetail,
+  contractDisputePath,
+  contractDecisionCopy,
+  contractHoldDetail,
+  contractHoldState,
+} from "./contractDispute";
 
 export interface ContractTeamMember {
   account_id: string;
@@ -647,6 +655,9 @@ export const ContractDetailsPage: React.FC = () => {
   const [cancellationMessage, setCancellationMessage] = useState("");
   const [submittingCancellation, setSubmittingCancellation] = useState(false);
   const [declineModalOpen, setDeclineModalOpen] = useState(false);
+  // Continue-or-end choice after the contract's dispute closed.
+  const [decisionSubmitting, setDecisionSubmitting] = useState<null | "continue" | "end">(null);
+  const [endDecisionModalOpen, setEndDecisionModalOpen] = useState(false);
   const [declineReason, setDeclineReason] = useState("");
   const [actionLoading, setActionLoading] = useState(false);
 
@@ -862,6 +873,8 @@ export const ContractDetailsPage: React.FC = () => {
         milestones: mappedMilestones,
         activeDispute: foundRaw.active_dispute || null,
         disputeFiling: foundRaw.dispute_filing || null,
+        disputeHold: foundRaw.dispute_hold || null,
+        disputeDecision: foundRaw.dispute_decision || null,
       };
 
       setContract(mapped);
@@ -1050,6 +1063,31 @@ export const ContractDetailsPage: React.FC = () => {
       showErrorToast(err?.response?.data?.message || "Failed to submit cancellation request.");
     } finally {
       setSubmittingCancellation(false);
+    }
+  };
+
+  const submitDisputeDecision = async (choice: "continue" | "end") => {
+    if (!contract || decisionSubmitting) return;
+    setDecisionSubmitting(choice);
+    try {
+      const res = await api.post(`/api/contracts/${contract.id}/dispute-decision`, { choice });
+      const outcome = res.data?.data?.outcome;
+      showSuccessToast(
+        outcome === "ended"
+          ? "The contract has ended. Unfinished escrow goes back to the client; approved milestones stay paid."
+          : outcome === "continued"
+            ? "You both chose to continue. The contract is active again and its deadlines moved forward."
+            : "Your choice is saved. The contract continues once the other party agrees, or if nobody ends it in time."
+      );
+      setEndDecisionModalOpen(false);
+      await fetchContractData();
+    } catch (err: any) {
+      console.error("Failed to save contract decision:", err);
+      showErrorToast(err?.response?.data?.message || "Failed to save your choice. Please try again.");
+      // The question may have been settled meanwhile (the other party ended it, or it expired).
+      await fetchContractData();
+    } finally {
+      setDecisionSubmitting(null);
     }
   };
 
@@ -1389,7 +1427,7 @@ export const ContractDetailsPage: React.FC = () => {
                       </span>
                     </button>
 
-                    {contract.status === "Active" && !activeCancellation && !contract.activeDispute && (
+                    {contract.status === "Active" && !activeCancellation && contractHoldState(contract).kind === "none" && (
                       <button
                         onClick={() => {
                           setActionsMenuOpen(false);
@@ -1429,18 +1467,22 @@ export const ContractDetailsPage: React.FC = () => {
                         </div>
                       )
                     ) : contract.disputeFiling && !contract.disputeFiling.canFile ? (
-                      contractDisputePath(contract.disputeFiling.previousDispute) ? (
+                      contractDisputePath(contractDisputeBlockingDispute(contract.disputeFiling)) ? (
                         <button
                           title={contract.disputeFiling.reason || undefined}
                           onClick={() => {
                             setActionsMenuOpen(false);
-                            const path = contractDisputePath(contract.disputeFiling?.previousDispute);
+                            const path = contractDisputePath(contractDisputeBlockingDispute(contract.disputeFiling));
                             if (path) navigate(path);
                           }}
                           className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs text-left font-bold text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-white/5 transition"
                         >
                           <AlertCircle className="w-4 h-4 text-zinc-400" />
-                          <span>View your dispute</span>
+                          <span>
+                            {contractDisputeBlockingDispute(contract.disputeFiling)?.filedByViewer
+                              ? "View your dispute"
+                              : "View dispute (payout pending)"}
+                          </span>
                         </button>
                       ) : (
                         <div
@@ -1585,7 +1627,7 @@ export const ContractDetailsPage: React.FC = () => {
                       <button
                         type="button"
                         onClick={handleAcceptCancellation}
-                        disabled={actionLoading || Boolean(contract.activeDispute)}
+                        disabled={actionLoading || contractHoldState(contract).kind !== "none"}
                         className="rounded-xl bg-emerald-600 px-4 py-2 text-xs font-bold text-white hover:bg-emerald-700 transition shadow-sm disabled:opacity-50"
                       >
                         {actionLoading ? "Processing..." : "Accept Cancellation & Refund Escrow"}
@@ -1603,7 +1645,7 @@ export const ContractDetailsPage: React.FC = () => {
                   <div>
                     <p className="text-sm font-bold text-rose-900 dark:text-rose-100">This contract is under dispute</p>
                     <p className="mt-1 text-xs text-rose-800 dark:text-rose-200">
-                      Remaining escrow is frozen. Credits cannot be released or refunded until staff close the case.{" "}
+                      {contractHoldDetail(contractHoldState(contract))}{" "}
                       {contractDisputeDetail(contract.activeDispute)}
                     </p>
                   </div>
@@ -1621,7 +1663,131 @@ export const ContractDetailsPage: React.FC = () => {
                   </button>
                 ) : null}
               </div>
-            ) : null}
+            ) : (() => {
+              // A ruling's payout still holding the contract, or a settlement that ended it.
+              const hold = contractHoldState(contract);
+              if (hold.kind !== "payout" && hold.kind !== "settled") return null;
+              const holdDispute = hold.kind === "payout" ? hold.payout : hold.settlement;
+              const holdPath = contractDisputePath(holdDispute);
+              const isPayoutHold = hold.kind === "payout";
+              return (
+                <div
+                  className={`flex flex-col gap-3 rounded-2xl border p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between ${
+                    isPayoutHold
+                      ? "border-amber-300 bg-amber-50 dark:border-amber-500/30 dark:bg-amber-500/10"
+                      : "border-zinc-200 bg-zinc-50 dark:border-white/10 dark:bg-white/5"
+                  }`}
+                >
+                  <div className="flex items-start gap-3">
+                    <AlertTriangle
+                      className={`mt-0.5 h-5 w-5 shrink-0 ${
+                        isPayoutHold ? "text-amber-600 dark:text-amber-300" : "text-zinc-500 dark:text-zinc-400"
+                      }`}
+                    />
+                    <div>
+                      <p
+                        className={`text-sm font-bold ${
+                          isPayoutHold ? "text-amber-900 dark:text-amber-100" : "text-zinc-900 dark:text-white"
+                        }`}
+                      >
+                        {isPayoutHold ? "On hold until the ruling is paid" : "Ended by a dispute ruling"}
+                      </p>
+                      <p
+                        className={`mt-1 text-xs ${
+                          isPayoutHold ? "text-amber-800 dark:text-amber-200" : "text-zinc-600 dark:text-zinc-400"
+                        }`}
+                      >
+                        {contractHoldDetail(hold)}
+                      </p>
+                    </div>
+                  </div>
+                  {holdPath ? (
+                    <button
+                      type="button"
+                      onClick={() => navigate(holdPath)}
+                      className={`shrink-0 rounded-xl px-4 py-2 text-xs font-bold text-white ${
+                        isPayoutHold ? "bg-amber-600 hover:bg-amber-700" : "bg-zinc-700 hover:bg-zinc-800 dark:bg-zinc-600 dark:hover:bg-zinc-500"
+                      }`}
+                    >
+                      View dispute
+                    </button>
+                  ) : null}
+                </div>
+              );
+            })()}
+
+            {(() => {
+              // The dispute closed: both parties choose whether to continue (continuing needs both,
+              // ending needs one, nobody ending it by the deadline means it continues).
+              const hold = contractHoldState(contract);
+              if (hold.kind !== "decision") return null;
+              const decision = hold.decision;
+              const copy = contractDecisionCopy(decision);
+              const decisionPath = contractDisputePath(decision.dispute);
+              const canChoose = Boolean(decision.viewerSide);
+              // The client reviews delivered work before ending; the server enforces the same rule.
+              const reviewPending = decision.reviewPending || [];
+              const endBlocked = decision.viewerSide === "client" && reviewPending.length > 0;
+              return (
+                <div className="flex flex-col gap-4 rounded-2xl border border-amber-300 bg-amber-50 p-5 shadow-sm dark:border-amber-500/30 dark:bg-amber-500/10">
+                  <div className="flex items-start gap-3">
+                    <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600 dark:text-amber-300" />
+                    <div className="space-y-1">
+                      <p className="text-sm font-bold text-amber-900 dark:text-amber-100">{copy.title}</p>
+                      <p className="text-xs text-amber-800 dark:text-amber-200">{copy.body}</p>
+                      {canChoose ? (
+                        <p className="text-[11px] text-amber-700 dark:text-amber-300">
+                          Ending it works like a cancellation: approved milestones stay paid, and escrow for
+                          unfinished milestones goes back to the client. If you both continue, either of you can
+                          file a new dispute later.
+                        </p>
+                      ) : null}
+                      {endBlocked ? (
+                        <p className="text-[11px] font-semibold text-amber-900 dark:text-amber-100">
+                          Work on {reviewPending.map((m) => `"${m.name}"`).join(", ")} is waiting for your review.
+                          Approve it or request a revision before you can end the contract. If you think it breaks
+                          the agreement, continue and file a new dispute.
+                        </p>
+                      ) : null}
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+                    {decisionPath ? (
+                      <button
+                        type="button"
+                        onClick={() => navigate(decisionPath)}
+                        className="rounded-xl border border-amber-300 px-4 py-2 text-xs font-bold text-amber-800 hover:bg-amber-100 dark:border-amber-500/40 dark:text-amber-200 dark:hover:bg-amber-500/20"
+                      >
+                        View dispute
+                      </button>
+                    ) : null}
+                    {canChoose ? (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => setEndDecisionModalOpen(true)}
+                          disabled={Boolean(decisionSubmitting) || endBlocked}
+                          title={endBlocked ? "Review the delivered work first" : undefined}
+                          className="rounded-xl border border-rose-300 bg-white px-4 py-2 text-xs font-bold text-rose-700 hover:bg-rose-50 disabled:opacity-50 dark:border-rose-500/40 dark:bg-transparent dark:text-rose-300 dark:hover:bg-rose-500/15"
+                        >
+                          End contract
+                        </button>
+                        {decision.viewerChoice !== "continue" ? (
+                          <button
+                            type="button"
+                            onClick={() => submitDisputeDecision("continue")}
+                            disabled={Boolean(decisionSubmitting)}
+                            className="rounded-xl bg-emerald-600 px-4 py-2 text-xs font-bold text-white hover:bg-emerald-700 disabled:opacity-50"
+                          >
+                            {decisionSubmitting === "continue" ? "Saving..." : "Continue contract"}
+                          </button>
+                        ) : null}
+                      </>
+                    ) : null}
+                  </div>
+                </div>
+              );
+            })()}
 
             {/* Contract Hero Header & Financial Summary */}
             <div className={`rounded-2xl border bg-white dark:bg-dark-surface p-6 sm:p-8 shadow-sm space-y-6 ${
@@ -1634,7 +1800,19 @@ export const ContractDetailsPage: React.FC = () => {
                   <div className="flex flex-wrap items-center gap-2">
                     {contract.activeDispute ? (
                       <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-rose-50 dark:bg-rose-500/15 text-rose-800 dark:text-rose-200 border border-rose-300 dark:border-rose-500/40">
-                        Under dispute
+                        Under dispute · On hold
+                      </span>
+                    ) : contractHoldState(contract).kind === "payout" ? (
+                      <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-amber-50 dark:bg-amber-500/15 text-amber-800 dark:text-amber-200 border border-amber-300 dark:border-amber-500/40">
+                        On hold
+                      </span>
+                    ) : contractHoldState(contract).kind === "decision" ? (
+                      <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-amber-50 dark:bg-amber-500/15 text-amber-800 dark:text-amber-200 border border-amber-300 dark:border-amber-500/40">
+                        On hold · Decision pending
+                      </span>
+                    ) : contractHoldState(contract).kind === "settled" ? (
+                      <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-zinc-50 dark:bg-white/5 text-zinc-700 dark:text-zinc-300 border border-zinc-300 dark:border-white/15">
+                        Settled by dispute
                       </span>
                     ) : null}
                     {getStatusBadge(contract.status)}
@@ -2258,6 +2436,13 @@ export const ContractDetailsPage: React.FC = () => {
                   contractDueDate={contract.dueDate}
                   isClient={isClient}
                   isFreelancer={isFreelancer}
+                  {...(() => {
+                    // On dispute hold the clock is stopped; it shows the time left when the hold began.
+                    const hold = contractHoldState(contract);
+                    return hold.kind === "dispute" || hold.kind === "payout" || hold.kind === "decision"
+                      ? { paused: true, pausedSince: hold.since }
+                      : { paused: false, pausedSince: null };
+                  })()}
                 />
 
                 {/* WORKFLOW & OPERATIONAL TERMS CARD */}
@@ -2508,6 +2693,55 @@ export const ContractDetailsPage: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* END CONTRACT AFTER DISPUTE MODAL */}
+      {endDecisionModalOpen && contract && (() => {
+        const unfinishedCredits = (contract.milestones || [])
+          .filter((m) => !["completed", "approved", "auto_approved", "cancelled", "abandoned"].includes((m.rawStatus || "").toLowerCase()))
+          .reduce((sum, m) => sum + (Number(m.credits) || 0), 0);
+        // A freelancer ending forfeits delivered work the client has not approved yet.
+        const decision = contract.disputeDecision;
+        const ownPendingWork = decision?.viewerSide === "freelancer" ? decision.reviewPending || [] : [];
+        return (
+          <div className="fixed inset-0 z-[100000] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
+            <div className="w-full max-w-md rounded-2xl border border-zinc-200 dark:border-white/15 bg-white dark:bg-dark-surface p-6 shadow-2xl space-y-4">
+              <h3 className="text-base font-bold text-zinc-900 dark:text-white">End this contract?</h3>
+              <p className="text-xs text-zinc-600 dark:text-zinc-300">
+                The contract ends right away for both of you, and this can't be undone. Approved milestones stay
+                paid to the freelancer.{" "}
+                {unfinishedCredits > 0
+                  ? `About ${unfinishedCredits.toLocaleString()} credits held for unfinished milestones go back to the client.`
+                  : "No unfinished milestone escrow is left to refund."}
+              </p>
+              {ownPendingWork.length > 0 ? (
+                <p className="rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100">
+                  Your work on {ownPendingWork.map((m) => `"${m.name}"`).join(", ")} hasn't been approved yet.
+                  Ending now sends its escrow back to the client too. To be paid for it, choose Continue instead and
+                  let the client review it.
+                </p>
+              ) : null}
+              <div className="flex justify-end gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setEndDecisionModalOpen(false)}
+                  disabled={Boolean(decisionSubmitting)}
+                  className="px-4 py-2 rounded-xl border border-zinc-200 dark:border-white/10 text-xs font-bold text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-white/5 transition"
+                >
+                  Keep deciding
+                </button>
+                <button
+                  type="button"
+                  onClick={() => submitDisputeDecision("end")}
+                  disabled={Boolean(decisionSubmitting)}
+                  className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold transition shadow-sm disabled:opacity-50"
+                >
+                  {decisionSubmitting === "end" ? "Ending..." : "End contract"}
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* DECLINE CANCELLATION MODAL */}
       {declineModalOpen && contract && (

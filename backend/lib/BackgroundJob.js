@@ -621,6 +621,25 @@ function startPaymentReconciliationJob() {
         }
     });
 
+    // Missed contract reviews: remind parties before the review deadline, then warn (merit) — hourly at :50.
+    let isMissedReviewJobRunning = false;
+    cron.schedule("50 * * * *", async () => {
+        if (isMissedReviewJobRunning) return;
+        isMissedReviewJobRunning = true;
+        try {
+            const { reconcileMissedReviews } = require('../services/MissedReviewServices');
+            const result = await reconcileMissedReviews();
+            if (result.reminded || result.warned) {
+                console.log(`Missed reviews: reminded ${result.reminded}, warned ${result.warned}`);
+            }
+        } catch (err) {
+            // The obligations table arrives with a migration; stay quiet until it exists.
+            if (err.code !== '42P01') console.error("Missed review reconciliation failed:", err.message);
+        } finally {
+            isMissedReviewJobRunning = false;
+        }
+    });
+
     // Dispute payouts: pay out money rulings whose release date has come — runs every minute.
     // Payouts of a reopened case wait; failed ones retry hourly (see releaseDuePayouts).
     let isDisputePayoutJobRunning = false;
@@ -638,6 +657,34 @@ function startPaymentReconciliationJob() {
             if (err.code !== '42P01') console.error("Dispute payout release failed:", err.message);
         } finally {
             isDisputePayoutJobRunning = false;
+        }
+    });
+
+    // Contract dispute hold: end contracts whose settlement ruling stands, pause contracts under
+    // dispute, ask both parties to continue or end after a case closes, continue those nobody
+    // ended in time (with a reminder first) — runs every 5 minutes.
+    // Each dispute change already syncs its contract; this catches anything else.
+    let isContractDisputeHoldJobRunning = false;
+    cron.schedule("*/5 * * * *", async () => {
+        if (isContractDisputeHoldJobRunning) return;
+        isContractDisputeHoldJobRunning = true;
+        try {
+            const { reconcileContractDisputeHoldsServices } = require('../services/ContractDisputeHoldServices');
+            const result = await reconcileContractDisputeHoldsServices();
+            if (result.ended || result.synced || result.continued || result.reminded) {
+                console.log(
+                    `Contract dispute holds: ended ${result.ended}, synced ${result.synced}, ` +
+                    `auto-continued ${result.continued}, reminded ${result.reminded}`
+                );
+            }
+        } catch (err) {
+            // The hold columns and decisions table arrive with migrations 1829900000000 and
+            // 1830000000000; stay quiet until they run.
+            if (err.code !== '42703' && err.code !== '42P01') {
+                console.error("Contract dispute hold reconcile failed:", err.message);
+            }
+        } finally {
+            isContractDisputeHoldJobRunning = false;
         }
     });
 

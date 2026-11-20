@@ -5,6 +5,8 @@ interface ApplicationWindowTimerProps {
   deadline?: string | null;
   status?: string | null;
   variant?: "badge" | "bar";
+  compact?: boolean;
+  tone?: "amber" | "gray";
   className?: string;
   actionButton?: React.ReactNode;
 }
@@ -13,6 +15,8 @@ export const ApplicationWindowTimer: React.FC<ApplicationWindowTimerProps> = ({
   deadline,
   status,
   variant = "badge",
+  compact = false,
+  tone = "amber",
   className = "",
   actionButton,
 }) => {
@@ -31,7 +35,7 @@ export const ApplicationWindowTimer: React.FC<ApplicationWindowTimerProps> = ({
       const diffMs = targetTime - Date.now();
 
       if (diffMs <= 0) {
-        setCountdown("00h 00m 00s");
+        setCountdown(compact ? "0 mins left" : "00h 00m 00s");
         return;
       }
 
@@ -40,6 +44,18 @@ export const ApplicationWindowTimer: React.FC<ApplicationWindowTimerProps> = ({
       const hours = Math.floor((totalSec % 86400) / 3600);
       const minutes = Math.floor((totalSec % 3600) / 60);
       const seconds = totalSec % 60;
+
+      if (compact) {
+        if (days > 0) {
+          setCountdown(`${days} ${days === 1 ? "day" : "days"} left`);
+        } else if (hours > 0) {
+          setCountdown(`${hours} ${hours === 1 ? "hour" : "hours"} left`);
+        } else {
+          const mins = Math.max(1, minutes);
+          setCountdown(`${mins} ${mins === 1 ? "min" : "mins"} left`);
+        }
+        return;
+      }
 
       const pad = (n: number) => String(n).padStart(2, "0");
       if (days > 0) {
@@ -52,7 +68,7 @@ export const ApplicationWindowTimer: React.FC<ApplicationWindowTimerProps> = ({
     calcTime();
     const interval = setInterval(calcTime, 1000);
     return () => clearInterval(interval);
-  }, [deadline, isStatusClosed]);
+  }, [deadline, isStatusClosed, compact]);
 
   if (!deadline) return null;
 
@@ -64,6 +80,7 @@ export const ApplicationWindowTimer: React.FC<ApplicationWindowTimerProps> = ({
       return (
         <span
           className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-rose-50 text-rose-700 border border-rose-200 dark:bg-rose-500/10 dark:text-rose-400 dark:border-rose-500/25 text-[10px] font-bold shrink-0 ${className}`}
+          style={tone === "gray" ? { fontFamily: "'Plus Jakarta Sans', sans-serif" } : undefined}
         >
           <span className="h-1.5 w-1.5 rounded-full bg-rose-500 shrink-0" />
           <span>Intake Closed</span>
@@ -71,15 +88,23 @@ export const ApplicationWindowTimer: React.FC<ApplicationWindowTimerProps> = ({
       );
     }
 
+    const isGray = tone === "gray";
     return (
       <span
-        className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-200 dark:bg-amber-500/10 dark:text-amber-400 dark:border-amber-500/25 text-[10px] font-bold shrink-0 shadow-2xs ${className}`}
+        className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full border text-[10px] font-semibold shrink-0 shadow-2xs ${
+          isGray
+            ? "bg-white/95 dark:bg-black/80 text-gray-700 dark:text-zinc-300 border-gray-200 dark:border-white/15 backdrop-blur-md"
+            : "bg-amber-50 text-amber-800 border-amber-200 dark:bg-amber-500/10 dark:text-amber-400 dark:border-amber-500/25 font-bold"
+        } ${className}`}
+        style={isGray ? { fontFamily: "'Plus Jakarta Sans', sans-serif" } : undefined}
       >
-        <Clock className="h-2.5 w-2.5 text-amber-500 shrink-0" />
-        <span className="font-mono tracking-tight font-bold">
+        <Clock className={`h-2.5 w-2.5 shrink-0 ${isGray ? "text-gray-500 dark:text-zinc-400" : "text-amber-500"}`} />
+        <span className={isGray ? "tracking-tight font-semibold" : "font-mono tracking-tight font-bold"}>
           {countdown || "Calculating..."}
         </span>
-        <span className="font-medium opacity-75 hidden sm:inline">left</span>
+        {!compact && (
+          <span className="font-medium opacity-75 hidden sm:inline">left</span>
+        )}
       </span>
     );
   }

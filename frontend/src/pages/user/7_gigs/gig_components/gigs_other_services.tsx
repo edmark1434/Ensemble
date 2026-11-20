@@ -10,6 +10,8 @@ import {
   Layers,
   TrendingUp,
   Sparkles,
+  CircleCheck,
+  Flame,
 } from "lucide-react";
 import { CreditIcon } from "@/components/ui/credit-icon";
 import { SubscriptionIcon } from "@/components/ui/SubscriptionIcon";
@@ -17,6 +19,7 @@ import { resolveAvatarPath } from "@/lib/accountAvatars";
 import api from "@/lib/axios";
 import { formatDistanceToNow } from "date-fns";
 import { computeGigRankingBreakdown, computeWeightedGigDiscoveryOrderKey } from "../gig_ranking";
+import { NewListingBadge } from "./NewListingBadge";
 import useGlobalState from "@/lib/global_state";
 
 interface GigsOtherServicesProps {
@@ -248,62 +251,61 @@ export const GigsOtherServices: React.FC<GigsOtherServicesProps> = ({ currentGig
                         </div>
                       )}
 
-                      {/* Orders and Service Rating grouped together at top-left */}
+                      {/* Top-left: Orders & Completed */}
                       <div className="absolute top-2 left-2 flex flex-wrap items-center gap-1.5 z-10">
                         <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-black/50 backdrop-blur-sm text-white text-[10px] font-semibold border border-white/10">
                           <ShoppingCart className="h-3 w-3" />
                           <span>{gig.ordersCount || 0} Orders</span>
                         </div>
-                        <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-black/50 backdrop-blur-sm text-[10px] font-semibold border border-white/10 text-white">
-                          <Star
-                            className={`h-3 w-3 ${
-                              hasServiceRating
-                                ? "fill-yellow-400 text-yellow-400"
-                                : "fill-gray-400 text-gray-400"
-                            }`}
-                          />
-                          <span
-                            className={
-                              hasServiceRating
-                                ? "text-yellow-400"
-                                : "text-gray-300 dark:text-zinc-400"
-                            }
-                          >
-                            {hasServiceRating
-                              ? `${gig.clientRating} (${gig.ratingCount})`
-                              : rankInfo.isNewListing
-                              ? "New"
-                              : "N/A"}
-                          </span>
+                        <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-black/50 backdrop-blur-sm text-white text-[10px] font-semibold border border-white/10">
+                          <CircleCheck className="h-3 w-3 text-emerald-400" />
+                          <span>{gig.completedOrdersCount || 0} Completed</span>
                         </div>
                       </div>
 
-                      {/* Bottom-left Tiers Count Tag on Thumbnail */}
-                      {gig.tiers && gig.tiers.length > 0 && (
-                        <div className="absolute bottom-2 left-2 z-10">
+                      {/* Bottom-left Tiers Count & Service Rating Tags on Thumbnail */}
+                      <div className="absolute bottom-2 left-2 z-10 flex items-center gap-1.5">
+                        {gig.tiers && gig.tiers.length > 0 && (
                           <span className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-white/95 dark:bg-black/80 text-gray-700 dark:text-zinc-300 border border-gray-200 dark:border-white/15 backdrop-blur-md text-[9px] font-semibold shadow-xs">
                             <Layers className="h-2.5 w-2.5 text-gray-500 dark:text-zinc-400" />
                             <span>
                               {gig.tiers.length} {gig.tiers.length === 1 ? "Tier" : "Tiers"}
                             </span>
                           </span>
-                        </div>
-                      )}
-
-                      {!isGuestMode && (
-                        <button
-                          onClick={(e) => handleToggleSave(e, gig.id)}
-                          className={`absolute top-2 right-2 rounded-full bg-white/80 dark:bg-black/50 p-1.5 backdrop-blur-sm transition ${
-                            gig.isSaved
-                              ? "text-amber-500 dark:text-amber-400"
-                              : "text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white"
-                          }`}
-                        >
-                          <Bookmark
-                            className={`h-3.5 w-3.5 ${gig.isSaved ? "fill-current" : ""}`}
+                        )}
+                        <span className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-white/95 dark:bg-black/80 text-gray-700 dark:text-zinc-300 border border-gray-200 dark:border-white/15 backdrop-blur-md text-[9px] font-semibold shadow-xs">
+                          <Star
+                            className={`h-2.5 w-2.5 ${
+                              hasServiceRating
+                                ? "fill-yellow-400 text-yellow-400"
+                                : "text-gray-500 dark:text-zinc-400"
+                            }`}
                           />
-                        </button>
-                      )}
+                          <span>
+                            {hasServiceRating
+                              ? `${gig.clientRating} (${gig.ratingCount})`
+                              : "No Rating"}
+                          </span>
+                        </span>
+                      </div>
+
+                      <div className="absolute top-2 right-2 flex items-center gap-1.5 z-10">
+                        {rankInfo.isNewListing && <NewListingBadge />}
+                        {!isGuestMode && (
+                          <button
+                            onClick={(e) => handleToggleSave(e, gig.id)}
+                            className={`rounded-full bg-white/80 dark:bg-black/50 p-1.5 backdrop-blur-sm transition ${
+                              gig.isSaved
+                                ? "text-amber-500 dark:text-amber-400"
+                                : "text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white"
+                            }`}
+                          >
+                            <Bookmark
+                              className={`h-3.5 w-3.5 ${gig.isSaved ? "fill-current" : ""}`}
+                            />
+                          </button>
+                        )}
+                      </div>
                     </div>
 
                     {/* Card Content */}

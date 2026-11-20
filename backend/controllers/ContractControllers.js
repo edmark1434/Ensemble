@@ -278,6 +278,34 @@ async function getContractsController(req, res) {
     }
 }
 
+/** After a dispute closes, a party chooses to continue or end the contract ({ choice }). */
+async function chooseAfterDisputeController(req, res) {
+    try {
+        const personalAccountId = req.user.account_id || req.user.accountId;
+        const actorIds = await getAuthorizedActorAccountIds(personalAccountId);
+        const { contractId } = req.params;
+        if (!contractId) {
+            return res.status(400).json({ success: false, message: 'Contract ID is required' });
+        }
+        const { chooseAfterDisputeService } = require('../services/ContractDisputeHoldServices');
+        const result = await chooseAfterDisputeService({
+            contractId,
+            actorAccountIds: actorIds,
+            personalAccountId,
+            choice: req.body?.choice,
+        });
+        return res.status(200).json({ success: true, data: result });
+    } catch (err) {
+        if (!err.statusCode) console.error('Error recording contract decision after dispute:', err);
+        const status = Number(err.statusCode) || 500;
+        return res.status(status).json({
+            success: false,
+            message: err.statusCode ? err.message : 'Internal server error',
+            ...(err.statusCode && err.code ? { code: err.code } : {}),
+        });
+    }
+}
+
 async function rejectJobOfferController(req, res) {
     try {
         const freelancerId = req.user.account_id || req.user.accountId;
@@ -342,7 +370,10 @@ async function createContractDisputeController(req, res) {
         const status = Number(err.statusCode) || (String(err.message || '').includes('Unauthorized') ? 403 : 500);
         return res.status(status).json({
             success: false,
-            message: err.message || 'Internal server error'
+            message: err.message || 'Internal server error',
+            // Filing blocks (DISPUTE_ALREADY_FILED, DISPUTE_WINDOW_CLOSED, DISPUTE_PAYOUT_PENDING) let
+            // the form show its banner. Only our own errors carry statusCode; driver codes stay out.
+            ...(err.statusCode && err.code ? { code: err.code } : {}),
         });
     }
 }
@@ -580,6 +611,7 @@ module.exports = {
     rejectJobOfferController,
     getContractsController,
     createContractDisputeController,
+    chooseAfterDisputeController,
     extendContractDeadlineController,
     cancelContractController,
     createCancellationRequestController,

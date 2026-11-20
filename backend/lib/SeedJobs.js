@@ -1,5 +1,11 @@
 const { pool } = require('./Database');
 
+const JOB_BANNER_PRESETS = [
+  '/job_banners/jb1.png',
+  '/job_banners/jb2.png',
+  '/job_banners/jb3.png',
+];
+
 const SAMPLE_JOBS_DATA = [
   // 10 INDIVIDUAL JOBS (hiring_type = 'single', no_of_hires = 1)
   {
@@ -269,10 +275,12 @@ async function seedSampleJobs(userAccountIds) {
     );
     const jobId = jobRes.rows[0].job_id;
 
-    // 2. Insert thumbnail file and link
+    // 2. Insert preset banner thumbnail file and link
+    const bannerPath = JOB_BANNER_PRESETS[i % JOB_BANNER_PRESETS.length];
+    const bannerName = bannerPath.split('/').pop();
     const fileRes = await pool.query(
-      `INSERT INTO files (name, path, mime_type, size_bytes) VALUES ($1, $2, 'image/jpeg', 0) RETURNING file_id`,
-      [`thumbnail_${i + 1}.jpg`, job.thumbnail]
+      `INSERT INTO files (name, path, mime_type, size_bytes) VALUES ($1, $2, 'image/png', 0) RETURNING file_id`,
+      [bannerName, bannerPath]
     );
     await pool.query(
       `INSERT INTO job_attachments (job_id, file_id, index) VALUES ($1, $2, 0)`,

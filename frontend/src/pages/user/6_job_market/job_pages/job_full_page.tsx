@@ -133,8 +133,10 @@ const JobFullPage: React.FC = () => {
   };
 
   useEffect(() => {
+    let cancelled = false;
     const fetchJobDetails = async () => {
       if (!id) return;
+      const startedAt = Date.now();
       setLoading(true);
       try {
         const response = await api.get(`/api/jobs/${id}`);
@@ -242,11 +244,20 @@ const JobFullPage: React.FC = () => {
         console.error("Failed to fetch job details:", error);
         setJob(null);
       } finally {
-        setLoading(false);
+        const remaining = Math.max(0, 650 - (Date.now() - startedAt));
+        if (remaining > 0) {
+          await new Promise((resolve) => setTimeout(resolve, remaining));
+        }
+        if (!cancelled) {
+          setLoading(false);
+        }
       }
     };
 
     fetchJobDetails();
+    return () => {
+      cancelled = true;
+    };
   }, [id, reloadTrigger]);
 
   const [isExpireModalOpen, setIsExpireModalOpen] = useState(false);
@@ -445,7 +456,12 @@ const JobFullPage: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-dark-base flex flex-col w-full relative">
+    <motion.div
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.25 }}
+      className="min-h-screen bg-gray-50 dark:bg-dark-base flex flex-col w-full relative"
+    >
       {/* Sticky Top Headers Container */}
       <div className="sticky top-0 z-40 bg-white dark:bg-dark-base flex flex-col border-b border-gray-200 dark:border-white/10 shadow-sm">
         <div className="z-50">
@@ -1687,7 +1703,7 @@ const JobFullPage: React.FC = () => {
           }}
         />
       )}
-    </div>
+    </motion.div>
   );
 };
 

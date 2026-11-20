@@ -8,6 +8,8 @@ export type SwipeToastPhase = 'open' | 'closing' | 'gone';
 
 export interface SwipeToastProps {
   title?: ReactNode;
+  /** Cut the title off after two lines (default). Turn off for messages that must be read in full, like errors. */
+  clampTitle?: boolean;
   description?: ReactNode;
   icon?: ReactNode;
   children?: ReactNode;
@@ -63,6 +65,7 @@ const velocityOf = (hist: Sample[]) => {
 
 export const SwipeToast: React.FC<SwipeToastProps> = ({
   title,
+  clampTitle = true,
   description = '',
   icon,
   children,
@@ -385,7 +388,11 @@ export const SwipeToast: React.FC<SwipeToastProps> = ({
             </span>
           ) : null}
           <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-            {title ? <div className="line-clamp-2 break-words font-semibold text-gray-900 dark:text-[#f5f5f5]">{title}</div> : null}
+            {title ? (
+              <div className={`${clampTitle ? 'line-clamp-2 ' : ''}break-words font-semibold text-gray-900 dark:text-[#f5f5f5]`}>
+                {title}
+              </div>
+            ) : null}
             {description ? <div className="line-clamp-2 break-words text-[12px] text-gray-500 dark:text-zinc-400">{description}</div> : null}
           </div>
           {closeButton ? (

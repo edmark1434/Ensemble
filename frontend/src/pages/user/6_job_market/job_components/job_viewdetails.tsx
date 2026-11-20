@@ -11,6 +11,7 @@ import { GuestLoginModal } from "@/components/ui/GuestLoginModal";
 import { continueIfAccountVerified } from "@/lib/accountVerification";
 import { motion, AnimatePresence } from "framer-motion";
 import { computeJobRankingBreakdown } from "../job_ranking";
+import { ApplicationWindowTimer } from "./job_utilities/ApplicationWindowTimer";
 
 interface JobViewDetailsProps {
   selectedJob: Job | null;
@@ -132,9 +133,8 @@ const JobViewDetails: React.FC<JobViewDetailsProps> = ({ selectedJob, onClose, o
               <img
                 src={selectedJob.thumbnail}
                 alt=""
-                className="w-full h-full object-cover opacity-60"
+                className="w-full h-full object-cover"
               />
-              <div className="absolute inset-0 bg-gradient-to-t from-white dark:from-dark-surface via-transparent to-transparent" />
               
               <div className="absolute top-4 right-4 flex items-center gap-2 z-10">
                 <button
@@ -164,6 +164,17 @@ const JobViewDetails: React.FC<JobViewDetailsProps> = ({ selectedJob, onClose, o
                   </button>
                 )}
               </div>
+
+              {selectedJob.applicationDeadline && (
+                <div className="absolute bottom-3 right-4 flex items-center z-10">
+                  <ApplicationWindowTimer
+                    deadline={selectedJob.applicationDeadline}
+                    status={selectedJob.status}
+                    variant="badge"
+                    tone="gray"
+                  />
+                </div>
+              )}
             </div>
 
             <div className="flex-1 overflow-y-auto p-5 md:p-6 space-y-5 thin-scrollbar">
@@ -676,6 +687,7 @@ const JobViewDetails: React.FC<JobViewDetailsProps> = ({ selectedJob, onClose, o
               {selectedJob.isOwnPost && !selectedJob.isManageablePost ? (
                 <div className="flex items-center gap-2">
                   <button
+                    data-tour="job-detail-view-full"
                     onClick={() => navigate(`/jobs/postings/${selectedJob.id}/page`)}
                     className="flex items-center justify-center px-4 py-3 rounded-xl bg-white dark:bg-white/5 shadow-sm dark:shadow-none hover:bg-gray-100 dark:hover:bg-white/10 border border-gray-200 dark:border-white/10 text-xs font-bold text-gray-600 dark:text-zinc-300 hover:text-gray-900 dark:text-white transition shrink-0"
                   >
@@ -690,12 +702,14 @@ const JobViewDetails: React.FC<JobViewDetailsProps> = ({ selectedJob, onClose, o
                   <div className="space-y-1">
                     <div className="flex items-center gap-2">
                       <button
+                        data-tour="job-detail-view-full"
                         onClick={() => navigate(`/jobs/postings/${selectedJob.id}/page`)}
                         className="flex items-center justify-center px-4 py-3 rounded-xl bg-white dark:bg-white/5 shadow-sm dark:shadow-none hover:bg-gray-100 dark:hover:bg-white/10 border border-gray-200 dark:border-white/10 text-xs font-bold text-gray-600 dark:text-zinc-300 hover:text-gray-900 dark:text-white transition shrink-0"
                       >
                         View Full
                       </button>
                       <button
+                        data-tour="job-detail-send-proposal"
                         onClick={() => navigate(`/jobs/proposals/sent/${selectedJob.myProposalId}`)}
                         className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-emerald-100 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 py-3 text-xs font-bold text-emerald-700 dark:text-emerald-400 hover:bg-emerald-200 dark:hover:bg-emerald-500/20 transition active:scale-[0.98]"
                       >
@@ -771,6 +785,7 @@ const JobViewDetails: React.FC<JobViewDetailsProps> = ({ selectedJob, onClose, o
               ) : (
                 <div className="flex items-center gap-2">
                   <button
+                    data-tour="job-detail-view-full"
                     onClick={() => navigate(`/jobs/postings/${selectedJob.id}/page`)}
                     className="flex items-center justify-center px-4 py-3 rounded-xl bg-white dark:bg-white/5 shadow-sm dark:shadow-none hover:bg-gray-100 dark:hover:bg-white/10 border border-gray-200 dark:border-white/10 text-xs font-bold text-gray-600 dark:text-zinc-300 hover:text-gray-900 dark:text-white transition shrink-0"
                   >
@@ -783,6 +798,7 @@ const JobViewDetails: React.FC<JobViewDetailsProps> = ({ selectedJob, onClose, o
                     <Edit2 className="h-3.5 w-3.5" /> Edit Job Post
                   </button>
                   <button
+                    data-tour="job-detail-send-proposal"
                     onClick={() => navigate(`/jobs/proposals/incoming/${selectedJob.id}`)}
                     className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-gray-100 dark:bg-zinc-800 border border-gray-200 dark:border-white/10 py-3 text-xs font-bold text-gray-900 dark:text-white hover:bg-gray-200 dark:hover:bg-zinc-700 transition"
                   >

@@ -84,6 +84,7 @@ export interface Gig {
   isPersonalGig?: boolean;
   savesCount?: number;
   ordersCount?: number;
+  completedOrdersCount?: number;
   pendingOrdersCount?: number;
   freelancerAccountId?: string;
   /** Seller's Platform Merit from the backend (100 minus active, unexpired warning points). */

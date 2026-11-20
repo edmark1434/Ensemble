@@ -168,6 +168,7 @@ const APPEAL_STATE_LABEL: Record<string, string> = {
   accepted: 'Appeal accepted',
   denied: 'Denied (12-month wait)',
   denied_permanent: 'Denied permanently',
+  window_closed: 'Appeal window closed',
 };
 
 /** The one penalty a per-penalty appeal is about, and what each decision does to it. */

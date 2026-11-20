@@ -13,8 +13,11 @@ import {
   FileText,
   UserCheck,
   ShoppingCart,
+  CircleCheck,
 } from "lucide-react";
 import { SubscriptionIcon } from "@/components/ui/SubscriptionIcon";
+import { NewListingBadge } from "./NewListingBadge";
+import { ThreeWayWorkflowModal } from "@/components/ui/ThreeWayWorkflowModal";
 
 interface GigServicesInfoGuideProps {
   onBrowseServices?: () => void;
@@ -198,6 +201,7 @@ export const GigServicesInfoGuide: React.FC<GigServicesInfoGuideProps> = ({
   onPostService,
 }) => {
   const [selectedCategory, setSelectedCategory] = useState<FactorCategory>("all");
+  const [isWorkflowModalOpen, setIsWorkflowModalOpen] = useState(false);
 
   const filteredFactors =
     selectedCategory === "all"
@@ -210,27 +214,38 @@ export const GigServicesInfoGuide: React.FC<GigServicesInfoGuideProps> = ({
           HEADER BOX: ARCHITECTURE OVERVIEW & 3-STEP PIPELINE
          ========================================================================= */}
       <div className="relative overflow-hidden rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface p-6 sm:p-8 shadow-sm">
-        <div className="relative z-10 max-w-3xl space-y-3">
-          <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-gray-100 text-gray-800 dark:bg-white/10 dark:text-zinc-200 text-xs font-bold border border-gray-200 dark:border-white/10">
-            <Award className="h-3.5 w-3.5 text-amber-500" />
-            <span>Fair Service Discovery &amp; Queue-Aware Ranking Engine</span>
+        <div className="relative z-10 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+          <div className="max-w-3xl space-y-3">
+            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-gray-100 text-gray-800 dark:bg-white/10 dark:text-zinc-200 text-xs font-bold border border-gray-200 dark:border-white/10">
+              <Award className="h-3.5 w-3.5 text-amber-500" />
+              <span>Fair Service Discovery &amp; Queue-Aware Ranking Engine</span>
+            </div>
+
+            <h2 className="text-xl sm:text-2xl font-extrabold tracking-tight text-gray-900 dark:text-white leading-snug">
+              How Ensemble Ranks &amp; Recommends Services
+            </h2>
+
+            <p className="text-xs sm:text-sm text-gray-600 dark:text-zinc-400 leading-relaxed">
+              Every active service is evaluated on a transparent{" "}
+              <strong className="text-gray-900 dark:text-white">100-Point Base Scale</strong> across{" "}
+              <strong className="text-gray-900 dark:text-white">13 Algorithmic Factors</strong> (plus optional{" "}
+              <strong className="text-gray-900 dark:text-white">Subscription Visibility Boosts</strong> and{" "}
+              <strong className="text-gray-900 dark:text-white">Buyer Skill Match Bonuses</strong>). The engine balances{" "}
+              <strong className="text-gray-900 dark:text-white">Service Package Quality (25 pts)</strong>,{" "}
+              <strong className="text-gray-900 dark:text-white">Creator Reputation &amp; Standing (35 pts)</strong>, and{" "}
+              <strong className="text-gray-900 dark:text-white">Live Market &amp; Queue Availability (40 pts)</strong> so
+              talented newcomers and established studios compete on equal footing.
+            </p>
           </div>
 
-          <h2 className="text-xl sm:text-2xl font-extrabold tracking-tight text-gray-900 dark:text-white leading-snug">
-            How Ensemble Ranks &amp; Recommends Services
-          </h2>
-
-          <p className="text-xs sm:text-sm text-gray-600 dark:text-zinc-400 leading-relaxed">
-            Every active service is evaluated on a transparent{" "}
-            <strong className="text-gray-900 dark:text-white">100-Point Base Scale</strong> across{" "}
-            <strong className="text-gray-900 dark:text-white">13 Algorithmic Factors</strong> (plus optional{" "}
-            <strong className="text-gray-900 dark:text-white">Subscription Visibility Boosts</strong> and{" "}
-            <strong className="text-gray-900 dark:text-white">Buyer Skill Match Bonuses</strong>). The engine balances{" "}
-            <strong className="text-gray-900 dark:text-white">Service Package Quality (25 pts)</strong>,{" "}
-            <strong className="text-gray-900 dark:text-white">Creator Reputation &amp; Standing (35 pts)</strong>, and{" "}
-            <strong className="text-gray-900 dark:text-white">Live Market &amp; Queue Availability (40 pts)</strong> so
-            talented newcomers and established studios compete on equal footing.
-          </p>
+          <button
+            type="button"
+            onClick={() => setIsWorkflowModalOpen(true)}
+            className="shrink-0 self-start inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-gray-900 text-white dark:bg-white dark:text-zinc-900 hover:opacity-90 text-xs font-bold shadow-xs transition cursor-pointer"
+          >
+            <Zap className="h-3.5 w-3.5" />
+            <span>How the 3-Way Works</span>
+          </button>
         </div>
 
         {/* 3-Step Pipeline Summary Strip */}
@@ -521,28 +536,25 @@ export const GigServicesInfoGuide: React.FC<GigServicesInfoGuideProps> = ({
                 {/* 6. New Listing Thumbnail Badge */}
                 <tr className="hover:bg-gray-50/50 dark:hover:bg-white/[0.01] transition-colors">
                   <td className="py-3.5 px-4">
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-black/75 text-white text-[10px] font-semibold border border-white/15 shadow-xs">
-                      <Star className="h-3 w-3 fill-gray-400 text-gray-400" />
-                      <span className="text-gray-200">New</span>
-                    </span>
+                    <NewListingBadge />
                   </td>
                   <td className="py-3.5 px-4 font-bold text-gray-900 dark:text-white">
-                    New Listing Badge
+                    New Listing Pill
                   </td>
                   <td className="py-3.5 px-4 text-gray-600 dark:text-zinc-400">
-                    Published within the last 7 days with 0 completed reviews yet.
+                    Published within the last 7 days (age ≤ 7 days).
                   </td>
                   <td className="py-3.5 px-4 text-gray-700 dark:text-zinc-300">
-                    Replaces &quot;N/A&quot; on new listings while Bayesian 4.2★ newcomer protection is active.
+                    Shining upper-right banner pill highlighting 7-day fresh services while newcomer momentum is active.
                   </td>
                 </tr>
 
                 {/* 7. Verified Service Rating Badge */}
                 <tr className="hover:bg-gray-50/50 dark:hover:bg-white/[0.01] transition-colors">
                   <td className="py-3.5 px-4">
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-black/75 text-white text-[10px] font-semibold border border-white/15 shadow-xs">
-                      <Star className="h-3 w-3 fill-yellow-400 text-yellow-400" />
-                      <span className="text-yellow-400 font-bold">5.0 (12)</span>
+                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-white/95 dark:bg-black/80 text-gray-700 dark:text-zinc-300 border border-gray-200 dark:border-white/15 text-[9px] font-semibold shadow-xs">
+                      <Star className="h-2.5 w-2.5 fill-yellow-400 text-yellow-400" />
+                      <span>5.0 (12)</span>
                     </span>
                   </td>
                   <td className="py-3.5 px-4 font-bold text-gray-900 dark:text-white">
@@ -552,7 +564,51 @@ export const GigServicesInfoGuide: React.FC<GigServicesInfoGuideProps> = ({
                     Service has 1 or more completed and rated escrow orders.
                   </td>
                   <td className="py-3.5 px-4 text-gray-700 dark:text-zinc-300">
-                    Displays average star rating and review count from verified buyers.
+                    Displayed beside the Tiers tag with the average star rating and review count from verified buyers.
+                  </td>
+                </tr>
+
+                {/* 8. No Rating Yet Badge */}
+                <tr className="hover:bg-gray-50/50 dark:hover:bg-white/[0.01] transition-colors">
+                  <td className="py-3.5 px-4">
+                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-white/95 dark:bg-black/80 text-gray-700 dark:text-zinc-300 border border-gray-200 dark:border-white/15 text-[9px] font-semibold shadow-xs">
+                      <Star className="h-2.5 w-2.5 text-gray-500 dark:text-zinc-400" />
+                      <span>No Rating</span>
+                    </span>
+                  </td>
+                  <td className="py-3.5 px-4 font-bold text-gray-900 dark:text-white">
+                    No Rating Yet
+                  </td>
+                  <td className="py-3.5 px-4 text-gray-600 dark:text-zinc-400">
+                    Service has 0 completed buyer ratings.
+                  </td>
+                  <td className="py-3.5 px-4 text-gray-700 dark:text-zinc-300">
+                    Shown beside the Tiers tag until the service receives its first verified buyer review.
+                  </td>
+                </tr>
+
+                {/* 9. Orders & Completed Badges */}
+                <tr className="hover:bg-gray-50/50 dark:hover:bg-white/[0.01] transition-colors">
+                  <td className="py-3.5 px-4">
+                    <div className="inline-flex items-center gap-1.5 flex-wrap">
+                      <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md bg-black/50 text-white text-[10px] font-semibold border border-white/10">
+                        <ShoppingCart className="h-3 w-3" />
+                        <span>4 Orders</span>
+                      </span>
+                      <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md bg-black/50 text-white text-[10px] font-semibold border border-white/10">
+                        <CircleCheck className="h-3 w-3 text-emerald-400" />
+                        <span>3 Completed</span>
+                      </span>
+                    </div>
+                  </td>
+                  <td className="py-3.5 px-4 font-bold text-gray-900 dark:text-white">
+                    Orders &amp; Completed
+                  </td>
+                  <td className="py-3.5 px-4 text-gray-600 dark:text-zinc-400">
+                    Displayed in the upper-left of the banner based on total requests and finished contracts.
+                  </td>
+                  <td className="py-3.5 px-4 text-gray-700 dark:text-zinc-300">
+                    Shows total order inquiries sent alongside successful completed orders.
                   </td>
                 </tr>
 
@@ -666,6 +722,11 @@ export const GigServicesInfoGuide: React.FC<GigServicesInfoGuideProps> = ({
           )}
         </div>
       </div>
+      <ThreeWayWorkflowModal
+        isOpen={isWorkflowModalOpen}
+        mode="gigs"
+        onClose={() => setIsWorkflowModalOpen(false)}
+      />
     </div>
   );
 };

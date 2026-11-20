@@ -31,8 +31,13 @@ import { CreditIcon } from "@/components/ui/credit-icon";
 import {
   type ContractActiveDispute,
   type ContractDisputeFiling,
+  type ContractDisputeHold,
+  type ContractDisputeDecision,
   contractDisputeHeadline,
   contractDisputePath,
+  contractDecisionCopy,
+  contractHoldDetail,
+  contractHoldState,
 } from "./contractDispute";
 import useGlobalState from "@/lib/global_state";
 import { constructAvatarUrl, getFallbackAvatarUrl } from "@/lib/accountAvatars";
@@ -133,6 +138,8 @@ export interface DetailedContract {
   milestones: MilestoneItem[];
   activeDispute?: ContractActiveDispute | null;
   disputeFiling?: ContractDisputeFiling | null;
+  disputeHold?: ContractDisputeHold | null;
+  disputeDecision?: ContractDisputeDecision | null;
 }
 
 // ============================================================================
@@ -312,6 +319,8 @@ export const Contracts: React.FC = () => {
         milestones: mappedMilestones,
         activeDispute: c.active_dispute || null,
         disputeFiling: c.dispute_filing || null,
+        disputeHold: c.dispute_hold || null,
+        disputeDecision: c.dispute_decision || null,
       };
     });
   }, []);
@@ -405,7 +414,10 @@ export const Contracts: React.FC = () => {
       ) : (
         <div className="mx-auto max-w-7xl p-6 md:p-8 space-y-8 animate-fade-in" data-tour="contracts-container">
           {/* Banner */}
-          <div className="relative overflow-hidden rounded-2xl border border-zinc-200 dark:border-white/10 bg-white dark:bg-dark-surface/60 shadow-xs p-6 md:p-8 backdrop-blur-xl">
+          <div
+            data-tour="contracts-header"
+            className="relative overflow-hidden rounded-2xl border border-zinc-200 dark:border-white/10 bg-white dark:bg-dark-surface/60 shadow-xs p-6 md:p-8 backdrop-blur-xl"
+          >
             <div className="relative z-10 space-y-3">
               <div>
                 <h1
@@ -584,6 +596,38 @@ export const Contracts: React.FC = () => {
               </button>
             </div>
           </div>
+
+          {(() => {
+            // Contracts whose dispute closed and still wait for this member's continue-or-end answer.
+            const awaiting = contracts.filter(
+              (c) => c.disputeDecision?.viewerSide && !c.disputeDecision.viewerChoice
+            );
+            if (!awaiting.length) return null;
+            return (
+              <div className="flex flex-col gap-2 rounded-2xl border border-amber-300 bg-amber-50 p-4 dark:border-amber-500/30 dark:bg-amber-500/10">
+                <p className="text-sm font-bold text-amber-900 dark:text-amber-100">
+                  {awaiting.length === 1
+                    ? "A contract needs your decision after its dispute"
+                    : `${awaiting.length} contracts need your decision after their disputes`}
+                </p>
+                <p className="text-xs text-amber-800 dark:text-amber-200">
+                  Choose whether to continue or end each one. They stay on hold until you decide.
+                </p>
+                <div className="flex flex-wrap gap-2 pt-1">
+                  {awaiting.map((c) => (
+                    <button
+                      key={c.id}
+                      type="button"
+                      onClick={() => navigate(`/contracts/${c.id}`)}
+                      className="rounded-lg bg-amber-600 px-3 py-1.5 text-[11px] font-bold text-white hover:bg-amber-700"
+                    >
+                      {c.title}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
 
           {/* Animated Tab Switch Container */}
           <AnimatePresence mode="wait">
@@ -802,6 +846,14 @@ export const Contracts: React.FC = () => {
                       (m) => m.status === "Claimed"
                     ).length;
                     const totalMilestones = contract.milestones.length;
+                    // An open dispute has its own strip below; this covers a ruling's payout
+                    // still holding the contract, and a contract a settlement ruling ended.
+                    const holdState = contractHoldState(contract);
+                    const holdDetail =
+                      holdState.kind === "payout" || holdState.kind === "settled" ? contractHoldDetail(holdState) : null;
+                    // After a dispute closes, both parties choose to continue or end the contract.
+                    const decision = holdState.kind === "decision" ? holdState.decision : null;
+                    const decisionNeeded = Boolean(decision?.viewerSide && !decision.viewerChoice);
 
                     return (
                       <motion.div
@@ -824,7 +876,8 @@ export const Contracts: React.FC = () => {
                         {/* Top accent bar */}
                         <div className={`h-1.5 w-full ${
                           contract.activeDispute ? 'bg-rose-500' :
-                          contract.status === 'Active' ? 'bg-emerald-500' : 
+                          holdState.kind === 'payout' || holdState.kind === 'decision' ? 'bg-amber-500' :
+                          contract.status === 'Active' ? 'bg-emerald-500' :
                           contract.status === 'Waiting' ? 'bg-sky-500' : 
                           contract.status === 'Done' ? 'bg-purple-500' : 'bg-zinc-300 dark:bg-zinc-700'
                         }`} />
@@ -864,6 +917,14 @@ export const Contracts: React.FC = () => {
                               {contract.activeDispute ? (
                                 <span className="inline-flex items-center gap-1 rounded-lg border border-rose-300 bg-rose-50 px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-rose-800 dark:border-rose-500/40 dark:bg-rose-500/15 dark:text-rose-200">
                                   Under dispute
+                                </span>
+                              ) : holdState.kind === "payout" || holdState.kind === "decision" ? (
+                                <span className="inline-flex items-center gap-1 rounded-lg border border-amber-300 bg-amber-50 px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-amber-800 dark:border-amber-500/40 dark:bg-amber-500/15 dark:text-amber-200">
+                                  {decisionNeeded ? "Decision needed" : "On hold"}
+                                </span>
+                              ) : holdState.kind === "settled" ? (
+                                <span className="inline-flex items-center gap-1 rounded-lg border border-zinc-300 bg-zinc-50 px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-zinc-700 dark:border-white/15 dark:bg-white/5 dark:text-zinc-300">
+                                  Settled by dispute
                                 </span>
                               ) : null}
                               {getStatusBadge(contract.status)}
@@ -915,6 +976,38 @@ export const Contracts: React.FC = () => {
                               </div>
                             );
                           })() : null}
+
+                          {decision ? (
+                            <div className="flex items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 dark:border-amber-500/30 dark:bg-amber-500/10">
+                              <p className="text-xs font-semibold text-amber-800 dark:text-amber-200">
+                                {contractDecisionCopy(decision).title}
+                              </p>
+                              {decision.viewerSide ? (
+                                <button
+                                  type="button"
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    navigate(`/contracts/${contract.id}`);
+                                  }}
+                                  className="shrink-0 rounded-lg bg-amber-600 px-3 py-1.5 text-[11px] font-bold text-white hover:bg-amber-700"
+                                >
+                                  {decisionNeeded ? "Choose" : "Review"}
+                                </button>
+                              ) : null}
+                            </div>
+                          ) : null}
+
+                          {holdDetail ? (
+                            <p
+                              className={`rounded-xl border px-3 py-2 text-xs font-semibold ${
+                                holdState.kind === "payout"
+                                  ? "border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200"
+                                  : "border-zinc-200 bg-zinc-50 text-zinc-700 dark:border-white/10 dark:bg-white/5 dark:text-zinc-300"
+                              }`}
+                            >
+                              {holdDetail}
+                            </p>
+                          ) : null}
 
                           {/* Stats Grid: Value, Milestones, Deadline */}
                           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 p-3.5 rounded-xl bg-zinc-50/90 dark:bg-white/[0.03] border border-zinc-200/80 dark:border-white/5">

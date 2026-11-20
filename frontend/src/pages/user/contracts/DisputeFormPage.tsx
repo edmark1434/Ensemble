@@ -18,11 +18,15 @@ import {
   usePendingFiles,
 } from "@/pages/user/account/appeal/appealAttachments";
 import {
+  CONTRACT_DISPUTE_FILING_CODES,
   type ContractActiveDispute,
   type ContractDisputeFiling,
+  type ContractDisputeFilingCode,
   contractDisputeBlockLabel,
+  contractDisputeBlockingDispute,
   contractDisputeDetail,
   contractDisputePath,
+  contractDisputePayoutText,
   contractDisputeWindowText,
 } from "./contractDispute";
 
@@ -148,10 +152,13 @@ export const DisputeFormPage: React.FC = () => {
   const existingDispute = selectedContract?.activeDispute || null;
   const existingDisputePath = contractDisputePath(existingDispute);
   const contractEnded = Boolean(selectedContract?.status && ENDED_CONTRACT_STATUSES.includes(selectedContract.status));
-  // One dispute per side per contract, and 30 days after an ended contract; the server enforces both.
+  // One dispute per side per contract, 30 days after an ended contract, and none while an earlier
+  // ruling's payout is pending; the server enforces all three.
   const filing = selectedContract?.disputeFiling || null;
   const filingBlocked = Boolean(!existingDispute && filing && !filing.canFile);
-  const previousDisputePath = contractDisputePath(filing?.previousDispute);
+  const blockingDispute = filingBlocked ? contractDisputeBlockingDispute(filing) : null;
+  const blockingDisputePath = contractDisputePath(blockingDispute);
+  const payoutText = filingBlocked ? contractDisputePayoutText(filing) : null;
   const windowText = contractDisputeWindowText(filing);
   const contestedMilestone = selectedContract?.milestones?.find((m: any) => String(m.id) === String(paramMilestoneId));
   
@@ -207,8 +214,25 @@ export const DisputeFormPage: React.FC = () => {
       }
     } catch (err: any) {
       console.error("Dispute submission error:", err);
+      const code = err.response?.data?.code as ContractDisputeFilingCode | undefined;
+      const message = err.response?.data?.message;
+      if (code && CONTRACT_DISPUTE_FILING_CODES.includes(code)) {
+        // The block appeared after this page loaded (e.g. a ruling's payout was just scheduled).
+        // Show it in the banner above the form, where the full explanation fits, and keep Submit off.
+        const contractId = selectedContractId;
+        setActiveContracts((prev) =>
+          prev.map((c) =>
+            c.id === contractId
+              ? { ...c, disputeFiling: { ...(c.disputeFiling || {}), canFile: false, code, reason: message || null } }
+              : c
+          )
+        );
+        toast.error("This contract can't be disputed right now. See the note above the form.");
+        window.scrollTo({ top: 0, behavior: "smooth" });
+        return;
+      }
       // An upload failure throws a plain Error naming the file (see uploadPendingFiles).
-      toast.error(err.response?.data?.message || err?.message || "Failed to submit dispute. Please try again.");
+      toast.error(message || err?.message || "Failed to submit dispute. Please try again.");
     } finally {
       submittingRef.current = false;
       setIsSubmitting(false);
@@ -328,15 +352,26 @@ export const DisputeFormPage: React.FC = () => {
                           {contractDisputeBlockLabel(filing)}
                         </p>
                         <p className="mt-1 text-xs text-rose-800 dark:text-rose-200">{filing.reason}</p>
+                        {payoutText ? (
+                          <p className="mt-1 text-xs font-semibold text-rose-800 dark:text-rose-200">{payoutText}</p>
+                        ) : null}
                       </div>
                     </div>
-                    {previousDisputePath ? (
+                    {blockingDisputePath ? (
                       <button
                         type="button"
-                        onClick={() => navigate(previousDisputePath)}
+                        onClick={() => navigate(blockingDisputePath)}
                         className="shrink-0 rounded-xl bg-rose-600 px-4 py-2 text-xs font-bold text-white hover:bg-rose-700"
                       >
-                        View your dispute
+                        {blockingDispute?.filedByViewer ? "View your dispute" : "View dispute"}
+                      </button>
+                    ) : filing.code === "DISPUTE_DECISION_PENDING" && selectedContractId ? (
+                      <button
+                        type="button"
+                        onClick={() => navigate(`/contracts/${selectedContractId}`)}
+                        className="shrink-0 rounded-xl bg-rose-600 px-4 py-2 text-xs font-bold text-white hover:bg-rose-700"
+                      >
+                        Go to contract
                       </button>
                     ) : null}
                   </div>

@@ -18,6 +18,9 @@ router.post('/:contractId/reject', requireAuth, ContractControllers.rejectJobOff
 // Submit a dispute for a contract
 router.post('/:contractId/dispute', requireAuth, ContractControllers.createContractDisputeController);
 
+// After its dispute closes, continue or end the contract ({ choice: 'continue' | 'end' })
+router.post('/:contractId/dispute-decision', requireAuth, ContractControllers.chooseAfterDisputeController);
+
 // Extend contract deadline (Client action)
 router.post('/:contractId/extend', requireAuth, ContractControllers.extendContractDeadlineController);
 

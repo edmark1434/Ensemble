@@ -37,6 +37,9 @@ function StatePill({ penalty }: { penalty: AppealablePenalty }) {
   if (state === 'denied_permanent') {
     return <span className={`${base} bg-rose-500/15 text-rose-700 dark:text-rose-300`}><Ban className="h-3 w-3" /> Final</span>;
   }
+  if (state === 'window_closed') {
+    return <span className={`${base} bg-gray-100 text-gray-600 dark:bg-white/5 dark:text-zinc-400`}><Clock className="h-3 w-3" /> Window closed</span>;
+  }
   return null;
 }
 
@@ -110,6 +113,11 @@ export default function PenaltyAppealList({
                   </p>
                   {appeal.message && !appeal.canAppeal ? (
                     <p className="mt-1.5 text-xs text-gray-600 dark:text-zinc-300">{appeal.message}</p>
+                  ) : null}
+                  {appeal.canAppeal && appeal.closesAt ? (
+                    <p className="mt-1.5 text-xs text-gray-600 dark:text-zinc-300">
+                      Appeal by {formatStandingWhen(appeal.closesAt)}. After that, this penalty can no longer be appealed.
+                    </p>
                   ) : null}
                   <div className="mt-2 flex flex-wrap gap-2">
                     {appeal.canAppeal ? (

@@ -66,6 +66,16 @@ export const toastConfig = {
 
 // --- Helper Functions ---
 
+/**
+ * How long an error toast stays up: at least `base` ms, plus reading time for long messages
+ * (about 4 words a second), capped at 15 s. Hovering pauses it either way.
+ */
+export const errorToastDuration = (message: unknown, base = 5000): number => {
+  if (typeof message !== 'string') return base;
+  const words = message.trim().split(/\s+/).filter(Boolean).length;
+  return Math.min(15000, Math.max(base, 1500 + words * 250));
+};
+
 export const showSuccessToast = (message: string, options?: ToastOptions) =>
   toast.custom(
     (t) =>
@@ -87,10 +97,11 @@ export const showErrorToast = (message: string, options?: ToastOptions) =>
       React.createElement(SwipeToast, {
         open: t.visible,
         onClose: () => toast.dismiss(t.id),
-        duration: options?.duration ?? 5000,
+        duration: options?.duration ?? errorToastDuration(message),
         fuseColor: '#f43f5e',
         icon: React.createElement(ToastLottieIcon, { src: "/icons/lottie/error.lottie" }),
         title: message,
+        clampTitle: false,
         className: 'w-[356px] max-w-[calc(100vw-32px)] border-red-200/80 dark:border-red-500/20',
       }),
     { ...options, duration: Infinity }

@@ -11,7 +11,10 @@
 
 const { pool } = require('../lib/Database');
 const TeamProjectRepositories = require('./TeamProjectRepositories');
-const { assertNoOpenContractDispute } = require('../lib/DisputeEscrow');
+const { assertNoOpenContractDispute, contractOnDisputeHoldSql } = require('../lib/DisputeEscrow');
+
+// A contract on dispute hold has its clock stopped: no job below may advance it.
+const NOT_ON_DISPUTE_HOLD = `NOT ${contractOnDisputeHoldSql('c.contract_id')}`;
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 const AUTO_APPROVE_DAYS_JOB  = 5;   // Days after submission before auto-approve (job contracts)
@@ -75,6 +78,7 @@ async function getActiveMilestonesNowOverdue() {
               WHERE ms.contract_milestone_id = cm.contract_milestone_id
                 AND ms.status = 'under_review'
           )
+          AND ${NOT_ON_DISPUTE_HOLD}
     `);
     return res.rows;
 }
@@ -135,6 +139,7 @@ async function getOverdueMilestonesNowStalled() {
               SELECT 1 FROM milestone_submits ms
               WHERE ms.contract_milestone_id = cm.contract_milestone_id
           )
+          AND ${NOT_ON_DISPUTE_HOLD}
     `, [STALLED_DAYS_GIG, STALLED_DAYS_JOB]);
     return res.rows;
 }
@@ -186,6 +191,7 @@ async function getStalledMilestonesNowAbandoned() {
                   ELSE ($2 || ' days')::interval
               END
           )
+          AND ${NOT_ON_DISPUTE_HOLD}
     `, [ABANDONED_DAYS_GIG, ABANDONED_DAYS_JOB]);
     return res.rows;
 }
@@ -236,17 +242,13 @@ async function getSubmissionsReadyForAutoApproval() {
             JOIN gigs g ON gt.gig_id = g.gig_id
         ) gc_info ON c.contract_id = gc_info.contract_id
         WHERE ms.status = 'under_review'
+          -- The review window does not run while the contract is on dispute hold.
           AND (
-            (c.contract_type = 'job' AND NOW() > ms.submitted_at + ($1 || ' days')::interval)
+            (c.contract_type = 'job' AND NOW() > ms.submitted_at + ms.review_paused_for + ($1 || ' days')::interval)
             OR
-            (c.contract_type = 'gig' AND NOW() > ms.submitted_at + ($2 || ' days')::interval)
+            (c.contract_type = 'gig' AND NOW() > ms.submitted_at + ms.review_paused_for + ($2 || ' days')::interval)
           )
-          AND NOT EXISTS (
-            SELECT 1 FROM disputes d
-            WHERE d.contract_id = c.contract_id
-              AND d.deleted_at IS NULL
-              AND d.status <> 'closed'
-          )
+          AND ${NOT_ON_DISPUTE_HOLD}
     `, [AUTO_APPROVE_DAYS_JOB, AUTO_APPROVE_DAYS_GIG]);
     return res.rows;
 }
@@ -441,6 +443,7 @@ async function getApproachingDeadlineMilestones() {
                 AND n.reference_prefix = 'MILESTONE_DUE_SOON'
                 AND n.account_id = COALESCE(jc_info.freelancer_account_id, gc_info.freelancer_account_id)
           )
+          AND ${NOT_ON_DISPUTE_HOLD}
     `, [DEADLINE_REMINDER_HRS]);
     return res.rows;
 }
@@ -478,12 +481,13 @@ async function getSubmissionsNeedingReviewReminder() {
         ) gc_info ON c.contract_id = gc_info.contract_id
         WHERE ms.status = 'under_review'
           AND (
-            (c.contract_type = 'job' AND NOW() > ms.submitted_at + ($1 || ' days')::interval
-             AND NOW() < ms.submitted_at + ($2 || ' days')::interval)
+            (c.contract_type = 'job' AND NOW() > ms.submitted_at + ms.review_paused_for + ($1 || ' days')::interval
+             AND NOW() < ms.submitted_at + ms.review_paused_for + ($2 || ' days')::interval)
             OR
-            (c.contract_type = 'gig' AND NOW() > ms.submitted_at + ($3 || ' days')::interval
-             AND NOW() < ms.submitted_at + ($4 || ' days')::interval)
+            (c.contract_type = 'gig' AND NOW() > ms.submitted_at + ms.review_paused_for + ($3 || ' days')::interval
+             AND NOW() < ms.submitted_at + ms.review_paused_for + ($4 || ' days')::interval)
           )
+          AND ${NOT_ON_DISPUTE_HOLD}
           AND NOT EXISTS (
               SELECT 1 FROM notifications n
               WHERE n.reference_table = 'milestone_submits'
@@ -696,7 +700,39 @@ async function cancelContractAndRefundUnfinishedMilestones({ contractId, clientA
     const client = await pool.connect();
     try {
         await client.query('BEGIN');
-        await assertNoOpenContractDispute(client, contractId);
+        const result = await cancelContractAndRefundInTransaction(client, {
+            contractId,
+            clientAccountId,
+            freelancerAccountId,
+        });
+        await client.query('COMMIT');
+        return result;
+    } catch (err) {
+        await client.query('ROLLBACK');
+        throw err;
+    } finally {
+        client.release();
+    }
+}
+
+/**
+ * The cancellation itself, inside the caller's transaction. Options for ending a contract from
+ * the continue-or-end question after a dispute:
+ *   allowDecision         the pending question does not block it (it is what ends the contract)
+ *   allowNothingToRefund  a contract with no unfinished milestones just closes
+ *   withdrawPendingRequests  a pending mutual cancellation request is withdrawn (moot once ended)
+ */
+async function cancelContractAndRefundInTransaction(client, {
+    contractId,
+    clientAccountId,
+    freelancerAccountId,
+    allowDecision = false,
+    allowNothingToRefund = false,
+    withdrawPendingRequests = false,
+    archiveReason = 'Contract cancelled',
+}) {
+    {
+        await assertNoOpenContractDispute(client, contractId, { allowDecision });
 
         // 1. Lock contract
         const contractRes = await client.query(`
@@ -726,7 +762,7 @@ async function cancelContractAndRefundUnfinishedMilestones({ contractId, clientA
         `, [contractId]);
         const completedCnt = parseInt(completedCounts.rows[0].completed_cnt, 10);
 
-        if (milestonesRes.rows.length === 0) {
+        if (milestonesRes.rows.length === 0 && !allowNothingToRefund) {
             throw new Error('No uncompleted milestones to cancel or refund');
         }
 
@@ -809,9 +845,15 @@ async function cancelContractAndRefundUnfinishedMilestones({ contractId, clientA
                 SELECT gig_request_id FROM gig_contracts WHERE contract_id = $1
             )
         `, [contractId]);
-        await TeamProjectRepositories.syncContractWorkspacesArchived(client, contractId, clientAccountId, 'Contract cancelled');
+        if (withdrawPendingRequests) {
+            await client.query(`
+                UPDATE contract_cancellation_requests
+                SET status = 'withdrawn', responded_at = NOW()
+                WHERE contract_id = $1 AND status = 'pending'
+            `, [contractId]);
+        }
+        await TeamProjectRepositories.syncContractWorkspacesArchived(client, contractId, clientAccountId, archiveReason);
 
-        await client.query('COMMIT');
         return {
             transactionId: txId,
             refundedCredits: refundableCredits,
@@ -821,11 +863,6 @@ async function cancelContractAndRefundUnfinishedMilestones({ contractId, clientA
             completedMilestonesCount: completedCnt,
             cancelledMilestonesCount: milestonesRes.rows.length,
         };
-    } catch (err) {
-        await client.query('ROLLBACK');
-        throw err;
-    } finally {
-        client.release();
     }
 }
 
@@ -836,7 +873,9 @@ async function approveMilestoneSubmit({ milestoneId, contractId, milestoneIndex,
     const client = await pool.connect();
     try {
         await client.query('BEGIN');
-        await assertNoOpenContractDispute(client, contractId);
+        // Approving delivered work stays possible while the parties decide whether to continue
+        // after a dispute: the client must review it before they can end the contract.
+        await assertNoOpenContractDispute(client, contractId, { allowDecision: true });
 
         // Lock the latest under_review submission for this milestone
         const submitRes = await client.query(`
@@ -1211,14 +1250,23 @@ async function getExpiredPendingCancellationRequests() {
          WHERE cr.status = 'pending'
            AND cr.auto_cancel_at <= NOW()
            AND c.status IN ('Active', 'Waiting')
-           AND NOT EXISTS (
-             SELECT 1 FROM disputes d
-             WHERE d.contract_id = c.contract_id
-               AND d.deleted_at IS NULL
-               AND d.status <> 'closed'
-           )`
+           AND ${NOT_ON_DISPUTE_HOLD}`
     );
     return res.rows;
+}
+
+/** Undo a request status set just before a cancellation that then failed. Never throws. */
+async function revertCancellationRequestToPending(requestId, fromStatus) {
+    try {
+        await pool.query(
+            `UPDATE contract_cancellation_requests
+             SET status = 'pending', responded_at = NULL
+             WHERE request_id = $1 AND status = $2`,
+            [requestId, fromStatus]
+        );
+    } catch (error) {
+        console.error(`Could not reset cancellation request ${requestId}:`, error.message);
+    }
 }
 
 async function autoApproveCancellationRequest(requestId) {
@@ -1245,6 +1293,7 @@ module.exports = {
     // Client action queries
     cancelMilestoneAndRefund,
     cancelContractAndRefundUnfinishedMilestones,
+    cancelContractAndRefundInTransaction,
     extendMilestoneDeadline,
     extendContractDeadline,
     approveMilestoneSubmit,
@@ -1257,5 +1306,6 @@ module.exports = {
     withdrawCancellationRequestRepository,
     getExpiredPendingCancellationRequests,
     autoApproveCancellationRequest,
+    revertCancellationRequestToPending,
 };
 

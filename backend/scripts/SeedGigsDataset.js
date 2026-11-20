@@ -11,6 +11,12 @@
 require('dotenv').config({ quiet: true, path: require('path').resolve(__dirname, '../.env') });
 const { pool } = require('../lib/Database');
 
+const GIG_BANNER_PRESETS = [
+  '/gig_banners/gg1.png',
+  '/gig_banners/gg2.png',
+  '/gig_banners/gg3.png',
+];
+
 const DEFAULT_TOS =
   '1. Raw footage, brand guidelines, and reference links must be provided via high-speed cloud storage prior to Milestone 1.\n2. Included revisions cover pacing, graphics, and color adjustments within the agreed brief.\n3. Final master files are delivered in 4K H.264/ProRes upon milestone sign-off.';
 
@@ -787,13 +793,20 @@ async function replaceAndSeed25Gigs() {
         );
       }
 
-      // Insert Gallery Images (index 0 = thumbnail, index 1..N = supporting images)
-      for (let gIdx = 0; gIdx < item.gallery.length; gIdx++) {
+      // Insert Gallery Images (index 0 = preset gig banner, index 1..N = supporting images)
+      const galleryImages = Array.isArray(item.gallery) ? item.gallery : [];
+      const bannerPath = GIG_BANNER_PRESETS[i % GIG_BANNER_PRESETS.length];
+      const totalImages = Math.max(1, galleryImages.length);
+      for (let gIdx = 0; gIdx < totalImages; gIdx++) {
+        const isBanner = gIdx === 0;
+        const imgPath = isBanner ? bannerPath : galleryImages[gIdx];
+        const imgName = isBanner ? bannerPath.split('/').pop() : `gig_${i + 1}_img_${gIdx}.jpg`;
+        const mimeType = isBanner ? 'image/png' : 'image/jpeg';
         const fRes = await client.query(
           `INSERT INTO files (name, path, mime_type, size_bytes)
-           VALUES ($1, $2, 'image/jpeg', 0)
+           VALUES ($1, $2, $3, 0)
            RETURNING file_id`,
-          [`gig_${i + 1}_img_${gIdx}.jpg`, item.gallery[gIdx]]
+          [imgName, imgPath, mimeType]
         );
         await client.query(
           `INSERT INTO gig_attachments (gig_id, file_id, index)

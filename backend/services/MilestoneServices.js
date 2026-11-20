@@ -16,7 +16,6 @@ const {
     getOverdueMilestonesNowStalled,
     markMilestoneStalled,
     getStalledMilestonesNowAbandoned,
-    markMilestoneAbandoned,
     getSubmissionsReadyForAutoApproval,
     autoApproveMilestoneSubmit,
     getApproachingDeadlineMilestones,
@@ -34,6 +33,7 @@ const {
     withdrawCancellationRequestRepository,
     getExpiredPendingCancellationRequests,
     autoApproveCancellationRequest,
+    revertCancellationRequestToPending,
 } = require('../repositories/MilestoneRepositories');
 
 const { createNotification } = require('../repositories/NotificationRepositories');
@@ -164,8 +164,9 @@ async function reconcileAbandonedMilestonesServices() {
     let abandoned = 0;
     for (const m of milestones) {
         try {
-            await markMilestoneAbandoned(m.contract_milestone_id);
-            // Automatically refund remaining escrow to the client
+            // Refund first: it accepts a stalled milestone and leaves it `cancelled`. Marking it
+            // abandoned beforehand left it abandoned with its credits stuck in escrow whenever the
+            // refund failed, and the job never picked it up again.
             const refundResult = await cancelMilestoneAndRefund({
                 milestoneId:         m.contract_milestone_id,
                 clientAccountId:     m.client_account_id,
@@ -461,6 +462,8 @@ async function approveMilestoneService(milestoneId, callerAccountId) {
         milestoneCredits:    Number(milestone.credits),
         freelancerAccountId: milestone.freelancer_account_id,
     });
+    // Approving the last milestone can complete a contract whose post-dispute question is open.
+    await require('./ContractDisputeHoldServices').syncHoldForContractQuietly(milestone.contract_id);
 
     await notifyBoth({
         clientAccountId:     milestone.client_account_id,
@@ -668,11 +671,20 @@ async function respondContractCancellationService({ contractId, requestId, calle
     });
 
     if (action === 'accept') {
-        const cancelResult = await cancelContractAndRefundUnfinishedMilestones({
-            contractId,
-            clientAccountId: contract.client_account_id,
-            freelancerAccountId: contract.freelancer_account_id,
-        });
+        let cancelResult;
+        try {
+            cancelResult = await cancelContractAndRefundUnfinishedMilestones({
+                contractId,
+                clientAccountId: contract.client_account_id,
+                freelancerAccountId: contract.freelancer_account_id,
+            });
+        } catch (err) {
+            // The request was marked accepted first; if the cancellation itself fails (escrow
+            // frozen by a dispute filed meanwhile, a wallet problem), put it back to pending so
+            // it is not left "accepted" on a contract that never ended.
+            await revertCancellationRequestToPending(requestId, 'accepted');
+            throw err;
+        }
 
         await notifyBoth({
             clientAccountId: contract.client_account_id,
@@ -767,12 +779,14 @@ async function reconcileExpiredCancellationRequestsServices() {
     let processed = 0;
     for (const req of expired) {
         try {
-            await autoApproveCancellationRequest(req.request_id);
+            // Cancel first: marking the request auto-approved before a failed cancellation left
+            // it approved on a live contract, and the job never retried it.
             const cancelResult = await cancelContractAndRefundUnfinishedMilestones({
                 contractId: req.contract_id,
                 clientAccountId: req.client_account_id,
                 freelancerAccountId: req.freelancer_account_id,
             });
+            await autoApproveCancellationRequest(req.request_id);
 
             await notifyBoth({
                 clientAccountId: req.client_account_id,

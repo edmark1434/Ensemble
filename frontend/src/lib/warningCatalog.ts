@@ -39,6 +39,7 @@ export const WARNING_PRESETS: WarningPreset[] = [
   { id: 'no_show', label: 'No-show / ghosting after hire', category: 'Jobs', points: 5, desks: ['admin', 'support', 'jobs'], note: 'First confirmed miss. Live contract still deliverable.' },
   { id: 'fake_delivery', label: 'Fake delivery or empty work', category: 'Jobs', points: 8, desks: ['admin', 'support', 'jobs'] },
   { id: 'review_manipulation', label: 'Review manipulation', category: 'Jobs', points: 6, desks: ['admin', 'support', 'jobs'] },
+  { id: 'missed_review', label: 'No review after a finished contract', category: 'Jobs', points: 2, desks: ['admin', 'support', 'jobs'], note: 'Issued automatically when a member does not review the other party within 24 hours of a contract ending. Staff can also issue it.' },
 
   { id: 'gig_spam', label: 'Duplicate or spam gig', category: 'Gigs', points: 3, desks: ['admin', 'support', 'jobs'] },
   { id: 'gig_misleading', label: 'Misleading gig or bait-and-switch', category: 'Gigs', points: 5, desks: ['admin', 'support', 'jobs'] },

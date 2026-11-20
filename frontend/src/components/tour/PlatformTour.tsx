@@ -6,6 +6,7 @@ import { TourWelcomeModal } from './TourWelcomeModal';
 import { TourSpotlightCard } from './TourSpotlightCard';
 import { TourGraduationModal } from './TourGraduationModal';
 import { TourWelcomeLeftPopup } from './TourWelcomeLeftPopup';
+import { ThreeWayWorkflowModal } from '@/components/ui/ThreeWayWorkflowModal';
 
 export const PlatformTour: React.FC = () => {
   const navigate = useNavigate();
@@ -48,7 +49,7 @@ export const PlatformTour: React.FC = () => {
         return;
       }
 
-      if (location.pathname === '/home') {
+      if (location.pathname === '/home' && !isWalkthroughActive && !isWelcomeOpen) {
         initFromUser(user);
       }
 
@@ -300,6 +301,10 @@ export const PlatformTour: React.FC = () => {
   if (isStaffAccount) return null;
   if (!isAuthenticated && !isWalkthroughActive && !isWelcomeOpen && !isLeftPopupOpen) return null;
 
+  const currentWorkflowModal = isWalkthroughActive
+    ? activeSteps[currentStepIndex]?.workflowModal
+    : undefined;
+
   return (
     <>
       {/* 1. Welcome Modal */}
@@ -309,13 +314,22 @@ export const PlatformTour: React.FC = () => {
         onStart={handleStartWalkthrough}
       />
 
-      {/* 2. Active Walkthrough Spotlight Card */}
-      {isWalkthroughActive && (
+      {/* 2. Active Walkthrough Spotlight Card or 3-Way Workflow Modal */}
+      {isWalkthroughActive && !currentWorkflowModal && (
         <TourSpotlightCard
           onNext={handleNext}
           onPrev={handlePrev}
           onExit={skipWalkthrough}
           onSkipSection={handleSkipSection}
+        />
+      )}
+
+      {currentWorkflowModal && (
+        <ThreeWayWorkflowModal
+          isOpen
+          mode={currentWorkflowModal}
+          onClose={handleNext}
+          onPrev={handlePrev}
         />
       )}
 

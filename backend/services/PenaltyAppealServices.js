@@ -8,6 +8,8 @@
  *    than planned); a warning is rescinded at once.
  *  - deny: that penalty cannot be appealed again for 12 months; deny permanently: never.
  *    Other penalties stay appealable.
+ *  - filing window: a penalty must first be appealed within `APPEAL_WINDOW_DAYS` of being
+ *    issued or last extended; after that it can no longer be appealed (`window_closed`).
  *
  * A decision covers the penalty as it stood when decided. When staff extend or re-issue it
  * afterwards (a newer status change into the same status), it can be appealed again.
@@ -31,6 +33,13 @@ const TARGET_TYPES = Object.freeze([
   'merit_penalty',
 ]);
 const DENIAL_HOLD_MONTHS = 12;
+/**
+ * A penalty must first be appealed within this many days of being issued (or last extended /
+ * re-issued, which makes it a new decision). After that it cannot be appealed. A penalty already
+ * appealed and denied (12-month hold) can still be appealed again once the hold ends.
+ */
+const APPEAL_WINDOW_DAYS = 30;
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 /** How each kind of penalty is named in sentences ("your suspension ends within 24 hours"). */
 const PENALTY_NOUN = Object.freeze({
@@ -297,12 +306,13 @@ function appealStateFor(penalty, { appeals, legacyOpen, legacyHold, now = Date.n
 
   // Account-wide denials decided before appeals were per penalty still cover the penalties that
   // already existed then. A penalty issued after that decision is a new case.
+  const legacyCovers = Boolean(legacyHold) && covers(toDate(legacyHold.decided_at));
   if (legacyHold) {
     const holdDecidedAt = toDate(legacyHold.decided_at);
     const until = toDate(legacyHold.blocked_until);
     const permanent = Boolean(legacyHold.permanently_denied);
     const active = permanent || Boolean(until && until.getTime() > now);
-    if (active && covers(holdDecidedAt)) {
+    if (active && legacyCovers) {
       return {
         state: permanent ? 'denied_permanent' : 'denied',
         canAppeal: false,
@@ -319,6 +329,26 @@ function appealStateFor(penalty, { appeals, legacyOpen, legacyHold, now = Date.n
     }
   }
 
+  // Filing window: a penalty nobody has appealed yet must be appealed within
+  // APPEAL_WINDOW_DAYS of being issued or last extended. Once a decision covered it, the
+  // 12-month denial hold above governs re-appeals instead.
+  const issuedAt = changedAt || toDate(penalty.startedAt);
+  const closesAt = issuedAt ? new Date(issuedAt.getTime() + APPEAL_WINDOW_DAYS * DAY_MS) : null;
+  const previouslyDecided = Boolean(decided && covers(decidedAt)) || legacyCovers;
+  if (closesAt && !previouslyDecided && closesAt.getTime() <= now) {
+    return {
+      state: 'window_closed',
+      canAppeal: false,
+      ticketId: null,
+      ticketNumber: null,
+      status: null,
+      decidedAt: null,
+      availableAt: null,
+      closedAt: closesAt.toISOString(),
+      message: `The appeal window for this penalty closed on ${formatDay(closesAt)}. Penalties must be appealed within ${APPEAL_WINDOW_DAYS} days of being issued.`,
+    };
+  }
+
   return {
     state: 'available',
     canAppeal: true,
@@ -327,6 +357,8 @@ function appealStateFor(penalty, { appeals, legacyOpen, legacyHold, now = Date.n
     status: null,
     decidedAt: null,
     availableAt: null,
+    // When filing closes; null when a previous decision covered it (the 12-month rule applies).
+    closesAt: closesAt && !previouslyDecided ? closesAt.toISOString() : null,
     message: null,
   };
 }
@@ -357,7 +389,14 @@ async function listAppealablePenalties(accountId) {
 /* Filing                                                              */
 /* ------------------------------------------------------------------ */
 
-const REFUSAL_STATUS = { open: 409, legacy_open: 409, accepted: 409, denied: 403, denied_permanent: 403 };
+const REFUSAL_STATUS = {
+  open: 409,
+  legacy_open: 409,
+  accepted: 409,
+  denied: 403,
+  denied_permanent: 403,
+  window_closed: 403,
+};
 
 /**
  * The penalty a new appeal is about, checked against what is on the account now.
@@ -896,6 +935,7 @@ async function describeAppealTarget(row) {
 
 module.exports = {
   TARGET_TYPES,
+  APPEAL_WINDOW_DAYS,
   PENALTY_NOUN,
   appealTargetsReady: repo.appealTargetsReady,
   listAppealablePenalties,
