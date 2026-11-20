@@ -27,6 +27,15 @@ const {
 const requireAuth = require('../middleware/RequireAuth');
 const checkSession = require('../middleware/CheckSession');
 const optionalSession = require('../middleware/OptionalSession');
+const { createRateLimiter } = require('../middleware/RateLimiter');
+
+const forumCommentLimiter = createRateLimiter('forumComment', {
+	windowMs: 60 * 1000,
+	accountLimit: 10,
+	anonymousLimit: 5,
+	networkLimit: 120,
+	message: 'You are commenting too fast. Please wait a moment before posting another reply.',
+});
 const {
 	createGroupReportController,
 	createMemberReportController,
@@ -48,7 +57,7 @@ router.get('/users/:userId/discussions', [checkSession, requireAuth], getForumDi
 router.get('/discussions/:discussionId', [checkSession, requireAuth], getForumDiscussionByIdController);
 router.patch('/discussions/:discussionId', [checkSession, requireAuth], updateForumDiscussionController);
 router.patch('/discussions/:discussionId/comments/:commentId', [checkSession, requireAuth], updateForumDiscussionCommentsController);
-router.post('/discussions/:discussionId/comments', [checkSession, requireAuth], addForumDiscussionCommentController);
+router.post('/discussions/:discussionId/comments', [checkSession, requireAuth, forumCommentLimiter], addForumDiscussionCommentController);
 router.put('/groups/:groupId', [checkSession, requireAuth], updateForumGroupController);
 router.put('/groups/members/:groupId', [checkSession, requireAuth], updateForumGroupMembersController);
 router.patch('/groups/:groupId/members/:memberId/role', [checkSession, requireAuth], updateForumGroupMemberRoleController);

@@ -87,7 +87,20 @@ async function getPublicForumUserIdentities(userIds = []) {
           FROM subscriptions s
           INNER JOIN plans pl ON pl.plan_id = s.plan_id
           WHERE s.user_id = u.user_id
-          ORDER BY s.created_at DESC
+            AND (s.status IS NULL OR UPPER(s.status) IN ('ACTIVE', 'TRIALING', 'TRIAL', 'PENDING'))
+            AND (
+              s.current_period_end IS NULL
+              OR s.current_period_end > CURRENT_TIMESTAMP
+              OR (s.trial_ends_at IS NOT NULL AND s.trial_ends_at > CURRENT_TIMESTAMP)
+            )
+          ORDER BY
+            CASE WHEN s.xendit_plan_id IS NOT NULL THEN 1 ELSE 2 END,
+            CASE
+              WHEN LOWER(pl.name) = 'business' THEN 1
+              WHEN LOWER(pl.name) = 'premium' THEN 2
+              ELSE 3
+            END,
+            s.updated_at DESC, s.created_at DESC
           LIMIT 1
         ) p ON TRUE
         WHERE a.deleted_at IS NULL

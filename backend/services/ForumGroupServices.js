@@ -10,7 +10,7 @@ const {
     removeForumGroupMember,
 } = require('../repositories/ForumGroupRepositories');
 const { emitForumEvent } = require('../lib/WebSocket');
-const { attachGroupMemberIdentities } = require('./ForumIdentityServices');
+const { attachGroupMemberIdentities, attachGroupListOwnerIdentities } = require('./ForumIdentityServices');
 const dotenv = require('dotenv');
 dotenv.config();
 function actorId(session = {}) {
@@ -69,7 +69,8 @@ async function createGroup(groupData){
 }
 
 async function listForumGroups() {
-    return await getAllForumGroups();
+    const groups = await getAllForumGroups();
+    return attachGroupListOwnerIdentities(groups);
 }
 
 async function listForumGroupsByMemberId(memberId) {
@@ -144,7 +145,15 @@ async function setForumGroupMemberBanServices(groupId, memberId, isBanned, sessi
 }
 
 async function removeForumGroupMemberServices(groupId, memberId, session = {}) {
-    const group = await requireGroupManager(groupId, session);
+    const currentActorId = actorId(session);
+    const isSelfLeave = Boolean(currentActorId && String(memberId) === String(currentActorId));
+    let group;
+    if (isSelfLeave) {
+        group = await getForumGroupById(groupId);
+        if (!group) throw new Error('Forum group not found');
+    } else {
+        group = await requireGroupManager(groupId, session);
+    }
     const target = group.members?.find((item) => String(item.userId) === String(memberId));
     if (!target) throw new Error('Group member not found');
     if (target.role === 'Admin') throw new Error('Group admins cannot be removed');

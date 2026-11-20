@@ -53,9 +53,21 @@ async function getForumGroupById(groupId){
 
 async function getAllForumGroups(){
     try{
-        const forumGroupsCollection = getForumDb().collection('forum_groups');
-        const result = await forumGroupsCollection.find({ status: 'active', deleted_at: null }).toArray();
-        return result;
+        const db = getForumDb();
+        const forumGroupsCollection = db.collection('forum_groups');
+        const forumDiscussionsCollection = db.collection('forum_discussions');
+        const [groups, counts] = await Promise.all([
+            forumGroupsCollection.find({ status: 'active', deleted_at: null }).toArray(),
+            forumDiscussionsCollection.aggregate([
+                { $match: { deleted_at: null, status: { $ne: 'deleted' } } },
+                { $group: { _id: { $toString: '$forum_group_id' }, count: { $sum: 1 } } },
+            ]).toArray(),
+        ]);
+        const countMap = new Map(counts.map((c) => [String(c._id), c.count]));
+        return groups.map((group) => ({
+            ...group,
+            discussionsCount: countMap.get(String(group._id)) || 0,
+        }));
     }catch(err){
         console.error('Error fetching all forum groups:', err);
         throw err;

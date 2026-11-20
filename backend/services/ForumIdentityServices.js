@@ -37,7 +37,24 @@ async function attachGroupMemberIdentities(group) {
     };
 }
 
+async function attachGroupListOwnerIdentities(groups = []) {
+    const ownerIds = groups
+        .map((group) => (group.members || []).find((m) => m.role === 'Admin')?.userId)
+        .filter(Boolean);
+    const identities = await resolvePublicForumIdentities(ownerIds);
+
+    return groups.map((group) => {
+        const ownerMember = (group.members || []).find((m) => m.role === 'Admin');
+        const ownerIdentity = ownerMember ? identities.get(String(ownerMember.userId)) || null : null;
+        return {
+            ...group,
+            owner_identity: ownerIdentity,
+        };
+    });
+}
+
 module.exports = {
     attachDiscussionIdentities,
     attachGroupMemberIdentities,
+    attachGroupListOwnerIdentities,
 };
