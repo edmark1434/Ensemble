@@ -93,15 +93,16 @@ export function insertPendingUpload(id: string, file: File, placement: AddPlacem
       }
       if (initial && details.left === initial.details.left) details.left = `${(target.size.width - details.width) / 2}px`;
       if (initial && details.top === initial.details.top) details.top = `${(target.size.height - details.height) / 2}px`;
-      const duration = type !== "image" && meta.duration ? meta.duration * 1000 : item.duration;
-      const untouchedTiming = type !== "image" && meta.duration &&
+      const probedDuration = type !== "image" && meta.duration ? meta.duration * 1000 : undefined;
+      const duration = probedDuration ?? item.duration;
+      const untouchedTiming = probedDuration !== undefined &&
         item.display.to - item.display.from === 5000 &&
         item.trim?.from === 0 && item.trim?.to === 5000;
       return {
         ...item, details, duration,
         ...(untouchedTiming ? {
-          trim: { from: 0, to: duration },
-          display: { from: item.display.from, to: item.display.from + duration / (item.playbackRate || 1) },
+          trim: { from: 0, to: probedDuration },
+          display: { from: item.display.from, to: item.display.from + probedDuration / (item.playbackRate || 1) },
         } : {}),
       } as ITrackItem;
     });

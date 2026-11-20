@@ -1,13 +1,13 @@
-# Optimize editor media loading and eliminate Loading media flashes
+# Guest view-only share links & navbar title subtitles
 
 ## Implementation objective
 
-Eliminate or minimize `"Loading media…"` flashes across uploads, images, market assets, and video cuts in the video editor using optimistic local previews, background pre-decoding/prefetching, longer video lookahead, frame-hold during seeks, and a delayed spinner threshold.
+Allow guests to open view-only project share links without signing in, display owner/save subtitles in the editor navbar, and add a custom tooltip to the portfolio back button.
 
 ## Acceptance criteria
 
-- Local files dropped or uploaded render immediately in the canvas from browser-local `blob:` URLs while uploading (with an unobtrusive corner upload progress badge), probe true dimensions/duration locally, and alias the final cloud URL to the same blob so upload completion causes zero flicker or re-download.
-- Market images proactively prefetch and decode in the background (bounded concurrency) instead of waiting until the playhead mounts each frame.
-- Regular images (uploads, Pexels) track decoded URLs and pre-decode in the background so remounting on cuts/scrubs renders instantaneously without a 1-frame loading flash.
-- Video clips premount 3 seconds ahead of the playhead (and stay mounted 2 seconds behind), hold their last decoded frame during brief seeks/waits instead of hiding behind `"Loading media…"`, and check `readyState >= 2` on mount.
-- `MediaPlaceholder` uses a 600ms grace delay (`delayMs={600}`) for the spinner text while keeping the 50% opacity preview thumbnail visible immediately for both images and videos.
+- View-only share links generated from the Share modal point directly to the editor (`/editor/[id]?share=...`) and allow unauthenticated guests to view the live project via read-only `SnapshotPreview` after verifying the signed link and active issuer authority in PostgreSQL.
+- Non-viewer share links (`Commenter`, `Editor`, `Manager`) still require login and redeem membership through `/projects/open/[id]?share=...`.
+- The navbar displays `by [owner]` in `text-muted-foreground` next to the title for view-only/comment-only access, template previews (showing template owner), guest view-only share links, and portfolio mode — and in mobile mode only when the user is actually a Viewer or Commenter (never for Owners/Managers/Editors).
+- Save previews display `at [Month Day, Year] · [Hour:Minute AM/PM]` in `text-muted-foreground` instead of `by [owner]`.
+- The portfolio mode back button uses a UI `<Tooltip>` with `"Back to profile"` and no native `title` attribute.

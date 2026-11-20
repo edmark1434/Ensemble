@@ -14,6 +14,7 @@ import { db } from "@/lib/db";
 import { loadLatestProjectState } from "./persistence-store";
 import { loadLatestBlockState } from "./block-persistence-store";
 import { liveRooms } from "./live-rooms";
+import { readProjectOwnerName } from "@/lib/db/project-members";
 
 function decode(document: Uint8Array): DocSnapshot {
   const doc = new Y.Doc();
@@ -59,16 +60,20 @@ async function hydrateSnapshot(saved: { document: Uint8Array }, readSceneDocumen
 export async function loadSnapshotPreview(snapshotId: number, userId: string) {
   const saved = await readPreviewSnapshot(snapshotId, userId);
   if (!saved) return null;
-  const { snapshot, scenes, media } = await hydrateSnapshot(saved, async id =>
-    (await readSceneAtSnapshot(id, saved.project_id, snapshotId))?.document ?? null);
-  return preparePrivatePreview(snapshot, scenes, media, saved.project_id, userId, saved.name);
+  const [{ snapshot, scenes, media }, ownerName] = await Promise.all([
+    hydrateSnapshot(saved, async id => (await readSceneAtSnapshot(id, saved.project_id, snapshotId))?.document ?? null),
+    readProjectOwnerName(saved.project_id),
+  ]);
+  const prepared = await preparePrivatePreview(snapshot, scenes, media, saved.project_id, userId, saved.name);
+  return { ...prepared, ownerName: ownerName ?? undefined };
 }
 
 // Read-only playback of a save. Access is checked by the caller.
 export async function loadProjectSavePreview(save: { document: Uint8Array; project_id: string; created_at: Date; name: string },
   readScene: SceneDocumentReader, userId: string) {
   const { snapshot, scenes, media } = await hydrateSnapshot(save, readScene);
-  return preparePrivatePreview(snapshot, scenes, media, save.project_id, userId, save.name);
+  const prepared = await preparePrivatePreview(snapshot, scenes, media, save.project_id, userId, save.name);
+  return { ...prepared, savedAt: save.created_at.toISOString() };
 }
 
 async function preparePrivatePreview(snapshot: DocSnapshot, scenes: Record<string, DocSnapshot>, media: ITrackItem[],
@@ -123,7 +128,51 @@ export async function loadPortfolioComposition(projectId: string) {
 
 export async function portfolioPlayback(content: NonNullable<Awaited<ReturnType<typeof loadPortfolioComposition>>>,
   projectId: string, userId: string, name: string) {
-  return preparePrivatePreview(content.snapshot, content.scenes, content.media, projectId, userId, name);
+  const [prepared, ownerName] = await Promise.all([
+    preparePrivatePreview(content.snapshot, content.scenes, content.media, projectId, userId, name),
+    readProjectOwnerName(projectId),
+  ]);
+  return { ...prepared, ownerName: ownerName ?? undefined };
+}
+
+function emptyProjectSnapshot(name: string, width: number, height: number): DocSnapshot {
+  const doc = new Y.Doc();
+  const schema = createCollabSchema(doc);
+  try {
+    const snapshot = structuredClone(readStateFromDoc(schema));
+    snapshot.size = { width, height };
+    snapshot.projectName = name;
+    return snapshot;
+  } finally { schema.awareness.destroy(); doc.destroy(); }
+}
+
+// Read-only guest playback for a verified Viewer share link.
+// Caller must verify the share link and confirm the issuer is still active.
+export async function loadGuestProjectSharePreview(
+  projectId: string,
+  issuerUserId: string,
+  project: { name: string; width: number; height: number; ownerName: string | null },
+) {
+  const composition = await loadPortfolioComposition(projectId);
+  if (!composition) {
+    return {
+      snapshot: emptyProjectSnapshot(project.name, project.width, project.height),
+      scenes: {},
+      missingSources: [],
+      name: project.name,
+      ownerName: project.ownerName ?? undefined,
+    };
+  }
+  const prepared = await preparePrivatePreview(
+    composition.snapshot,
+    composition.scenes,
+    composition.media,
+    projectId,
+    issuerUserId,
+    project.name,
+  );
+  prepared.snapshot.size ??= { width: project.width, height: project.height };
+  return { ...prepared, ownerName: project.ownerName ?? undefined };
 }
 
 export async function loadMarketTemplatePreview(assetId: string, snapshotId?: number) {
@@ -170,5 +219,8 @@ export async function loadMarketTemplatePreview(assetId: string, snapshotId?: nu
       else markMissing(item);
     }
   }
-  return { snapshot, scenes, missingSources: [...missing], name: source.name };
+  const ownerName = source.is_admin_asset || source.owner_type === "Staff"
+    ? "Ensemble"
+    : source.owner_name?.trim() || (source.project_id ? await readProjectOwnerName(source.project_id) : null) || undefined;
+  return { snapshot, scenes, missingSources: [...missing], name: source.name, ownerName };
 }

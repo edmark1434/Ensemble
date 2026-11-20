@@ -11,6 +11,8 @@ export interface SnapshotPreviewData {
   scenes: Record<string, DocSnapshot>;
   missingSources: string[];
   name: string;
+  ownerName?: string;
+  savedAt?: string;
 }
 export const SnapshotPreviewContext = createContext<SnapshotPreviewData | null>(null);
 export const useSnapshotPreview = () => useContext(SnapshotPreviewContext);

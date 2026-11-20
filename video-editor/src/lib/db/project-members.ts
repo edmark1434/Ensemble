@@ -58,6 +58,23 @@ export async function getProjectMemberRole(
   return row?.role ?? null;
 }
 
+export async function readProjectOwnerName(projectId: string): Promise<string | null> {
+  const row = await db
+    .selectFrom("project_members as pm")
+    .innerJoin("users as u", "u.user_id", "pm.user_id")
+    .innerJoin("accounts as a", "a.account_id", "u.account_id")
+    .where("pm.project_id", "=", projectId)
+    .where("pm.role", "=", "Owner")
+    .where("pm.deleted_at", "is", null)
+    .select(["a.display_name", "u.first_name", "u.last_name"])
+    .executeTakeFirst();
+  if (!row) return null;
+  const display = row.display_name?.trim();
+  if (display) return display;
+  const full = `${row.first_name ?? ""} ${row.last_name ?? ""}`.trim();
+  return full || null;
+}
+
 export async function getProjectAccess(
   projectId: string,
   viewerUserId: string,

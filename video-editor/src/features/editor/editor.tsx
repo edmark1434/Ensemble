@@ -533,11 +533,12 @@ const Controls = ({ panelRef }: { panelRef: React.RefObject<HTMLDivElement | nul
   );
 };
 
-const Editor = ({ id, userId, userName, projectName, width, height, role }: {
+const Editor = ({ id, userId, userName, projectName, ownerName, width, height, role }: {
   id?: string;
   userId?: string;
   userName?: string;
   projectName?: string;
+  ownerName?: string;
   width?: number;
   height?: number;
   role?: EditorRole;
@@ -750,6 +751,8 @@ const Editor = ({ id, userId, userName, projectName, width, height, role }: {
             stateManager={stateManager}
             undoManager={collab?.undoManager}
             viewOnly={viewOnly}
+            resolvedRole={resolvedRole}
+            ownerName={ownerName}
             saveStatus={collab?.saveStatus}
             compactStatus={collab?.compactStatus}
             onForceSave={collab?.forceSave}
