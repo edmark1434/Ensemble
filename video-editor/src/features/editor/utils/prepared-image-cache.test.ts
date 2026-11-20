@@ -50,3 +50,22 @@ test("failed image downloads can retry and obsolete downloads cannot produce a r
     assert.equal(create.mock.callCount(), 0, "A cancelled request must not create a leaked blob URL");
   } finally { cache.dispose(); }
 });
+
+test("expired direct image downloads fall back to the logical source endpoint", async t => {
+  const originalImage = globalThis.Image;
+  const requested: string[] = [];
+  t.mock.method(globalThis, "fetch", async (input: RequestInfo | URL) => {
+    requested.push(String(input));
+    if (requested.length === 1) return new Response(null, { status: 403 });
+    return new Response(new Blob(["image"], { type: "image/webp" }));
+  });
+  t.mock.method(URL, "revokeObjectURL", () => {});
+  t.mock.method(URL, "createObjectURL", () => "blob:fallback");
+  globalThis.Image = class { src = ""; decode() { return Promise.resolve(); } } as unknown as typeof Image;
+  const cache = createPreparedImageCache();
+  try {
+    const url = await cache.load("/api/market-assets/a/source?projectId=p&mediaAssetId=m", "https://storage.example/expired");
+    assert.equal(url, "blob:fallback");
+    assert.deepEqual(requested, ["https://storage.example/expired", "/api/market-assets/a/source?projectId=p&mediaAssetId=m"]);
+  } finally { cache.dispose(); globalThis.Image = originalImage; }
+});

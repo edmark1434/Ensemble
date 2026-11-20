@@ -91,7 +91,11 @@ function LiveMarketAssetLicensing({ children }: { children: ReactNode }) {
     const status = licenses.assets[getMarketAssetId(item)!];
     const source = marketPlaybackSource(item, projectId, status);
     const mediaId = (item.metadata as { media_asset_id?: string } | undefined)?.media_asset_id;
-    return [source, status.licensed && mediaId ? status.playbackSources?.[mediaId]?.url || status.imageSources?.[mediaId] || source : source];
+    const direct = mediaId ? status.playbackSources?.[mediaId] : undefined;
+    const directUrl = direct
+      ? (direct.expiresAt > Date.now() ? direct.url : source)
+      : (mediaId ? status.imageSources?.[mediaId] || source : source);
+    return [source, status.licensed ? directUrl : source];
   }).sort(([a], [b]) => a.localeCompare(b))));
   return <>
     <UploadDeletionDialog />

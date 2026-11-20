@@ -3,6 +3,7 @@ import { MediaPlaceholder } from "../../components/media-placeholder";
 import { useMissingMedia } from "../../store/use-missing-media";
 import { isMissingMediaSource } from "../../utils/missing-media";
 import useStore from "../../store/use-store";
+import { getMarketAssetId, useMarketLicenses } from "../../store/use-market-licenses";
 import { useMarketAssetSource } from "../../hooks/use-market-asset-source";
 import { IVideo } from "@designcombo/types";
 import { BaseSequence, SequenceItemOptions } from "../base-sequence";
@@ -22,6 +23,12 @@ const VideoMedia = ({ item, fps }: { item: IVideo; fps: number }) => {
   const src = useMarketAssetSource(item);
   const projectId = useStore(state => state.projectId);
   const missing = useMissingMedia(state => state.projectId === projectId && state.missing.has(item.details.src));
+  const assetId = getMarketAssetId(item);
+  const mediaAssetId = (item.metadata as { media_asset_id?: string } | undefined)?.media_asset_id;
+  const licensed = useMarketLicenses(state => !!(assetId && state.projectId === projectId && state.assets[assetId]?.licensed));
+  const fallbackSrc = licensed && assetId && mediaAssetId
+    ? `/api/market-assets/${assetId}/source?${new URLSearchParams({ projectId, mediaAssetId })}`
+    : undefined;
   const playbackRate = item.playbackRate || 1;
   const hasTrimTo = typeof item.trim?.to === "number" && item.trim.to > 0;
   const trimBefore = ((item.trim?.from ?? 0) / 1000) * fps;
@@ -43,27 +50,39 @@ const VideoMedia = ({ item, fps }: { item: IVideo; fps: number }) => {
 
   if (missing || isMissingMediaSource(item.details.src)) return <MediaPlaceholder missing />;
   if (!src) return <MediaPlaceholder item={item} />;
-  return <PreviewVideo key={src} item={item} src={src} trimBefore={trimBefore} trimAfter={trimAfter} />;
+  return (
+    <PreviewVideo
+      key={src}
+      item={item}
+      src={src}
+      fallbackSrc={fallbackSrc && fallbackSrc !== src ? fallbackSrc : undefined}
+      trimBefore={trimBefore}
+      trimAfter={trimAfter}
+    />
+  );
 };
 
 const RETRY_DELAYS_MS = [350, 1000, 2500];
 
-function PreviewVideo({ item, src, trimBefore, trimAfter }: {
-  item: IVideo; src: string; trimBefore: number; trimAfter?: number;
+function PreviewVideo({ item, src, fallbackSrc, trimBefore, trimAfter }: {
+  item: IVideo; src: string; fallbackSrc?: string; trimBefore: number; trimAfter?: number;
 }) {
   const [attempt, setAttempt] = useState(0);
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
+  const [useFallback, setUseFallback] = useState(false);
   const video = useRef<HTMLVideoElement>(null);
   const retryDelay = RETRY_DELAYS_MS[attempt];
+  const activeSrc = useFallback && fallbackSrc ? fallbackSrc : src;
 
   useEffect(() => {
     if (status !== "error" || retryDelay === undefined) return;
     const timer = window.setTimeout(() => {
+      if (fallbackSrc && !useFallback) setUseFallback(true);
       setAttempt(current => current + 1);
       setStatus("loading");
     }, retryDelay);
     return () => window.clearTimeout(timer);
-  }, [status, retryDelay]);
+  }, [status, retryDelay, fallbackSrc, useFallback]);
 
   return (<>
     {status !== "error" && <Html5Video
@@ -72,7 +91,7 @@ function PreviewVideo({ item, src, trimBefore, trimAfter }: {
       trimBefore={trimBefore}
       trimAfter={trimAfter}
       playbackRate={item.playbackRate || 1}
-      src={src}
+      src={activeSrc}
       volume={(item.details.volume ?? 100) / 100}
       onLoadedData={() => setStatus("ready")}
       onWaiting={() => setStatus("loading")}

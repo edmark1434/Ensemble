@@ -28,10 +28,22 @@ export function createPreparedImageCache() {
       if (existing) return existing.promise;
       const controller = new AbortController();
       const entry = { controller, url: undefined as string | undefined, promise: Promise.resolve("") };
-      entry.promise = (async () => {
-        const response = await fetch(downloadUrl, { signal: controller.signal });
+      const fetchImage = async (target: string, noStore = false) => {
+        const response = await fetch(
+          target,
+          noStore ? { signal: controller.signal, cache: "no-store" } : { signal: controller.signal }
+        );
         if (!response.ok) throw new Error("Unable to load asset image.");
-        const blob = await response.blob();
+        return response.blob();
+      };
+      entry.promise = (async () => {
+        let blob: Blob;
+        try {
+          blob = await fetchImage(downloadUrl);
+        } catch (error) {
+          if (controller.signal.aborted || downloadUrl === source) throw error;
+          blob = await fetchImage(source, true);
+        }
         if (controller.signal.aborted) throw new Error("Aborted");
         entry.url = URL.createObjectURL(blob);
         preparedImageTypes.set(entry.url, blob.type.split(";")[0].trim().toLowerCase());

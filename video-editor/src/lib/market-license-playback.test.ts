@@ -22,7 +22,7 @@ function load<T>(file: string, dependencies: Record<string, unknown>): T {
   return module.exports as T;
 }
 
-test("batch image URLs are short-lived, reusable within a window, and limited to image paths", async () => {
+test("batch image URLs are hour-long, reusable within a five-minute window, and limited to image paths", async () => {
   const client = new S3Client({ region: "us-east-1", credentials: { accessKeyId: "test", secretAccessKey: "test" } });
   const { signMarketImage } = load<{ signMarketImage: (path: string, mime: string, now: number) => Promise<string> }>(
     "src/lib/market-image-url.ts", {
@@ -33,12 +33,12 @@ test("batch image URLs are short-lived, reusable within a window, and limited to
   try {
     const now = Date.parse("2026-10-30T00:00:01Z");
     const first = await signMarketImage("asset-originals/image.jpg", "image/jpeg", now);
-    assert.equal(await signMarketImage("asset-originals/image.jpg", "image/jpeg", now + 10_000), first);
-    assert.notEqual(await signMarketImage("asset-originals/image.jpg", "image/jpeg", now + 30_000), first);
+    assert.equal(await signMarketImage("asset-originals/image.jpg", "image/jpeg", now + 60_000), first);
+    assert.notEqual(await signMarketImage("asset-originals/image.jpg", "image/jpeg", now + 300_000), first);
     const url = new URL(first);
-    assert.equal(url.searchParams.get("X-Amz-Expires"), "60");
+    assert.equal(url.searchParams.get("X-Amz-Expires"), "3600");
     assert.equal(url.searchParams.get("X-Amz-Date"), "20261030T000000Z");
-    assert.equal(url.searchParams.get("response-cache-control"), "private, max-age=30");
+    assert.equal(url.searchParams.get("response-cache-control"), "private, max-age=300");
     for (const key of ["private/secret", "assets/../secret", "assets/\\secret"]) {
       await assert.rejects(signMarketImage(key, "image/jpeg", now), /Invalid market image/);
     }

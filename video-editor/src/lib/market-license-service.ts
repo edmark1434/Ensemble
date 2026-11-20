@@ -16,7 +16,7 @@ async function signLicensedMedia(file: LicensedMedia) {
     const now = Date.now();
     return {
       url: await signMarketImage(file.path, file.mimeType, now),
-      expiresAt: Math.floor(now / 30_000) * 30_000 + 60_000,
+      expiresAt: Math.floor(now / 300_000) * 300_000 + 3_600_000,
     };
   }
   return signMarketStream(file.path, file.mimeType);
