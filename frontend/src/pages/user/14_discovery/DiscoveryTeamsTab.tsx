@@ -284,7 +284,6 @@ export const DiscoveryTeamsTab: React.FC = () => {
             <span className="font-medium mr-1 hidden sm:inline">Sort by:</span>
             {[
               { id: "smart_discovery", label: "Discover", icon: Sparkles },
-              { id: "pure_random", label: "Random", icon: Dices },
               { id: "members", label: "Most Members" },
               { id: "rating", label: "Top Rated" },
               { id: "name", label: "Name" },
