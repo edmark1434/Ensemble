@@ -1,13 +1,11 @@
-# Fix market asset loading failures in the video editor
+# Fix video asset preview on asset library info page
 
 ## Implementation objective
 
-Prevent licensed marketplace images from expiring before S3 fetches complete (including under server clock drift or lazy mounting) and add automatic fallback + retry recovery for market images and videos.
+Render MP4 video thumbnail previews properly with `<video>` instead of `<img>` on the asset details info page (carousel, package preview cards, and purchase modal).
 
 ## Acceptance criteria
 
-- `signMarketImage` and `market-license-service.ts` sign licensed S3 market images with a 5-minute signing window and 1-hour expiry (`expiresIn: 3600`, `private, max-age=300`), matching streams and CloudFront grants.
-- `MarketAssetLicensing` only forwards direct signed image URLs when `expiresAt > Date.now()`, falling back to `/api/market-assets/[id]/source` otherwise.
-- `createPreparedImageCache` falls back to the logical `/api/market-assets/[id]/source` endpoint when a direct signed URL fails.
-- `PrepareMarketImages` retries failed market image loads with backoff, clears stale `failed` state on retry/removal, and cleans up retry timers.
-- `PreviewVideo` switches to `/api/market-assets/[id]/source` on retry when a direct signed market video URL fails.
+- `AssetThumbnailCarousel` renders video thumbnail slides (`assets/thumbnails/video-5s-(320|480)/` or `.mp4` files) with `<video>` in both the main preview stage and the slide strip, falls back to `proxy_path` for video/image assets without `thumbnail_path`, and shows `MediaFallback` on error.
+- `MediaAssetPreview` in `AssetDetails` chooses `<video>` vs `<img>` based on the resolved preview path so both MP4 video previews and legacy image thumbnails render cleanly.
+- `AssetPurchaseModal` renders `<video>` instead of `<img>` when `asset.thumbnail_path` is a video preview.

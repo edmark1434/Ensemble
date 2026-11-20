@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { AudioLines, Loader2, ShoppingCart, X } from "lucide-react";
 import api from "@/lib/axios";
 import { CreditIcon } from "@/components/ui/credit-icon";
-import { mediaUrl, type AssetPurchaseResponse, type AssetRecord } from "./assetTypes";
+import { isVideoPreviewPath, mediaUrl, type AssetPurchaseResponse, type AssetRecord } from "./assetTypes";
 
 interface AssetPurchaseModalProps {
   open: boolean;
@@ -85,7 +85,13 @@ function OpenAssetPurchaseModal({ asset, onClose, onPurchased }: Omit<AssetPurch
 
         <div className="p-5">
           <div className="overflow-hidden rounded-xl border border-gray-200 bg-gray-50 dark:border-white/10 dark:bg-dark-base">
-            {asset.thumbnail_path ? <img src={mediaUrl(asset.thumbnail_path)} alt="" draggable={false} onContextMenu={(event) => event.preventDefault()} className="h-44 w-full object-contain" /> : asset.type === "audio" ? <div className="flex h-44 items-center justify-center text-blue-500"><AudioLines className="h-12 w-12" /></div> : <div className="h-44" />}
+            {asset.thumbnail_path ? (
+              isVideoPreviewPath(asset.thumbnail_path) ? (
+                <video src={mediaUrl(asset.thumbnail_path)} autoPlay muted loop playsInline preload="metadata" onContextMenu={(event) => event.preventDefault()} className="h-44 w-full bg-black object-contain" />
+              ) : (
+                <img src={mediaUrl(asset.thumbnail_path)} alt="" draggable={false} onContextMenu={(event) => event.preventDefault()} className="h-44 w-full object-contain" />
+              )
+            ) : asset.type === "audio" ? <div className="flex h-44 items-center justify-center text-blue-500"><AudioLines className="h-12 w-12" /></div> : <div className="h-44" />}
           </div>
           <h3 className="mt-4 truncate font-bold text-gray-900 dark:text-white">{asset.name}</h3>
           <p className="mt-1 text-xs text-gray-500 dark:text-zinc-400">

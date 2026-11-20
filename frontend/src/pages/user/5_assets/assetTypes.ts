@@ -156,6 +156,12 @@ export function mediaUrl(path?: string | null) {
   return base ? `${base}/${path.replace(/^\/+/, "")}` : path;
 }
 
+export function isVideoPreviewPath(path?: string | null) {
+  if (!path) return false;
+  return /(?:^|\/)thumbnails\/video-5s-(?:320|480)\//i.test(path)
+    || /\.(?:mp4|webm|mov|m4v)(?:[?#]|$)/i.test(path);
+}
+
 export function readableSize(value?: number | null) {
   if (!value || value < 1) return "—";
   if (value < 1024 * 1024) return `${Math.ceil(value / 1024)} KB`;
