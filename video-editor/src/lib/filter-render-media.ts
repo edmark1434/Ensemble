@@ -38,3 +38,41 @@ export function filterRenderMedia(content: RenderContent, shouldOmit: (item: ITr
   if (content.transitionIds) content.transitionIds = content.transitionIds.filter(keep);
   for (const track of content.tracks ?? []) track.items = track.items.filter(keep);
 }
+
+// Strip editor-only kind: "none" drop targets and orphaned transitions from
+// outbound render/thumbnail payloads (including nested scenes). An unpatched
+// render server's groupTrackItems can drop clips that follow a "none" slot
+// before an active transition.
+export function sanitizeRenderTransitions(content: RenderContent) {
+  for (const item of Object.values(content.trackItemsMap)) {
+    if (String(item.type) === "scene") {
+      const nested = (item.details as unknown as ISceneDetails).content;
+      if (nested) sanitizeRenderTransitions(nested);
+    }
+  }
+  const transitionsMap = content.transitionsMap;
+  if (!transitionsMap) return;
+
+  const removed = new Set<string>();
+  for (const [id, transition] of Object.entries(transitionsMap)) {
+    if (
+      !transition ||
+      transition.kind === "none" ||
+      !(transition.fromId in content.trackItemsMap) ||
+      !(transition.toId in content.trackItemsMap)
+    ) {
+      removed.add(id);
+      delete transitionsMap[id];
+    }
+  }
+  if (!removed.size) return;
+
+  if (content.transitionIds) {
+    content.transitionIds = content.transitionIds.filter((id) => !removed.has(id));
+  }
+  for (const item of Object.values(content.trackItemsMap)) {
+    const endpoint = item as ITrackItem & { transitionInfo?: { transition?: ITransition } };
+    const transition = endpoint.transitionInfo?.transition;
+    if (transition && removed.has(transition.id)) delete endpoint.transitionInfo;
+  }
+}

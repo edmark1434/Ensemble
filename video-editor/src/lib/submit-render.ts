@@ -5,7 +5,7 @@ import { collectMarketExportItems, type MarketExportContent } from "@/features/e
 import { getVideoExportBitrateError } from "@/lib/export-bitrate";
 import { missingUploadSources } from "@/lib/db/upload-usage";
 import { mediaSources } from "@/features/editor/utils/media-sources";
-import { filterRenderMedia } from "./filter-render-media";
+import { filterRenderMedia, sanitizeRenderTransitions } from "./filter-render-media";
 import { getVideoUploadPolicy } from "@/lib/upload-policy";
 import { getExportPlanError } from "@/lib/export-plan-policy";
 import { PlanConfigurationError } from "@/lib/plan-feature-values";
@@ -74,6 +74,7 @@ export async function submitRender(request: NextRequest, userId: string, body: M
       const metadata = item.metadata as { market?: boolean; market_asset_id?: string; media_asset_id?: string } | undefined;
       return !!metadata?.market && unavailable.has(`${metadata.market_asset_id}:${metadata.media_asset_id}`);
     });
+    sanitizeRenderTransitions(body);
     const response = await fetch(`${RENDER_SERVER_URL}/renders`, {
       method: "POST", headers: { "Content-Type": "application/json", ...renderHeaders },
       body: JSON.stringify(body),

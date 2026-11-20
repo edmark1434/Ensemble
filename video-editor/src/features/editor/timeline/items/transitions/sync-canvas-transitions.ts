@@ -1,6 +1,7 @@
 // features/editor/timeline/items/sync-canvas-transitions.ts
 
 import { ItransitionsMap } from "@designcombo/types";
+import { reconcileAdjacentTransitions } from "../../../utils/item-actions";
 
 // Every call site that pushes transitions onto the Fabric canvas needs the
 // same steps, in the same order:
@@ -26,8 +27,19 @@ export function syncCanvasTransitions(
 ): void {
   if (!canvas) return;
 
-  canvas.transitionsMap = transitionsMap;
-  canvas.transitionIds = Object.keys(transitionsMap);
+  const effective =
+    Array.isArray(canvas.tracks) && canvas.tracks.length > 0 && canvas.trackItemsMap
+      ? reconcileAdjacentTransitions(
+          canvas.tracks,
+          canvas.trackItemsMap,
+          transitionsMap,
+          Object.keys(transitionsMap),
+          canvas.tScale,
+        )
+      : { transitionsMap, transitionIds: Object.keys(transitionsMap) };
+
+  canvas.transitionsMap = effective.transitionsMap;
+  canvas.transitionIds = effective.transitionIds;
 
   canvas.getTrackItems().forEach((item: any) => {
     const info = item.transitionInfo;

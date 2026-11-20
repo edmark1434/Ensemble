@@ -6,6 +6,7 @@ import {
   readStateFromDoc,
 } from "@/features/editor/collab/ydoc-schema";
 import { loadLatestProjectState } from "@/lib/collab/persistence-store";
+import { sanitizeRenderTransitions } from "@/lib/filter-render-media";
 
 export const THUMBNAIL_SHORT_SIDE_PX = 480;
 
@@ -127,6 +128,8 @@ export async function buildThumbnailJob(
       bitrate: null,
       currentTime: timeMs,
     };
+
+    sanitizeRenderTransitions(payload);
 
     return { payload, hash, timeMs };
   } finally {

@@ -100,9 +100,11 @@ export function useFileDropUpload() {
       const fileUploads = validFiles.map(({ file, type }, index) => {
         const id = crypto.randomUUID();
         const mediaFile = file.type === type ? file : new File([file], file.name, { type, lastModified: file.lastModified });
-        const callbacks = placement ? insertPendingUpload(id, mediaFile, index === 0 ? placement : {
-          time: placement.time, trackIndex: (placement.trackIndex ?? 0) + index, isNewTrack: true,
-        }) : {};
+        const callbacks = placement ? insertPendingUpload(id, mediaFile, index === 0 ? placement : (
+          placement.isNewTrack
+            ? { time: placement.time, trackIndex: (placement.trackIndex ?? 0) + index, isNewTrack: true }
+            : { time: placement.time }
+        )) : {};
         return { id, file: mediaFile, type, status: "pending" as const, progress: 0, ...callbacks };
       });
 

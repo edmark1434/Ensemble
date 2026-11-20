@@ -1,4 +1,4 @@
-import { generateId } from "@designcombo/timeline";
+import { generateId, timeMsToUnits } from "@designcombo/timeline";
 import type { ITrack, ITrackItem, ITransition } from "@designcombo/types";
 import type StateManager from "@designcombo/state";
 import { isSceneItem } from "../types/ensemble-scene";
@@ -108,20 +108,334 @@ export function getClipboard(): SelectionSnapshot | null {
 }
 
 // ---------------------------------------------------------------------
+// Track compatibility & collision helpers used when reusing existing
+// lanes on paste / duplicate so we minimize newly added tracks while
+// preserving top-to-bottom layering and guaranteeing zero overlaps.
+// Matches the timeline canvas acceptsMap in timeline/timeline.tsx.
+// ---------------------------------------------------------------------
+
+const TRACK_ACCEPTS: Record<string, readonly string[]> = {
+  text: ["text", "caption"],
+  image: ["image", "video", "scene"],
+  video: ["video", "image", "scene"],
+  audio: ["audio"],
+  caption: ["caption", "text"],
+  template: ["template"],
+  customTrack: ["video", "image"],
+  customTrack2: ["video", "image"],
+  main: ["video", "image", "scene"],
+  linealAudioBars: ["audio", "linealAudioBars"],
+  radialAudioBars: ["audio", "radialAudioBars"],
+  waveAudioBars: ["audio", "waveAudioBars"],
+  hillAudioBars: ["audio", "hillAudioBars"],
+  scene: ["scene", "image", "video"],
+};
+
+const OVERLAP_EPSILON_MS = 0.5;
+const DEFAULT_TRANSITION_DURATION_MS = 1500;
+
+function areItemsAdjacent(a: ITrackItem, b: ITrackItem, zoom?: number): boolean {
+  if (Math.abs(b.display.from - a.display.to) <= 1) return true;
+  if (zoom && zoom > 0) {
+    return Math.abs(timeMsToUnits(a.display.to, zoom) - timeMsToUnits(b.display.from, zoom)) <= 1;
+  }
+  return false;
+}
+
+// Maintain kind: "none" drop-target entries in transitionsMap for every pair of
+// adjacent items on the same track. @designcombo/timeline's drag/drop handler
+// only exposes drop targets for Transition objects currently in transitionsMap,
+// and syncCanvasTransitions mirrors stateManager's map onto the canvas — so
+// state-level adds, pastes, duplicates, and timing edits must keep these
+// placeholder entries in sync just like drag-end's canvas.updateTransitions().
+export function reconcileAdjacentTransitions(
+  tracks: ITrack[],
+  trackItemsMap: Record<string, ITrackItem>,
+  transitionsMap: Record<string, ITransition>,
+  transitionIds: string[],
+  zoom?: number,
+): {
+  transitionsMap: Record<string, ITransition>;
+  transitionIds: string[];
+  changed: boolean;
+} {
+  const adjacentPairs = new Map<string, { fromId: string; toId: string; trackId: string }>();
+
+  for (const track of tracks) {
+    const items = track.items
+      .map((id) => trackItemsMap[id])
+      .filter((item): item is ITrackItem => !!item)
+      .sort((a, b) => a.display.from - b.display.from);
+
+    for (let i = 0; i < items.length - 1; i++) {
+      const prev = items[i];
+      const next = items[i + 1];
+      if (!areItemsAdjacent(prev, next, zoom)) continue;
+      adjacentPairs.set(`${prev.id}-${next.id}`, {
+        fromId: prev.id,
+        toId: next.id,
+        trackId: track.id,
+      });
+    }
+  }
+
+  let changed = false;
+  const nextTransitionsMap: Record<string, ITransition> = {};
+  const nextTransitionIds: string[] = [];
+  const seen = new Set<string>();
+
+  const existingOrder = transitionIds.length ? transitionIds : Object.keys(transitionsMap);
+  for (const id of existingOrder) {
+    const existing = transitionsMap[id];
+    if (!existing || seen.has(id)) {
+      if (existing === undefined) changed = true;
+      continue;
+    }
+    seen.add(id);
+    const pair = adjacentPairs.get(id);
+    if (existing.kind === "none") {
+      if (!pair) {
+        changed = true;
+        continue;
+      }
+      if (existing.trackId !== pair.trackId) {
+        nextTransitionsMap[id] = { ...existing, trackId: pair.trackId };
+        changed = true;
+      } else {
+        nextTransitionsMap[id] = existing;
+      }
+      nextTransitionIds.push(id);
+    } else {
+      nextTransitionsMap[id] = existing;
+      nextTransitionIds.push(id);
+    }
+  }
+
+  for (const [id, existing] of Object.entries(transitionsMap)) {
+    if (seen.has(id)) continue;
+    seen.add(id);
+    const pair = adjacentPairs.get(id);
+    if (existing.kind === "none") {
+      if (!pair) {
+        changed = true;
+        continue;
+      }
+      nextTransitionsMap[id] = existing.trackId !== pair.trackId ? { ...existing, trackId: pair.trackId } : existing;
+      nextTransitionIds.push(id);
+      changed = true;
+    } else {
+      nextTransitionsMap[id] = existing;
+      nextTransitionIds.push(id);
+      changed = true;
+    }
+  }
+
+  for (const [id, pair] of adjacentPairs) {
+    if (id in nextTransitionsMap) continue;
+    nextTransitionsMap[id] = {
+      id,
+      duration: DEFAULT_TRANSITION_DURATION_MS,
+      fromId: pair.fromId,
+      toId: pair.toId,
+      kind: "none",
+      trackId: pair.trackId,
+      type: "transition",
+    };
+    nextTransitionIds.push(id);
+    changed = true;
+  }
+
+  if (!changed) {
+    return { transitionsMap, transitionIds, changed: false };
+  }
+  return {
+    transitionsMap: nextTransitionsMap,
+    transitionIds: nextTransitionIds,
+    changed: true,
+  };
+}
+
+export function intervalsOverlap(aFrom: number, aTo: number, bFrom: number, bTo: number): boolean {
+  if (Math.min(aTo, bTo) - Math.max(aFrom, bFrom) > OVERLAP_EPSILON_MS) return true;
+  return aFrom === bFrom && aTo === bTo;
+}
+
+export function trackAcceptsItemType(track: ITrack, itemType: string): boolean {
+  const allowed = TRACK_ACCEPTS[track.type];
+  if (allowed) return allowed.includes(itemType);
+  if (Array.isArray(track.accepts) && track.accepts.length > 0) {
+    return (track.accepts as string[]).includes(itemType);
+  }
+  return track.type === itemType;
+}
+
+export function trackHasCollision(
+  track: ITrack,
+  from: number,
+  to: number,
+  existingItemsMap: Record<string, ITrackItem>,
+  ignoreItemId?: string,
+): boolean {
+  for (const existingId of track.items) {
+    if (existingId === ignoreItemId) continue;
+    const existing = existingItemsMap[existingId];
+    if (!existing) continue;
+    if (intervalsOverlap(from, to, existing.display.from, existing.display.to)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+export function findReusableTrackForItem(
+  item: Pick<ITrackItem, "id" | "type" | "display">,
+  tracks: ITrack[],
+  existingItemsMap: Record<string, ITrackItem>,
+  preferredIndex?: number,
+): ITrack | undefined {
+  const itemType = String(item.type);
+  const candidates = tracks
+    .map((track, index) => ({ track, index }))
+    .filter(({ track }) =>
+      !track.magnetic &&
+      !track.static &&
+      trackAcceptsItemType(track, itemType) &&
+      !trackHasCollision(track, item.display.from, item.display.to, existingItemsMap, item.id)
+    );
+  if (candidates.length === 0) return undefined;
+
+  const isExactType = (track: ITrack) =>
+    track.type === itemType || (itemType === "video" && track.type === "main");
+
+  candidates.sort((a, b) => {
+    const exactDiff = Number(isExactType(b.track)) - Number(isExactType(a.track));
+    if (exactDiff !== 0) return exactDiff;
+    if (preferredIndex !== undefined) {
+      const distDiff = Math.abs(a.index - preferredIndex) - Math.abs(b.index - preferredIndex);
+      if (distDiff !== 0) return distDiff;
+    }
+    return a.index - b.index;
+  });
+
+  return candidates[0].track;
+}
+
+function canPlaceLaneOnTrack(
+  oldTrackId: string,
+  laneItems: ITrackItem[],
+  targetTrack: ITrack,
+  existingItemsMap: Record<string, ITrackItem>,
+): boolean {
+  if (targetTrack.magnetic || targetTrack.static) return false;
+  if (targetTrack.id !== oldTrackId) {
+    for (const item of laneItems) {
+      if (!trackAcceptsItemType(targetTrack, String(item.type))) return false;
+    }
+  }
+  for (const candidate of laneItems) {
+    if (trackHasCollision(targetTrack, candidate.display.from, candidate.display.to, existingItemsMap)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+// Maximize the number of source lanes reused onto existing compatible,
+// collision-free tracks while keeping strict top-to-bottom order.
+// Returns existing track index for each source lane, or -1 if it needs a new track.
+function assignLanesToExistingTracks(
+  lanes: Array<{ oldTrackId: string; items: ITrackItem[] }>,
+  existingTracks: ITrack[],
+  existingItemsMap: Record<string, ITrackItem>,
+  trackPlacement: "aboveGroup" | "top",
+): number[] {
+  const k = lanes.length;
+  const m = existingTracks.length;
+  const assigned = new Array<number>(k).fill(-1);
+  if (k === 0 || m === 0) return assigned;
+
+  const existingIndexById = new Map<string, number>();
+  existingTracks.forEach((t, idx) => existingIndexById.set(t.id, idx));
+
+  const preferredIndex = lanes.map((lane, i) => {
+    const origIdx = existingIndexById.get(lane.oldTrackId);
+    if (origIdx === undefined) return i;
+    return trackPlacement === "aboveGroup" ? Math.max(0, origIdx - 1) : origIdx;
+  });
+
+  const fits: boolean[][] = Array.from({ length: k }, (_, i) =>
+    existingTracks.map((track) => canPlaceLaneOnTrack(lanes[i].oldTrackId, lanes[i].items, track, existingItemsMap))
+  );
+
+  // DP: dp[i][j] = max score matching a subset of lanes[0..i-1] to a strictly
+  // increasing subsequence of existingTracks[0..j-1].
+  // Reusing a lane contributes 1_000_000 so minimizing new tracks always wins;
+  // smaller bonuses break ties toward original tracks and nearest lanes.
+  const REUSE_WEIGHT = 1_000_000;
+  const SAME_TRACK_BONUS = 10_000;
+  const PROXIMITY_BASE = 1_000;
+
+  const dp: number[][] = Array.from({ length: k + 1 }, () => new Array<number>(m + 1).fill(0));
+  const choice: Uint8Array[] = Array.from({ length: k + 1 }, () => new Uint8Array(m + 1)); // 0=skip lane, 1=skip track, 2=match
+
+  for (let i = 1; i <= k; i++) {
+    for (let j = 1; j <= m; j++) {
+      let best = dp[i - 1][j];
+      let dir = 0;
+
+      if (dp[i][j - 1] > best) {
+        best = dp[i][j - 1];
+        dir = 1;
+      }
+
+      if (fits[i - 1][j - 1]) {
+        const sameTrack = existingTracks[j - 1].id === lanes[i - 1].oldTrackId ? SAME_TRACK_BONUS : 0;
+        const proximity = Math.max(0, PROXIMITY_BASE - Math.abs((j - 1) - preferredIndex[i - 1]));
+        const score = dp[i - 1][j - 1] + REUSE_WEIGHT + sameTrack + proximity;
+        if (score > best) {
+          best = score;
+          dir = 2;
+        }
+      }
+
+      dp[i][j] = best;
+      choice[i][j] = dir;
+    }
+  }
+
+  let i = k;
+  let j = m;
+  while (i > 0 && j > 0) {
+    const dir = choice[i][j];
+    if (dir === 2) {
+      assigned[i - 1] = j - 1;
+      i--;
+      j--;
+    } else if (dir === 1) {
+      j--;
+    } else {
+      i--;
+    }
+  }
+
+  return assigned;
+}
+
+// ---------------------------------------------------------------------
 // Clone a snapshot (clipboard, for paste; or a fresh selection, for
-// duplicate) into new tracks — one new track per source track, in the
-// same relative order. Pass anchorMs = null to keep original positions
-// (duplicate); pass a time in ms to anchor the earliest item there,
-// shifting the rest by the same amount (paste). New items are never
-// reselected afterward — selection stays wherever it was.
+// duplicate) while minimizing newly added tracks: each source lane
+// reuses a compatible, collision-free existing track when possible
+// (preserving top-to-bottom relative order) and only creates new tracks
+// for lanes that collide or have no compatible lane available.
+// Pass anchorMs = null to keep original positions (duplicate); pass a
+// time in ms to anchor the earliest item there, shifting the rest by
+// the same amount (paste). New items are never reselected afterward.
 //
-// trackPlacement controls where the new track block lands:
+// trackPlacement controls where newly created tracks land when none of
+// the lanes can reuse an existing track (and tie-breaking preference):
 //   "aboveGroup" — directly above wherever the source tracks currently
 //     sit (right for duplicate: the source is still live and visible).
-//   "top" — always at the very top of the stack (right for paste: the
-//     clipboard's origin can be stale, or, after a cut, an emptied-out
-//     track you don't care about anymore — anchoring to it just puts
-//     things back where they came from).
+//   "top" — at the very top of the stack (right for paste).
 // ---------------------------------------------------------------------
 
 export interface ClonedIntoNewTracks {
@@ -156,19 +470,64 @@ export function cloneIntoNewTracks(
   const minFrom = Math.min(...snapshot.items.map((i) => i.display.from));
   const offset = anchorMs === null ? 0 : anchorMs - minFrom;
 
-  // One fresh track per source track, cloned from that track's own shape
-  // so it keeps whatever type/accepts/height/etc it had.
-  const trackIdMap = new Map<string, string>();
-  snapshot.trackOrder.forEach((oldId) => trackIdMap.set(oldId, generateId()));
+  // Build shifted clones first so we can check exact target intervals
+  // against existing tracks before deciding which lanes need new tracks.
+  const sortedSourceItems = [...snapshot.items].sort((a, b) => a.display.from - b.display.from);
+  const newItemsMap: Record<string, ITrackItem> = {};
+  const newIds: string[] = [];
+  const laneItemsByOldTrack = new Map<string, ITrackItem[]>();
+  snapshot.trackOrder.forEach((oldId) => laneItemsByOldTrack.set(oldId, []));
 
-  const newTracks: ITrack[] = snapshot.trackOrder.map((oldId) => ({
-    ...deepClone(snapshot.trackTemplates[oldId]),
-    id: trackIdMap.get(oldId)!,
-    items: [],
+  sortedSourceItems.forEach((item) => {
+    const newId = idMap.get(item.id)!;
+    const cloned = deepClone(item);
+    cloned.id = newId;
+    cloned.display = { from: item.display.from + offset, to: item.display.to + offset };
+    cloned.activeEdit = false;
+    if (cloned.details) cloned.details = { ...cloned.details, locked: false };
+    delete cloned.transitionInfo;
+
+    newItemsMap[newId] = cloned;
+    newIds.push(newId);
+
+    const oldTrackId = snapshot.trackIdByItemId[item.id] ?? snapshot.trackOrder[snapshot.trackOrder.length - 1];
+    if (oldTrackId) {
+      const bucket = laneItemsByOldTrack.get(oldTrackId);
+      if (bucket) bucket.push(cloned);
+    }
+  });
+
+  const existingTracks: ITrack[] = state.tracks.map((t) => ({ ...t, items: [...t.items] }));
+  const lanes = snapshot.trackOrder.map((oldTrackId) => ({
+    oldTrackId,
+    items: laneItemsByOldTrack.get(oldTrackId) ?? [],
   }));
+  const assigned = assignLanesToExistingTracks(lanes, existingTracks, state.trackItemsMap, trackPlacement);
 
-  // Reconnect transitions, and re-point trackId at the new track — it
-  // moved along with its items, so the old trackId is stale.
+  const trackIdMap = new Map<string, string>();
+  const createdTrackIds: string[] = [];
+  const createdTrackByLane = new Map<number, ITrack>();
+
+  lanes.forEach((lane, i) => {
+    const targetIdx = assigned[i];
+    if (targetIdx !== -1) {
+      const targetTrack = existingTracks[targetIdx];
+      trackIdMap.set(lane.oldTrackId, targetTrack.id);
+      lane.items.forEach((item) => targetTrack.items.push(item.id));
+    } else {
+      const newTrackId = generateId();
+      trackIdMap.set(lane.oldTrackId, newTrackId);
+      createdTrackIds.push(newTrackId);
+      createdTrackByLane.set(i, {
+        ...deepClone(snapshot.trackTemplates[lane.oldTrackId]),
+        id: newTrackId,
+        items: lane.items.map((item) => item.id),
+      });
+    }
+  });
+
+  // Reconnect transitions and point trackId at whichever track (reused or new)
+  // the lane's items actually landed on.
   const newTransitions = new Map<string, ITransition>();
   snapshot.transitions.forEach((t) => {
     const fromId = idMap.get(t.fromId);
@@ -190,56 +549,91 @@ export function cloneIntoNewTracks(
     }
     transitionForNewItem.set(t.toId, { isFrom: false, isTo: true, transition: t });
   });
-
-  const newItemsMap: Record<string, ITrackItem> = {};
-  const newIds: string[] = [];
-
-  // Time order so each new track's items array comes out sorted.
-  [...snapshot.items]
-    .sort((a, b) => a.display.from - b.display.from)
-    .forEach((item) => {
-      const newId = idMap.get(item.id)!;
-      const cloned = deepClone(item);
-      cloned.id = newId;
-      cloned.display = { from: item.display.from + offset, to: item.display.to + offset };
-      cloned.activeEdit = false;
-      if (cloned.details) cloned.details = { ...cloned.details, locked: false };
-
-      const info = transitionForNewItem.get(newId);
-      if (info) cloned.transitionInfo = info;
-      else delete cloned.transitionInfo;
-
-      newItemsMap[newId] = cloned;
-      newIds.push(newId);
-
-      const oldTrackId = snapshot.trackIdByItemId[item.id];
-      const newTrackId = oldTrackId && trackIdMap.get(oldTrackId);
-      const targetTrack = newTracks.find((t) => t.id === newTrackId) ?? newTracks[newTracks.length - 1];
-      targetTrack?.items.push(newId);
-    });
-
-  // `newTracks` is already in the same top-to-bottom order as
-  // `snapshot.trackOrder`, so either placement mode drops it in as one
-  // contiguous group.
-  const tracks = [...state.tracks];
-  if (trackPlacement === "top") {
-    tracks.splice(0, 0, ...newTracks);
-  } else {
-    const insertAt = snapshot.trackOrder
-      .map((oldId) => tracks.findIndex((t) => t.id === oldId))
-      .find((idx) => idx !== -1);
-    insertAt === undefined ? tracks.push(...newTracks) : tracks.splice(insertAt, 0, ...newTracks);
-  }
+  transitionForNewItem.forEach((info, itemId) => {
+    const item = newItemsMap[itemId];
+    if (item) item.transitionInfo = info;
+  });
 
   const trackItemsMap = { ...state.trackItemsMap, ...newItemsMap };
+
+  // Keep reused tracks' item arrays sorted by display.from.
+  existingTracks.forEach((track, idx) => {
+    if (assigned.includes(idx)) {
+      track.items.sort((a, b) => (trackItemsMap[a]?.display.from ?? 0) - (trackItemsMap[b]?.display.from ?? 0));
+    }
+  });
+
+  // Insert only the newly created tracks, positioned to preserve top-to-bottom
+  // relative order with any reused lanes.
+  const tracks: ITrack[] = [];
+  if (existingTracks.length === 0) {
+    for (let i = 0; i < lanes.length; i++) {
+      const created = createdTrackByLane.get(i);
+      if (created) tracks.push(created);
+    }
+  } else {
+    const insertBefore = new Map<number, ITrack[]>();
+    const insertAfter = new Map<number, ITrack[]>();
+    const pushMap = (map: Map<number, ITrack[]>, idx: number, list: ITrack[]) => {
+      const existing = map.get(idx);
+      if (existing) existing.push(...list);
+      else map.set(idx, [...list]);
+    };
+
+    let i = 0;
+    while (i < lanes.length) {
+      if (assigned[i] !== -1) {
+        i++;
+        continue;
+      }
+      const start = i;
+      const run: ITrack[] = [];
+      while (i < lanes.length && assigned[i] === -1) {
+        const created = createdTrackByLane.get(i);
+        if (created) run.push(created);
+        i++;
+      }
+      if (run.length === 0) continue;
+
+      if (i < lanes.length && assigned[i] !== -1) {
+        pushMap(insertBefore, assigned[i], run);
+      } else if (start > 0 && assigned[start - 1] !== -1) {
+        pushMap(insertAfter, assigned[start - 1], run);
+      } else if (trackPlacement === "top") {
+        pushMap(insertBefore, 0, run);
+      } else {
+        const insertAt = snapshot.trackOrder
+          .map((oldId) => existingTracks.findIndex((t) => t.id === oldId))
+          .find((idx) => idx !== -1);
+        if (insertAt !== undefined) pushMap(insertBefore, insertAt, run);
+        else pushMap(insertAfter, existingTracks.length - 1, run);
+      }
+    }
+
+    for (let j = 0; j < existingTracks.length; j++) {
+      const before = insertBefore.get(j);
+      if (before) tracks.push(...before);
+      tracks.push(existingTracks[j]);
+      const after = insertAfter.get(j);
+      if (after) tracks.push(...after);
+    }
+  }
+
   const trackItemIds = [...state.trackItemIds, ...newIds];
 
-  const transitionsMap = { ...state.transitionsMap };
-  const transitionIds = [...state.transitionIds];
+  const rawTransitionsMap = { ...state.transitionsMap };
+  const rawTransitionIds = [...state.transitionIds];
   newTransitions.forEach((t, id) => {
-    transitionsMap[id] = t;
-    transitionIds.push(id);
+    rawTransitionsMap[id] = t;
+    if (!rawTransitionIds.includes(id)) rawTransitionIds.push(id);
   });
+
+  const { transitionsMap, transitionIds } = reconcileAdjacentTransitions(
+    tracks,
+    trackItemsMap,
+    rawTransitionsMap,
+    rawTransitionIds,
+  );
 
   const duration = Math.max(state.duration, ...newIds.map((id) => trackItemsMap[id].display.to));
 
@@ -251,7 +645,7 @@ export function cloneIntoNewTracks(
     transitionIds,
     duration,
     newIds,
-    newTrackIds: [...trackIdMap.values()],
+    newTrackIds: createdTrackIds,
   };
 }
 
@@ -353,12 +747,19 @@ export function cloneSelectionInto(
   const trackItemsMap = { ...state.trackItemsMap, ...newItemsMap };
   const trackItemIds = [...state.trackItemIds, ...newIds];
 
-  const transitionsMap = { ...state.transitionsMap };
-  const transitionIds = [...state.transitionIds];
+  const rawTransitionsMap = { ...state.transitionsMap };
+  const rawTransitionIds = [...state.transitionIds];
   newTransitions.forEach((t, id) => {
-    transitionsMap[id] = t;
-    transitionIds.push(id);
+    rawTransitionsMap[id] = t;
+    if (!rawTransitionIds.includes(id)) rawTransitionIds.push(id);
   });
+
+  const { transitionsMap, transitionIds } = reconcileAdjacentTransitions(
+    tracks,
+    trackItemsMap,
+    rawTransitionsMap,
+    rawTransitionIds,
+  );
 
   const duration = Math.max(state.duration, ...newIds.map((id) => trackItemsMap[id].display.to));
 
@@ -612,9 +1013,22 @@ export function applyPlayheadAction(
   const next = getPlayheadEdit(action, item, timeMs, state);
   if (!next) return;
 
+  const nextTrackItemsMap = { ...state.trackItemsMap, [next.id]: next };
+  const current = stateManager.getState();
+  const reconciled = reconcileAdjacentTransitions(
+    state.tracks,
+    nextTrackItemsMap,
+    current.transitionsMap,
+    current.transitionIds,
+    current.scale?.zoom,
+  );
+
   stateManager.updateState(
     {
-      trackItemsMap: { ...state.trackItemsMap, [next.id]: next },
+      trackItemsMap: nextTrackItemsMap,
+      ...(reconciled.changed
+        ? { transitionsMap: reconciled.transitionsMap, transitionIds: reconciled.transitionIds }
+        : {}),
       duration: Math.max(state.duration, next.display.to),
     },
     { updateHistory: true, kind: "update" }

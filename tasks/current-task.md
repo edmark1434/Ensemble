@@ -1,13 +1,14 @@
-# Guest view-only share links & navbar title subtitles
+# Current Task
 
-## Implementation objective
+## Objective
 
-Allow guests to open view-only project share links without signing in, display owner/save subtitles in the editor navbar, and add a custom tooltip to the portfolio back button.
+1. Restore transition drop targets between adjacent clips placed on reused timeline lanes (after add, paste, duplicate, scene add, and playhead edits).
+2. Investigate and fix intermittent black-media-after-transition playback issues.
+3. Merge stacked presence playhead labels into a single `Name and N others` badge whenever 3+ names stack vertically at the current zoom level, separating them again as the user zooms in.
 
-## Acceptance criteria
+## Acceptance Criteria
 
-- View-only share links generated from the Share modal point directly to the editor (`/editor/[id]?share=...`) and allow unauthenticated guests to view the live project via read-only `SnapshotPreview` after verifying the signed link and active issuer authority in PostgreSQL.
-- Non-viewer share links (`Commenter`, `Editor`, `Manager`) still require login and redeem membership through `/projects/open/[id]?share=...`.
-- The navbar displays `by [owner]` in `text-muted-foreground` next to the title for view-only/comment-only access, template previews (showing template owner), guest view-only share links, and portfolio mode — and in mobile mode only when the user is actually a Viewer or Commenter (never for Owners/Managers/Editors).
-- Save previews display `at [Month Day, Year] · [Hour:Minute AM/PM]` in `text-muted-foreground` instead of `by [owner]`.
-- The portfolio mode back button uses a UI `<Tooltip>` with `"Back to profile"` and no native `title` attribute.
+- Adding, pasting, duplicating, or extending/moving items adjacent to another item on a reused lane creates/preserves `kind: "none"` transition drop slots in `stateManager`, Yjs, and the timeline canvas so transitions can be dropped between them immediately.
+- `groupTrackItems` ignores `kind: "none"` placeholders (and orphaned transitions) when deciding transition chain heads so clips after an active transition never silently disappear to black, and `<TransitionSeries>` uses integer `from` and even `durationInFrames` (>= 2) to prevent fractional-frame midpoint handoffs.
+- Outbound export and thumbnail payloads strip `kind: "none"` and orphaned transitions (recursively into nested scenes) before posting to the render server.
+- `PresencePlayheads` clusters overlapping playhead badges by current screen pixel span (zoom-aware), stacks up to 2 overlapping labels vertically, and merges clusters that reach 3+ stacked rows into a single `{name} and {n} others` pill while keeping individual vertical lines.

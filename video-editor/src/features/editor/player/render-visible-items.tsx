@@ -144,7 +144,7 @@ export function RenderVisibleItems({
 
     const firstItem = trackItemsMap[group[0].id];
     const rawFrom = (firstItem.display.from / 1000) * fps;
-    const from = Number.isFinite(rawFrom) ? rawFrom : 0;
+    const from = Number.isFinite(rawFrom) ? Math.round(rawFrom) : 0;
 
     const children = group.map((g) => {
       if (g.type === "transition") {
@@ -156,8 +156,13 @@ export function RenderVisibleItems({
             transitionId: t.id, rawDuration: t.duration, fromId: (t as any).fromId, toId: (t as any).toId,
           });
         }
+        const roundedDuration = isBad ? 1 : Math.round(rawDuration);
+        // @designcombo/transitions divides transition durationInFrames by 2
+        // without rounding when shifting the entering <Sequence from={...}>.
+        // Keep >= 2-frame durations even so the midpoint handoff lands on an integer frame.
+        const durationInFrames = roundedDuration >= 2 ? roundedDuration - (roundedDuration % 2) : roundedDuration;
         return Transitions[t.kind]({
-          durationInFrames: isBad ? 1 : Math.round(rawDuration), ...size, id: t.id, direction: t.direction,
+          durationInFrames, ...size, id: t.id, direction: t.direction,
         });
       }
       return renderItem(g.id, true, active);
