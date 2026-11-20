@@ -29,9 +29,8 @@ function writeDismissed(value: string) {
 }
 
 /**
- * Site-wide bar for open cases, next to the standing bar: an open dispute (credits are on hold
- * while one runs) or a ticket or dispute that is waiting on the member. Shows the most urgent
- * one; hiding it lasts until something about the member's cases changes.
+ * Compact upper-left icon badge for open cases (disputes / member-waiting tickets).
+ * Smoothly expands on hover to show case details and opens the case on click.
  */
 export function CaseStatusBar({
   summary,
@@ -44,6 +43,7 @@ export function CaseStatusBar({
 }) {
   const key = summaryKey(summary);
   const [dismissed, setDismissed] = useState(() => readDismissed());
+  const [expanded, setExpanded] = useState(false);
 
   // Tickets that are just with support do not need a site-wide bar; disputes always do.
   const relevant = summary.items.filter((item) => item.kind === 'dispute' || item.access.needsYou);
@@ -55,57 +55,78 @@ export function CaseStatusBar({
   const openCount = summary.openDisputes + summary.openTickets;
   const others = Math.max(0, openCount - 1);
   const detail = primary.access.attention || primary.access.stageLabel;
-  const action = primary.access.needsYou && primary.access.canReply ? 'Reply' : 'Open';
 
   return (
     <div
       role="status"
       aria-live="polite"
-      className={`pointer-events-auto flex w-full max-w-2xl items-center justify-between gap-2.5 rounded-xl border bg-white/95 px-3 py-1.5 shadow-md backdrop-blur-md dark:bg-[#15161b]/95 ${tone.border}`}
+      onMouseEnter={() => setExpanded(true)}
+      onMouseLeave={() => setExpanded(false)}
+      className={`pointer-events-auto flex w-fit items-center rounded-xl border bg-white/95 p-1.5 shadow-lg backdrop-blur-md transition-all duration-300 ease-out dark:bg-[#15161b]/95 ${tone.border}`}
       style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
     >
-      <button type="button" onClick={() => onOpen(primary)} className="flex min-w-0 flex-1 items-center gap-2 text-left">
-        <span className={`relative flex h-6 w-6 shrink-0 items-center justify-center rounded-lg ${tone.icon}`}>
-          <Icon className="h-3.5 w-3.5" />
-          {primary.access.needsYou ? (
-            <span className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-amber-500 ring-2 ring-white dark:ring-[#15161b]" />
-          ) : null}
-        </span>
-        <span className="shrink-0 text-xs font-bold text-zinc-900 dark:text-white">
-          {caseLabel(primary.kind, primary.number)}
-        </span>
-        <span className="truncate text-xs font-medium text-zinc-600 dark:text-zinc-300">
-          {detail}
-          {others > 0 ? ` · ${others} more open` : ''}
-        </span>
-      </button>
       <button
         type="button"
         onClick={() => onOpen(primary)}
-        className="inline-flex shrink-0 items-center rounded-lg border border-zinc-300 px-2.5 py-1 text-xs font-semibold text-zinc-900 transition-colors hover:bg-zinc-100 dark:border-white/15 dark:text-white dark:hover:bg-white/5"
+        title={`${caseLabel(primary.kind, primary.number)} — ${detail}`}
+        className="flex min-w-0 items-center text-left cursor-pointer"
       >
-        {action}
+        <span className={`relative flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${tone.icon}`}>
+          <Icon className="h-3.5 w-3.5" />
+          <span
+            className={`absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full ring-2 ring-white dark:ring-[#15161b] ${
+              primary.access.needsYou ? 'bg-amber-500' : 'bg-sky-500'
+            }`}
+          />
+        </span>
+
+        <div
+          className={`overflow-hidden transition-all duration-300 ease-out ${
+            expanded ? 'ml-2 max-w-[240px] opacity-100' : 'ml-0 max-w-0 opacity-0'
+          }`}
+        >
+          <div className="whitespace-nowrap pr-1 leading-tight">
+            <div className="text-[11px] font-bold text-zinc-900 dark:text-white">
+              {caseLabel(primary.kind, primary.number)}
+            </div>
+            <div className="truncate text-[10.5px] font-medium text-zinc-500 dark:text-zinc-400">
+              {detail}
+              {others > 0 ? ` · +${others}` : ''}
+            </div>
+          </div>
+        </div>
       </button>
-      {others > 0 ? (
+
+      <div
+        className={`flex items-center overflow-hidden transition-all duration-300 ease-out ${
+          expanded ? 'ml-1.5 max-w-[90px] opacity-100' : 'ml-0 max-w-0 opacity-0'
+        }`}
+      >
+        {others > 0 ? (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onOpenAll();
+            }}
+            className="mr-1 shrink-0 rounded-lg border border-zinc-200 px-2 py-1 text-[10.5px] font-semibold text-zinc-700 transition-colors hover:bg-zinc-100 dark:border-white/15 dark:text-zinc-300 dark:hover:bg-white/5 cursor-pointer"
+          >
+            All
+          </button>
+        ) : null}
         <button
           type="button"
-          onClick={onOpenAll}
-          className="hidden shrink-0 items-center rounded-lg border border-zinc-300 px-2.5 py-1 text-xs font-semibold text-zinc-900 transition-colors hover:bg-zinc-100 dark:border-white/15 dark:text-white dark:hover:bg-white/5 sm:inline-flex"
+          aria-label="Hide until something changes"
+          onClick={(e) => {
+            e.stopPropagation();
+            writeDismissed(key);
+            setDismissed(key);
+          }}
+          className="shrink-0 rounded-md p-1 text-zinc-400 transition-colors hover:bg-zinc-100 hover:text-zinc-900 dark:hover:bg-white/10 dark:hover:text-white cursor-pointer"
         >
-          All cases
+          <X className="h-3.5 w-3.5" />
         </button>
-      ) : null}
-      <button
-        type="button"
-        aria-label="Hide until something changes"
-        onClick={() => {
-          writeDismissed(key);
-          setDismissed(key);
-        }}
-        className="shrink-0 rounded-md p-1 text-zinc-400 transition-colors hover:bg-zinc-100 hover:text-zinc-900 dark:hover:bg-white/10 dark:hover:text-white"
-      >
-        <X className="h-3.5 w-3.5" />
-      </button>
+      </div>
     </div>
   );
 }

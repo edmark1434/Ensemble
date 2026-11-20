@@ -4,7 +4,6 @@ import { motion } from "framer-motion";
 import { Search, X, ChevronUp, ChevronDown, HelpCircle, Briefcase, FileText, Users, Box } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { HomeQuickActButtons } from "./home_quickact_buttons";
-import { HomeBannerVersion } from "./home_banner_version";
 import { HomeBannerInfo } from "./home_banner_info";
 import useGlobalState from "@/lib/global_state";
 import { useTourStore } from "@/lib/tour_state";
@@ -217,9 +216,6 @@ export const HomeBanner: React.FC<HomeBannerProps> = ({
 
       {/* Controls Container - Upper Right Corner */}
       <div className="absolute top-6 right-6 z-20 flex items-center gap-2">
-        {/* Modular Custom HUD Version Badge */}
-        <HomeBannerVersion />
-
         {/* Circular Question Mark "What's New?" Trigger Button */}
         <button
           onClick={() => setIsInfoOpen(!isInfoOpen)}
@@ -272,7 +268,7 @@ export const HomeBanner: React.FC<HomeBannerProps> = ({
               : "grid-rows-[1fr] opacity-100"
           }`}
         >
-          <div className={isCollapsed ? "overflow-hidden" : "overflow-visible"}>
+          <div className={searchQuery.trim() && !isCollapsed ? "overflow-visible min-h-0" : "overflow-hidden min-h-0"}>
             <p
               className="mt-3 text-base font-medium leading-relaxed text-gray-800 dark:text-zinc-200 md:text-lg"
               style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}

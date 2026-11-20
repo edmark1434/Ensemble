@@ -1,7 +1,10 @@
 // src/pages/user/1_home/home_components/home_banner_info.tsx
 import React, { useEffect, useState, useMemo } from "react";
+import { createPortal } from "react-dom";
+import { motion, AnimatePresence } from "framer-motion";
 import { X, ChevronDown, Compass } from "lucide-react";
 import { useTourStore } from "@/lib/tour_state";
+import useGlobalState from "@/lib/global_state";
 import { APP_VERSION } from "@/version.tsx";
 
 // ============================================================================
@@ -14,7 +17,6 @@ interface VersionRelease {
 }
 
 const loadVersionFiles = (): VersionRelease[] => {
-  // Automatically imports all .txt files inside the ./versions folder as raw strings
   const modules = import.meta.glob<{ default: string }>("./versions/*.txt", {
     query: "?raw",
     eager: true,
@@ -23,12 +25,10 @@ const loadVersionFiles = (): VersionRelease[] => {
   const parsedLogs: VersionRelease[] = [];
 
   for (const path in modules) {
-    // Extract version name from file path, e.g., "./versions/V1.3.2.txt" -> "V1.3.2"
     const filename = path.split("/").pop() || "";
     const version = filename.replace(".txt", "");
     const rawContent = modules[path].default || "";
 
-    // Split content line by line and clean up empty lines
     const changes = rawContent
       .split("\n")
       .map((line) => line.trim())
@@ -41,15 +41,39 @@ const loadVersionFiles = (): VersionRelease[] => {
     });
   }
 
-  // Sort versions in descending order (e.g., V1.3.3, V1.3.2, V1.3.1)
   return parsedLogs.sort((a, b) =>
     b.version.localeCompare(a.version, undefined, { numeric: true, sensitivity: "base" })
   );
 };
 
-// ============================================================================
-// COMPONENT IMPLEMENTATION
-// ============================================================================
+const Crosshair: React.FC<{
+  top?: boolean;
+  bottom?: boolean;
+  left?: boolean;
+  right?: boolean;
+  color: string;
+}> = ({ top, bottom, left, right, color }) => (
+  <span
+    aria-hidden="true"
+    style={{
+      position: "absolute",
+      top: top ? -6 : undefined,
+      bottom: bottom ? -6 : undefined,
+      left: left ? -5 : undefined,
+      right: right ? -5 : undefined,
+      fontFamily: "'Plus Jakarta Sans', sans-serif",
+      fontSize: 12,
+      lineHeight: 1,
+      color,
+      pointerEvents: "none",
+      userSelect: "none",
+      zIndex: 5,
+    }}
+  >
+    +
+  </span>
+);
+
 interface HomeBannerInfoProps {
   isOpen: boolean;
   onClose: () => void;
@@ -59,221 +83,300 @@ export const HomeBannerInfo: React.FC<HomeBannerInfoProps> = ({
   isOpen,
   onClose,
 }) => {
-  const [render, setRender] = useState(isOpen);
-  const [active, setActive] = useState(false);
+  const theme = useGlobalState((state) => state.theme);
+  const isDark = theme === "dark";
 
-  // Load version logs dynamically
   const versionLogs = useMemo(() => loadVersionFiles(), []);
+  const latestVersion = versionLogs.length > 0 ? versionLogs[0].version : APP_VERSION.split("|")[0].trim();
 
-  // Extract latest version for the header display dynamically
-  const latestVersion = versionLogs.length > 0 ? versionLogs[0].version : APP_VERSION;
-
-  // Track which accordion item is expanded (defaults to the latest version)
   const [expandedVersion, setExpandedVersion] = useState<string | null>(
     versionLogs.length > 0 ? versionLogs[0].version : null
   );
 
-  // Sync expanded item if files reload
   useEffect(() => {
     if (versionLogs.length > 0 && !expandedVersion) {
       setExpandedVersion(versionLogs[0].version);
     }
   }, [versionLogs, expandedVersion]);
 
-  // Manage mounting/unmounting for smooth transition
   useEffect(() => {
-    if (isOpen) {
-      setRender(true);
-      const timer = setTimeout(() => setActive(true), 10);
-      return () => clearTimeout(timer);
-    } else {
-      setActive(false);
-      const timer = setTimeout(() => setRender(false), 250);
-      return () => clearTimeout(timer);
-    }
-  }, [isOpen]);
-
-  // Close modal on Escape key press
-  useEffect(() => {
+    if (!isOpen) return;
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
     };
-    if (isOpen) {
-      window.addEventListener("keydown", handleKeyDown);
-    }
+    window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [isOpen, onClose]);
 
-  if (!render) return null;
+  if (typeof document === "undefined") return null;
 
-  return (
-    <div
-      className={`fixed inset-0 z-[999999] flex items-center justify-center p-4 transition-opacity duration-300 ease-out ${
-        active ? "opacity-100" : "opacity-0 pointer-events-none"
-      }`}
-      onClick={onClose}
-    >
-      <div className="relative w-full max-w-lg">
-        {/* Soft Ambient Radial Back Glow */}
-        <div
-          className={`absolute -inset-4 rounded-3xl bg-black/10 dark:bg-zinc-400/10 transition-all duration-300 blur-3xl pointer-events-none ${
-            active ? "opacity-60 scale-100" : "opacity-0 scale-50"
-          }`}
-        />
+  const borderLine = isDark ? "rgba(255, 255, 255, 0.14)" : "rgba(15, 23, 42, 0.14)";
+  const panelBg = isDark ? "rgba(18, 18, 20, 0.98)" : "#ffffff";
+  const subSurfaceBg = isDark ? "rgba(255, 255, 255, 0.03)" : "#f8fafc";
+  const textPrimary = isDark ? "#fafafa" : "#0f172a";
+  const textSecondary = isDark ? "#d4d4d8" : "#334155";
+  const textMeta = isDark ? "#a1a1aa" : "#475569";
+  const crosshairColor = isDark ? "rgba(255, 255, 255, 0.4)" : "rgba(15, 23, 42, 0.35)";
 
-        {/* Modal Card */}
+  return createPortal(
+    <AnimatePresence>
+      {isOpen && (
         <div
-          className={`relative w-full overflow-hidden rounded-2xl border border-gray-200 dark:border-white/15 bg-white/95 dark:bg-[#0a0d18]/95 p-6 md:p-8 shadow-[0_25px_100px_rgba(0,0,0,0.1)] dark:shadow-[0_25px_100px_rgba(0,0,0,0.95)] backdrop-blur-2xl transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] origin-top-right ${
-            active
-              ? "scale-100 translate-y-0 opacity-100"
-              : "scale-50 -translate-y-12 opacity-0"
-          }`}
-          onClick={(e) => e.stopPropagation()}
+          className="fixed inset-0 z-[999999] flex items-center justify-center p-3 sm:p-5"
+          style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
         >
-          {/* Header */}
-          <div className="flex items-start justify-between border-b border-gray-200 dark:border-white/10 pb-4">
-            <div>
-              <span
-                className="text-[10px] font-semibold uppercase tracking-widest text-gray-500 dark:text-zinc-400"
-                style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
-              >
-                System Release Logs
-              </span>
+          {/* Backdrop */}
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="absolute inset-0 bg-black/80 backdrop-blur-sm"
+            onClick={onClose}
+          />
 
-              {/* DYNAMIC TITLE DIRECTLY READING FROM LATEST VERSION FILE */}
-              <h2
-                className="mt-1 text-2xl font-extrabold tracking-tight text-gray-900 dark:text-white"
-                style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
-              >
-                What's New in {latestVersion}?
-              </h2>
-            </div>
-            <button
-              onClick={onClose}
-              className="rounded-lg border border-gray-200 dark:border-white/10 bg-gray-100 dark:bg-white/5 p-1.5 text-gray-500 dark:text-zinc-400 transition hover:bg-gray-200 dark:hover:bg-white/10 hover:text-gray-900 dark:hover:text-white"
+          {/* Architectural Blueprint Modal Window */}
+          <motion.div
+            initial={{ scale: 0.97, opacity: 0, y: 12 }}
+            animate={{ scale: 1, opacity: 1, y: 0 }}
+            exit={{ scale: 0.97, opacity: 0, y: 12 }}
+            transition={{ duration: 0.22, ease: "easeOut" }}
+            onClick={(e) => e.stopPropagation()}
+            className="max-h-[90vh] flex flex-col"
+            style={{
+              position: "relative",
+              width: "100%",
+              maxWidth: 600,
+              border: `1px solid ${borderLine}`,
+              background: panelBg,
+              color: textPrimary,
+              backdropFilter: "blur(16px)",
+              WebkitBackdropFilter: "blur(16px)",
+              boxShadow: isDark
+                ? "0 28px 80px rgba(0, 0, 0, 0.75)"
+                : "0 28px 80px rgba(0, 0, 0, 0.22)",
+            }}
+          >
+            <Crosshair top left color={crosshairColor} />
+            <Crosshair top right color={crosshairColor} />
+            <Crosshair bottom left color={crosshairColor} />
+            <Crosshair bottom right color={crosshairColor} />
+
+            {/* Top Blueprint Navigation Strip */}
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                padding: "10px 20px",
+                borderBottom: `1px solid ${borderLine}`,
+                gap: 12,
+                flexShrink: 0,
+              }}
             >
-              <X className="h-4 w-4" />
-            </button>
-          </div>
+              <div className="flex items-center gap-2 min-w-0">
+                <span
+                  style={{
+                    fontSize: 10.5,
+                    fontWeight: 700,
+                    letterSpacing: "0.16em",
+                    textTransform: "uppercase",
+                    color: textMeta,
+                  }}
+                >
+                  ENSEMBLE // SYSTEM RELEASE LOGS
+                </span>
+                <span className="px-1.5 py-0.5 text-[9px] font-extrabold tracking-[0.2em] uppercase border border-zinc-300 dark:border-white/20 bg-zinc-100 dark:bg-white/10 text-zinc-800 dark:text-zinc-100">
+                  ALPHA
+                </span>
+              </div>
 
-          {/* Scrollable Version Logs List - Fixed Max Height for Compact Viewing */}
-          <div className="my-5 space-y-2.5 max-h-[280px] md:max-h-[320px] overflow-y-auto pr-1.5 custom-scrollbar">
-            {versionLogs.length === 0 ? (
-              <p className="py-4 text-center text-xs text-gray-500 dark:text-zinc-500">
-                No version log files found in <code className="text-gray-400 dark:text-zinc-400">/versions</code>
+              <button
+                type="button"
+                onClick={onClose}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 6,
+                  background: "transparent",
+                  border: `1px solid ${borderLine}`,
+                  padding: "4px 8px",
+                  color: textSecondary,
+                  fontSize: 10,
+                  fontWeight: 700,
+                  letterSpacing: "0.12em",
+                  textTransform: "uppercase",
+                  cursor: "pointer",
+                }}
+              >
+                <span>CLOSE</span>
+                <X size={12} />
+              </button>
+            </div>
+
+            {/* Header */}
+            <div
+              style={{
+                padding: "18px 20px 14px",
+                borderBottom: `1px solid ${borderLine}`,
+                flexShrink: 0,
+              }}
+            >
+              <h2
+                style={{
+                  fontSize: "clamp(20px, 2.6vw, 24px)",
+                  fontWeight: 800,
+                  letterSpacing: "-0.025em",
+                  lineHeight: 1.2,
+                  margin: "0 0 4px",
+                  color: textPrimary,
+                }}
+              >
+                What&apos;s New in {latestVersion}?
+              </h2>
+              <p
+                style={{
+                  color: textSecondary,
+                  fontSize: 12.5,
+                  fontWeight: 500,
+                  margin: 0,
+                }}
+              >
+                Release channel: <strong style={{ color: textPrimary }}>Alpha</strong> · Platform updates and refinements
               </p>
-            ) : (
-              versionLogs.map((log, index) => {
-                const isExpanded = expandedVersion === log.version;
-                const isLatest = index === 0;
+            </div>
 
-                return (
-                  <div
-                    key={log.version}
-                    className="overflow-hidden rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/[0.02] transition-colors hover:border-gray-300 dark:hover:border-white/20 shadow-sm dark:shadow-none"
-                  >
-                    {/* Accordion Header */}
-                    <button
-                      onClick={() =>
-                        setExpandedVersion(isExpanded ? null : log.version)
-                      }
-                      className="flex w-full items-center justify-between p-3 text-left transition hover:bg-gray-50 dark:hover:bg-white/5"
-                    >
-                      <div className="flex items-center gap-2">
-                        <span
-                          className="text-xs font-bold text-gray-900 dark:text-white"
-                          style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
-                        >
-                          {log.version}
-                        </span>
-                        {isLatest && (
-                          <span className="rounded-md border border-gray-200 dark:border-zinc-700 bg-gray-100 dark:bg-zinc-800/60 px-1.5 py-0.5 text-[9px] font-medium text-gray-600 dark:text-zinc-300 uppercase tracking-wider">
-                            Latest
-                          </span>
-                        )}
-                      </div>
-                      <ChevronDown
-                        className={`h-3.5 w-3.5 text-gray-400 dark:text-zinc-400 transition-transform duration-300 ${
-                          isExpanded ? "rotate-180 text-gray-900 dark:text-white" : ""
-                        }`}
-                      />
-                    </button>
+            {/* Scrollable Version Logs List */}
+            <div
+              className="overflow-y-auto thin-scrollbar space-y-2.5"
+              style={{
+                padding: "16px 20px",
+                background: subSurfaceBg,
+                borderBottom: `1px solid ${borderLine}`,
+              }}
+            >
+              {versionLogs.length === 0 ? (
+                <p className="py-6 text-center text-xs text-zinc-500">
+                  No version log files found in <code>/versions</code>
+                </p>
+              ) : (
+                versionLogs.map((log, index) => {
+                  const isExpanded = expandedVersion === log.version;
+                  const isLatest = index === 0;
 
-                    {/* Accordion Collapsible Body */}
+                  return (
                     <div
-                      className={`grid transition-all duration-300 ease-in-out ${
-                        isExpanded
-                          ? "grid-rows-[1fr] opacity-100"
-                          : "grid-rows-[0fr] opacity-0"
-                      }`}
+                      key={log.version}
+                      style={{
+                        border: `1px solid ${borderLine}`,
+                        background: panelBg,
+                      }}
                     >
-                      <div className="overflow-hidden">
-                        <div className="border-t border-gray-100 dark:border-white/5 bg-gray-50 dark:bg-zinc-950/40 p-3 pt-2 space-y-1">
-                          {log.changes.map((change, i) => (
-                            <p
-                              key={i}
-                              className="text-[11px] leading-relaxed text-gray-600 dark:text-zinc-300"
-                              style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
-                            >
-                              {change}
-                            </p>
-                          ))}
+                      {/* Accordion Header */}
+                      <button
+                        type="button"
+                        onClick={() => setExpandedVersion(isExpanded ? null : log.version)}
+                        className="flex w-full items-center justify-between px-3.5 py-2.5 text-left transition-colors hover:bg-zinc-50 dark:hover:bg-white/[0.03] cursor-pointer"
+                      >
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-extrabold tracking-tight" style={{ color: textPrimary }}>
+                            {log.version}
+                          </span>
+                          {isLatest && (
+                            <span className="px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider border border-zinc-300 dark:border-white/20 bg-zinc-100 dark:bg-white/10 text-zinc-800 dark:text-zinc-200">
+                              Latest · Alpha
+                            </span>
+                          )}
+                        </div>
+                        <ChevronDown
+                          className={`h-3.5 w-3.5 transition-transform duration-200 ${
+                            isExpanded ? "rotate-180" : ""
+                          }`}
+                          style={{ color: textMeta }}
+                        />
+                      </button>
+
+                      {/* Accordion Collapsible Body */}
+                      <div
+                        className={`grid transition-all duration-200 ease-in-out ${
+                          isExpanded ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"
+                        }`}
+                      >
+                        <div className="overflow-hidden">
+                          <div
+                            className="px-3.5 py-3 space-y-1.5"
+                            style={{
+                              borderTop: `1px solid ${borderLine}`,
+                              background: subSurfaceBg,
+                            }}
+                          >
+                            {log.changes.map((change, i) => (
+                              <p
+                                key={i}
+                                className="text-[11.5px] leading-relaxed"
+                                style={{ color: textSecondary }}
+                              >
+                                {change}
+                              </p>
+                            ))}
+                          </div>
                         </div>
                       </div>
                     </div>
-                  </div>
-                );
-              })
-            )}
-          </div>
-
-          {/* Footer */}
-          <div className="flex items-center justify-between border-t border-gray-200 dark:border-white/10 pt-4">
-            <span className="text-[11px] text-gray-500 dark:text-zinc-500 hidden sm:inline">
-              Press ESC or click Got It to dismiss
-            </span>
-            <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
-              <button
-                type="button"
-                onClick={() => {
-                  onClose();
-                  useTourStore.getState().openWelcome();
-                }}
-                className="flex items-center gap-1.5 rounded-xl border border-amber-500/30 bg-amber-50 dark:bg-amber-500/10 px-3.5 py-2 text-xs font-semibold text-amber-800 dark:text-amber-300 transition hover:bg-amber-100 dark:hover:bg-amber-500/20"
-                style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
-              >
-                <Compass className="h-3.5 w-3.5" />
-                Walkthrough
-              </button>
-              <button
-                onClick={onClose}
-                className="rounded-xl border border-gray-200 dark:border-white/15 bg-gray-100 dark:bg-white/10 px-4 py-2 text-xs font-semibold text-gray-900 dark:text-white transition hover:bg-gray-200 dark:hover:bg-white/20"
-                style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
-              >
-                Got it
-              </button>
+                  );
+                })
+              )}
             </div>
-          </div>
-        </div>
-      </div>
 
-      {/* Slim Dark Scrollbar Styles */}
-      <style>{`
-        .custom-scrollbar::-webkit-scrollbar {
-          width: 4px;
-        }
-        .custom-scrollbar::-webkit-scrollbar-track {
-          background: rgba(255, 255, 255, 0.02);
-          border-radius: 4px;
-        }
-        .custom-scrollbar::-webkit-scrollbar-thumb {
-          background: rgba(255, 255, 255, 0.15);
-          border-radius: 4px;
-        }
-        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-          background: rgba(255, 255, 255, 0.3);
-        }
-      `}</style>
-    </div>
+            {/* Footer */}
+            <div
+              style={{
+                padding: "12px 20px",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: 12,
+                flexShrink: 0,
+              }}
+            >
+              <span
+                className="hidden sm:inline"
+                style={{
+                  fontSize: 11.5,
+                  fontWeight: 600,
+                  color: textMeta,
+                }}
+              >
+                Press ESC or click Got it to dismiss
+              </span>
+              <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+                <button
+                  type="button"
+                  onClick={() => {
+                    onClose();
+                    useTourStore.getState().openWelcome();
+                  }}
+                  style={{
+                    border: `1px solid ${borderLine}`,
+                    color: textPrimary,
+                  }}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold bg-transparent hover:opacity-80 transition cursor-pointer"
+                >
+                  <Compass className="h-3.5 w-3.5" />
+                  <span>Walkthrough</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="px-4 py-1.5 text-xs font-bold bg-zinc-900 text-white dark:bg-white dark:text-zinc-900 hover:opacity-90 transition cursor-pointer"
+                >
+                  Got it
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        </div>
+      )}
+    </AnimatePresence>,
+    document.body
   );
 };
