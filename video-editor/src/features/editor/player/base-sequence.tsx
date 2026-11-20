@@ -19,6 +19,8 @@ export interface SequenceItemOptions {
   visualsActive?: boolean;
   // Keep nearby videos ready across cuts and short seeks.
   keepMountedFor?: number;
+  premountFor?: number;
+  postmountFor?: number;
   // true only for items rendered inside a Scene's nested content layer —
   // a read-only snapshot that must never be individually selectable/
   // draggable in the player
@@ -36,7 +38,9 @@ export const BaseSequence = ({
 }) => {
   const { details } = item as ITrackItem;
 
-  const { fps, isTransition, nested, keepMountedFor } = options;
+  const { fps, isTransition, nested, keepMountedFor, premountFor, postmountFor } = options;
+  const premount = premountFor ?? keepMountedFor;
+  const postmount = postmountFor ?? keepMountedFor;
   const canvasActive = !nested && isCanvasItemAtTime(item, ((options.frame ?? 0) / fps) * 1000);
   const { from, durationInFrames } = calculateFrames(
     {
@@ -67,8 +71,8 @@ export const BaseSequence = ({
     return (
       <TransitionSeries.Sequence
         key={item.id}
-        premountFor={keepMountedFor}
-        postmountFor={keepMountedFor}
+        premountFor={premount}
+        postmountFor={postmount}
         durationInFrames={durationInFrames}
         style={{ pointerEvents: "none" }}
       >
@@ -93,8 +97,8 @@ export const BaseSequence = ({
   return (
     <Sequence
       key={item.id}
-      premountFor={keepMountedFor}
-      postmountFor={keepMountedFor}
+      premountFor={premount}
+      postmountFor={postmount}
       from={from}
       durationInFrames={durationInFrames}
       style={{ pointerEvents: "none" }}

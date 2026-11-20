@@ -1,9 +1,11 @@
 import { useCallback, useState } from "react";
 import { Gif } from "@remotion/gif";
 import { getPreparedImageType } from "../../utils/prepared-image-cache";
-import { MediaPlaceholder } from "../../components/media-placeholder";
+import { getLocalMediaType } from "../../utils/local-media-cache";
+import { isImageDecoded, markImageDecoded } from "../../utils/decoded-image-cache";
+import { MediaPlaceholder, PendingUploadBadge } from "../../components/media-placeholder";
 import { useMissingMedia } from "../../store/use-missing-media";
-import { isMissingMediaSource } from "../../utils/missing-media";
+import { isMissingMediaSource, isPendingMediaSource } from "../../utils/missing-media";
 import useStore from "../../store/use-store";
 import { useMarketAssetSource, useMarketImageFailed } from "../../hooks/use-market-asset-source";
 import { IImage } from "@designcombo/types";
@@ -20,20 +22,24 @@ function MarketImage({ item }: { item: IImage }) {
   const { isRendering } = useRemotionEnvironment();
   const projectId = useStore(state => state.projectId);
   const missing = useMissingMedia(state => state.projectId === projectId && state.missing.has(item.details.src));
-  const [loaded, setLoaded] = useState<string | null>(null);
-  const [failed, setFailed] = useState<string | null>(null);
   const source = isRendering ? item.details.src : src;
-  const onLoad = useCallback(() => setLoaded(source), [source]);
+  const [loaded, setLoaded] = useState<string | null>(() => (source && isImageDecoded(source) ? source : null));
+  const [failed, setFailed] = useState<string | null>(null);
+  const isLoaded = !!source && (loaded === source || isImageDecoded(source));
+  const onLoad = useCallback(() => {
+    if (source) markImageDecoded(source);
+    setLoaded(source);
+  }, [source]);
   const onError = useCallback(() => setFailed(source), [source]);
 
   if (!isRendering && (missing || isMissingMediaSource(item.details.src))) {
     return <MediaPlaceholder missing />;
   }
   if (!source || (!isRendering && failed === source)) {
-    return <MediaPlaceholder item={item} failed={preparationFailed || (!!source && failed === source)} />;
+    return <MediaPlaceholder item={item} delayMs={600} failed={preparationFailed || (!!source && failed === source)} />;
   }
 
-  const mimeType = getPreparedImageType(source);
+  const mimeType = getPreparedImageType(source) ?? getLocalMediaType(source);
   const isGif = mimeType?.startsWith("image/")
     ? mimeType === "image/gif"
     : [source, item.details.src].some(value => /^(?:data:image\/gif[;,]|[^?#]*\.gif(?:[?#]|$))/i.test(value));
@@ -49,7 +55,8 @@ function MarketImage({ item }: { item: IImage }) {
         style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", display: "block" }}
         {...events} />
     )}
-    {!isRendering && loaded !== source && <MediaPlaceholder item={item} failed={preparationFailed} />}
+    {!isRendering && !isLoaded && <MediaPlaceholder item={item} delayMs={600} failed={preparationFailed} />}
+    {!isRendering && isPendingMediaSource(item.details.src) && <PendingUploadBadge src={item.details.src} />}
   </>;
 }
 

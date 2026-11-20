@@ -1,3 +1,5 @@
+import { markImageDecoded } from "./decoded-image-cache";
+
 // Prepared marketplace images use blob URLs, which have no file extension.
 const preparedImageTypes = new Map<string, string>();
 
@@ -51,6 +53,7 @@ export function createPreparedImageCache() {
         image.src = entry.url;
         await image.decode();
         if (controller.signal.aborted) throw new Error("Aborted");
+        markImageDecoded(entry.url);
         return entry.url;
       })().catch(error => {
         if (entries.get(source) === entry) remove(source);
