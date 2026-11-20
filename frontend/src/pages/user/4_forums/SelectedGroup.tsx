@@ -1,6 +1,7 @@
 // src/pages/user/4_forums/SelectedGroup.tsx
 import { useState, useEffect, useRef, useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
+import { motion } from "framer-motion";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import api from "@/lib/axios";
@@ -35,8 +36,15 @@ import {
   Reply,
   ChevronRight,
   UserPlus,
+  Info,
+  Bold,
+  Italic,
+  List,
+  Code,
 } from "lucide-react";
 import UserHeader from "@/components/nav/user_header";
+import GlideSelect from "@/components/ui/GlideSelect";
+import JobRichText from "@/pages/user/6_job_market/job_components/JobRichText";
 import { GuestLoginModal } from "@/components/ui/GuestLoginModal";
 import NewDiscussionModal from "@/pages/user/4_forums/forum_modals/NewDiscussionModal";
 import EditGroupModal from "@/pages/user/4_forums/forum_modals/EditGroupModal";
@@ -163,6 +171,8 @@ type MemberWithDetails = {
   name: string;
   avatar: string;
   joinedAt: string;
+  isVerified?: boolean;
+  subscriptionPlan?: string;
 };
 
 const getTagColor = (tagId: number) => {
@@ -233,16 +243,19 @@ const MarkdownComponents = {
 const getTimeAgo = (dateString: string): string => {
   const date = new Date(dateString);
   const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
+  const diffMs = Math.max(0, now.getTime() - date.getTime());
   const diffMins = Math.floor(diffMs / 60000);
   const diffHours = Math.floor(diffMs / 3600000);
   const diffDays = Math.floor(diffMs / 86400000);
+  const diffMonths = Math.floor(diffDays / 30);
+  const diffYears = Math.floor(diffDays / 365);
 
   if (diffMins < 1) return "Just now";
-  if (diffMins < 60) return `${diffMins} min ago`;
-  if (diffHours < 24) return `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`;
-  if (diffDays < 7) return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
-  return date.toLocaleDateString();
+  if (diffMins < 60) return `${diffMins} min${diffMins > 1 ? "s" : ""} ago`;
+  if (diffHours < 24) return `${diffHours} hour${diffHours > 1 ? "s" : ""} ago`;
+  if (diffDays < 30) return `${diffDays} day${diffDays > 1 ? "s" : ""} ago`;
+  if (diffMonths < 12) return `${diffMonths} month${diffMonths > 1 ? "s" : ""} ago`;
+  return `${Math.max(1, diffYears)} year${diffYears > 1 ? "s" : ""} ago`;
 };
 
 const getDepthClass = (depth: number = 0): string => {
@@ -346,7 +359,7 @@ const ReplyInput = ({
 }: {
   replyText: string;
   updateReplyText: (text: string) => void;
-  handleReply: () => void;
+  handleReply: () => Promise<void> | void;
   uploadImages: (files: FileList | null) => void;
   images: ImageAttachment[];
   removeImage: (imageId: string) => void;
@@ -356,8 +369,22 @@ const ReplyInput = ({
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [showPreview, setShowPreview] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const submittingRef = useRef(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const { locked: forumTimedOut } = useForumTimeout();
+
+  const handleSubmitReply = async () => {
+    if (submittingRef.current || isSubmitting || isUploading || (!replyText.trim() && images.length === 0)) return;
+    submittingRef.current = true;
+    setIsSubmitting(true);
+    try {
+      await handleReply();
+    } finally {
+      submittingRef.current = false;
+      setIsSubmitting(false);
+    }
+  };
 
   const applyFormatting = (format: string) => {
     const textarea = textareaRef.current;
@@ -420,54 +447,58 @@ const ReplyInput = ({
           className="h-8 w-8 rounded-full object-cover ring-2 ring-white/20 flex-shrink-0"
         />
         <div className="flex-1">
-          <div className="flex flex-wrap items-center gap-1 rounded-t-lg border border-gray-200 dark:border-white/15 border-b-0 bg-white dark:bg-white/5 shadow-sm dark:shadow-none px-2 py-1">
+          <div className="flex flex-wrap items-center gap-1 rounded-t-lg border border-gray-300 dark:border-white/15 border-b-0 bg-gray-100/80 dark:bg-white/5 px-3 py-2">
             <button
               type="button"
               onClick={() => applyFormatting("bold")}
-              className="rounded p-1 text-gray-500 dark:text-zinc-400 transition hover:bg-gray-100 dark:bg-white/10 hover:text-gray-900 dark:text-white"
-              title="Bold"
+              className="rounded p-1.5 text-gray-600 dark:text-zinc-300 transition hover:bg-gray-200/70 dark:hover:bg-white/10 hover:text-gray-900 dark:hover:text-white"
+              title="Bold (**text**)"
             >
-              <strong className="text-xs">B</strong>
+              <Bold className="h-3.5 w-3.5" />
             </button>
             <button
               type="button"
               onClick={() => applyFormatting("italic")}
-              className="rounded p-1 text-gray-500 dark:text-zinc-400 transition hover:bg-gray-100 dark:bg-white/10 hover:text-gray-900 dark:text-white"
-              title="Italic"
+              className="rounded p-1.5 text-gray-600 dark:text-zinc-300 transition hover:bg-gray-200/70 dark:hover:bg-white/10 hover:text-gray-900 dark:hover:text-white"
+              title="Italic (*text*)"
             >
-              <em className="text-xs">I</em>
+              <Italic className="h-3.5 w-3.5" />
             </button>
+            <div className="mx-0.5 h-4 w-px bg-gray-300 dark:bg-white/15" />
             <button
               type="button"
               onClick={() => applyFormatting("bullet-list")}
-              className="rounded p-1 text-gray-500 dark:text-zinc-400 transition hover:bg-gray-100 dark:bg-white/10 hover:text-gray-900 dark:text-white"
-              title="Bullet List"
+              className="rounded p-1.5 text-gray-600 dark:text-zinc-300 transition hover:bg-gray-200/70 dark:hover:bg-white/10 hover:text-gray-900 dark:hover:text-white"
+              title="Bullet List (- item)"
             >
-              <span className="text-xs">•</span>
+              <List className="h-3.5 w-3.5" />
             </button>
             <button
               type="button"
               onClick={() => applyFormatting("code")}
-              className="rounded p-1 text-gray-500 dark:text-zinc-400 transition hover:bg-gray-100 dark:bg-white/10 hover:text-gray-900 dark:text-white"
-              title="Code"
+              className="rounded p-1.5 text-gray-600 dark:text-zinc-300 transition hover:bg-gray-200/70 dark:hover:bg-white/10 hover:text-gray-900 dark:hover:text-white"
+              title="Inline Code (`code`)"
             >
-              <span className="text-xs">{'<>'}</span>
+              <Code className="h-3.5 w-3.5" />
             </button>
+            <div className="mx-0.5 h-4 w-px bg-gray-300 dark:bg-white/15" />
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
-              className="rounded p-1 text-gray-500 dark:text-zinc-400 transition hover:bg-gray-100 dark:bg-white/10 hover:text-gray-900 dark:text-white"
+              className="rounded p-1.5 text-gray-600 dark:text-zinc-300 transition hover:bg-gray-200/70 dark:hover:bg-white/10 hover:text-gray-900 dark:hover:text-white"
               title="Upload Image"
             >
-              <ImageIcon className="h-3 w-3" />
+              <ImageIcon className="h-3.5 w-3.5" />
             </button>
             <button
               type="button"
               onClick={() => setShowPreview(!showPreview)}
-              className="ml-auto rounded p-1 text-gray-500 dark:text-zinc-400 transition hover:bg-gray-100 dark:bg-white/10 hover:text-gray-900 dark:text-white"
+              className={`ml-auto rounded p-1.5 transition hover:bg-gray-200/70 dark:hover:bg-white/10 hover:text-gray-900 dark:hover:text-white ${
+                showPreview ? "bg-blue-500/20 text-blue-600 dark:text-blue-400" : "text-gray-600 dark:text-zinc-300"
+              }`}
               title={showPreview ? "Edit" : "Preview"}
             >
-              {showPreview ? <Edit2 className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
+              {showPreview ? <Edit2 className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
             </button>
           </div>
 
@@ -477,17 +508,15 @@ const ReplyInput = ({
               value={replyText}
               onChange={(e) => updateReplyText(e.target.value)}
               placeholder={placeholder}
-              className="w-full rounded-b-lg border border-gray-200 dark:border-white/15 border-t-0 bg-white dark:bg-white/5 shadow-sm dark:shadow-none px-3 py-2 text-sm text-gray-900 dark:text-white placeholder:text-gray-500 dark:text-zinc-500 focus:border-blue-500/50 focus:outline-none focus:ring-1 focus:ring-blue-500/50 resize-none"
+              className="w-full rounded-b-lg border border-gray-300 dark:border-white/15 border-t-0 bg-white dark:bg-white/5 px-3.5 py-2.5 text-sm text-gray-900 dark:text-white placeholder:text-gray-500 dark:placeholder:text-zinc-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-none"
               rows={3}
             />
           ) : (
-            <div className="min-h-[80px] rounded-b-lg border border-gray-200 dark:border-white/15 border-t-0 bg-white dark:bg-white/5 shadow-sm dark:shadow-none p-3">
+            <div className="min-h-[84px] rounded-b-lg border border-gray-300 dark:border-white/15 border-t-0 bg-white dark:bg-white/5 p-3.5">
               {replyText.trim() ? (
-                <ReactMarkdown remarkPlugins={[remarkGfm]} components={MarkdownComponents}>
-                  {replyText}
-                </ReactMarkdown>
+                <JobRichText content={replyText} className="text-sm text-gray-800 dark:text-zinc-100" />
               ) : (
-                <p className="text-sm text-gray-500 dark:text-zinc-500 italic">Nothing to preview...</p>
+                <p className="text-sm text-gray-500 dark:text-zinc-400 italic">Nothing to preview...</p>
               )}
             </div>
           )}
@@ -519,23 +548,25 @@ const ReplyInput = ({
 
           <div className="mt-2 flex justify-end gap-2">
             <button
+              type="button"
               onClick={() => fileInputRef.current?.click()}
-              className="flex items-center gap-1 rounded-lg border border-gray-200 dark:border-white/15 bg-white dark:bg-white/5 shadow-sm dark:shadow-none px-3 py-1.5 text-xs text-gray-500 dark:text-zinc-400 transition hover:bg-gray-100 dark:bg-white/10 hover:text-gray-900 dark:text-white"
+              className="flex items-center gap-1.5 rounded-lg border border-gray-300 dark:border-white/15 bg-white dark:bg-white/5 px-3 py-1.5 text-xs font-medium text-gray-700 dark:text-zinc-200 transition hover:bg-gray-100 dark:hover:bg-white/10 hover:text-gray-900 dark:hover:text-white"
             >
-              <ImageIcon className="h-3 w-3" />
+              <ImageIcon className="h-3.5 w-3.5" />
               Add Image
             </button>
             <button
-              onClick={handleReply}
-              disabled={(!replyText.trim() && images.length === 0) || isUploading}
-              className="flex items-center gap-1 rounded-lg bg-blue-500 px-3 py-1.5 text-xs font-medium text-gray-900 dark:text-white transition hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed"
+              type="button"
+              onClick={handleSubmitReply}
+              disabled={(!replyText.trim() && images.length === 0) || isUploading || isSubmitting}
+              className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-3.5 py-1.5 text-xs font-semibold text-white transition hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {isUploading ? (
-                <Loader2 className="h-3 w-3 animate-spin" />
+              {isUploading || isSubmitting ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
               ) : (
-                <Send className="h-3 w-3" />
+                <Send className="h-3.5 w-3.5" />
               )}
-              Post Reply
+              {isSubmitting ? "Posting..." : "Post Reply"}
             </button>
           </div>
 
@@ -603,8 +634,23 @@ const CommentItem = ({
   const [showCommentMenu, setShowCommentMenu] = useState(false);
   
   const commentAuthor = membersDetails[comment.user_id] || { name: "Unknown User", avatar: "https://i.pravatar.cc/150?u=unknown" };
+  const commentIdentity = comment.author_identity ? identityFromDetails(comment.author_identity) : null;
   const isLiked = comment.likes?.some(like => like.user_id === currentUserId) || false;
   const isAuthor = comment.user_id === currentUserId;
+  const commentIsVerified = Boolean(
+    commentIdentity?.isVerified ||
+    (commentAuthor as any).isVerified ||
+    (isAuthor && (useGlobalState.getState().isVerified || user?.is_verified))
+  );
+  const commentSubscriptionPlan =
+    (commentIdentity?.subscriptionPlan && commentIdentity.subscriptionPlan !== "Free"
+      ? commentIdentity.subscriptionPlan
+      : null) ||
+    ((commentAuthor as any).subscriptionPlan && (commentAuthor as any).subscriptionPlan !== "Free"
+      ? (commentAuthor as any).subscriptionPlan
+      : null) ||
+    (isAuthor ? (useGlobalState.getState().subscriptionPlan || user?.subscription_plan) : null) ||
+    "Free";
   const targetAccountId = (isAuthor ? (user?.account_id || user?.accountId) : null)
     || (commentAuthor as any).accountId
     || comment.author_identity?.account_id
@@ -631,7 +677,7 @@ const CommentItem = ({
 
   return (
     <div className={`${depthClass} mt-2 ${!isLastInThread ? "border-l-2 border-gray-200 dark:border-white/10 ml-2 pl-2" : ""}`}>
-      <div className="flex gap-3 py-2">
+      <div className="flex items-start gap-3 py-2">
         {targetAccountId ? (
           <button
             type="button"
@@ -666,10 +712,26 @@ const CommentItem = ({
                   }}
                   className="text-sm font-medium text-gray-900 dark:text-white hover:underline cursor-pointer text-left"
                 >
-                  {commentAuthor.name}
+                  {commentIdentity?.name || commentAuthor.name}
                 </button>
               ) : (
-                <p className="text-sm font-medium text-gray-900 dark:text-white">{commentAuthor.name}</p>
+                <p className="text-sm font-medium text-gray-900 dark:text-white">{commentIdentity?.name || commentAuthor.name}</p>
+              )}
+              {commentIsVerified && (
+                <img
+                  src="/icons/verification/lvl2_verified.png"
+                  alt="Verified"
+                  className="h-3.5 w-3.5 object-contain"
+                  title="Verified"
+                />
+              )}
+              {commentSubscriptionPlan && commentSubscriptionPlan !== "Free" && (
+                <img
+                  src={getSubscriptionIcon(commentSubscriptionPlan)}
+                  alt={commentSubscriptionPlan}
+                  className="h-3.5 w-3.5 object-contain drop-shadow-[0_0_8px_rgba(255,255,255,0.15)]"
+                  title={`${commentSubscriptionPlan} Tier`}
+                />
               )}
               <span className="text-xs text-gray-500 dark:text-zinc-500">{getTimeAgo(comment.created_at)}</span>
               {comment.is_edited && (
@@ -720,19 +782,19 @@ const CommentItem = ({
               <textarea
                 value={editText}
                 onChange={(e) => setEditText(e.target.value)}
-                className="w-full rounded-lg border border-gray-200 dark:border-white/15 bg-white dark:bg-white/5 shadow-sm dark:shadow-none px-3 py-2 text-sm text-gray-900 dark:text-white"
+                className="w-full rounded-lg border border-gray-300 dark:border-white/15 bg-white dark:bg-white/5 px-3.5 py-2.5 text-sm text-gray-900 dark:text-white focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                 rows={3}
               />
               <div className="mt-2 flex gap-2">
                 <button
                   onClick={handleEditSubmit}
-                  className="rounded bg-blue-500 px-3 py-1 text-xs text-gray-900 dark:text-white"
+                  className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700"
                 >
                   Save
                 </button>
                 <button
                   onClick={() => setIsEditing(false)}
-                  className="rounded bg-gray-100 dark:bg-white/10 px-3 py-1 text-xs text-gray-500 dark:text-zinc-400"
+                  className="rounded-lg border border-gray-300 dark:border-white/15 bg-white dark:bg-white/5 px-3 py-1.5 text-xs font-medium text-gray-700 dark:text-zinc-200 hover:bg-gray-100 dark:hover:bg-white/10"
                 >
                   Cancel
                 </button>
@@ -740,11 +802,10 @@ const CommentItem = ({
             </div>
           ) : (
             <>
-              <div className="mt-1 text-sm text-gray-600 dark:text-zinc-300 prose prose-invert prose-sm max-w-none break-words">
-                <ReactMarkdown remarkPlugins={[remarkGfm]} components={MarkdownComponents}>
-                  {comment.deleted_at ? "[deleted]" : comment.comment}
-                </ReactMarkdown>
-              </div>
+              <JobRichText
+                content={comment.deleted_at ? "[deleted]" : comment.comment}
+                className="mt-1 text-sm text-gray-800 dark:text-zinc-100"
+              />
               
               <ImageGallery attachments={comment.attachments} />
             </>
@@ -871,6 +932,7 @@ const SelectedGroup = () => {
   const { locked: forumTimedOut, reportLocked, message: forumTimeoutMessage } = useForumTimeout();
   const [searchQuery, setSearchQuery] = useState("");
   const [sortBy, setSortBy] = useState("latest");
+  const [selectedTagFilter, setSelectedTagFilter] = useState<string>("all");
   const [memberRoleFilter, setMemberRoleFilter] = useState<"All" | "Admin" | "Member">("All");
   const [showMenu, setShowMenu] = useState(false);
   const [showMemberMenu, setShowMemberMenu] = useState<number | null>(null);
@@ -951,18 +1013,17 @@ const SelectedGroup = () => {
         avatar: currentUserAvatar,
         accountId: user?.account_id || user?.accountId || null,
         isVerified: useGlobalState.getState().isVerified || user?.is_verified || false,
-        subscriptionPlan: user?.subscription_plan || "Free",
+        subscriptionPlan: useGlobalState.getState().subscriptionPlan || user?.subscription_plan || "Free",
       };
     }
     const member = membersWithDetails.find(m => String(m.userId) === String(userId));
     const participant = participantDetails[String(userId)];
-    // Fallbacks since participant details doesn't have badges for now
     return {
       name: member?.name || participant?.name || "Forum member",
       avatar: member?.avatar || participant?.avatar || currentUserAvatar,
       accountId: member?.accountId || (participant as any)?.accountId || (typeof userId === "string" && userId.length > 10 ? userId : null),
-      isVerified: false,
-      subscriptionPlan: "Free",
+      isVerified: Boolean(member?.isVerified),
+      subscriptionPlan: member?.subscriptionPlan || "Free",
     };
   };
 
@@ -1019,6 +1080,8 @@ const SelectedGroup = () => {
             name: identity.name,
             avatar: identity.avatar,
             joinedAt: member.joined_at,
+            isVerified: Boolean((identity as any).isVerified),
+            subscriptionPlan: (identity as any).subscriptionPlan || "Free",
           };
         });
         console.log("Group discussion:", result2.data.discussions);
@@ -1075,6 +1138,12 @@ const SelectedGroup = () => {
   const filteredAndSortedPosts = useMemo(() => {
     let filtered = [...posts];
 
+    if (selectedTagFilter !== "all") {
+      filtered = filtered.filter((post) =>
+        post.tags?.some((tag) => String(tag.tag_id) === selectedTagFilter) || false
+      );
+    }
+
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase().trim();
       filtered = filtered.filter((post) => {
@@ -1089,10 +1158,11 @@ const SelectedGroup = () => {
     }
 
     return filtered;
-  }, [posts, searchQuery]);
+  }, [posts, searchQuery, selectedTagFilter]);
 
   const displayPosts = filteredAndSortedPosts.map((post, index) => {
     const authorDetails = getMemberDetails(post.user_id);
+    const postIdentity = post.author_identity ? identityFromDetails(post.author_identity) : null;
     const isLikedByCurrentUser = post.likes?.some(like => like.user_id === currentUserId) || false;
     const isSavedByCurrentUser = post.saves?.some(save => save.user_id === currentUserId) || false;
     const authorAccountId = (post.user_id === currentUserId ? (user?.account_id || user?.accountId) : null)
@@ -1106,11 +1176,14 @@ const SelectedGroup = () => {
       arrayIndex: index,
       id: post._id || String(index),
       _id: post._id,
-      author: authorDetails.name,
-      authorAvatar: authorDetails.avatar,
+      author: postIdentity?.name || authorDetails.name,
+      authorAvatar: postIdentity?.avatar || authorDetails.avatar,
       authorAccountId,
-      authorIsVerified: authorDetails.isVerified,
-      authorSubscriptionPlan: authorDetails.subscriptionPlan,
+      authorIsVerified: Boolean(postIdentity?.isVerified || authorDetails.isVerified),
+      authorSubscriptionPlan:
+        (postIdentity?.subscriptionPlan && postIdentity.subscriptionPlan !== "Free"
+          ? postIdentity.subscriptionPlan
+          : authorDetails.subscriptionPlan) || "Free",
       excerpt: post.content,
       content: post.content,
       ago: getTimeAgo(post.created_at),
@@ -1769,19 +1842,20 @@ const SelectedGroup = () => {
     }
   };
 
-  const handleEditGroup = async(updatedData: { group_name: string; description: string; tags: string[]; gradient: string }) => {
+  const handleEditGroup = async(updatedData: { group_name?: string; description?: string; tags?: any[]; image_url?: string; gradient?: string }) => {
     if (!group) return;
     try {
       const response = await api.put(`api/forum/groups/${group._id}`, updatedData);
       if (response.status === 200) {
         showSuccessToast(`Group "${group.group_name}" updated successfully!`);
         setGroup({
-        ...group,
-        group_name: updatedData.group_name ?? group.group_name,
-        description: updatedData.description ?? group.description,
-        tags: updatedData.tags ?? group.tags,
-        gradient: updatedData.gradient ?? group.gradient,
-      });
+          ...group,
+          group_name: updatedData.group_name ?? group.group_name,
+          description: updatedData.description ?? group.description,
+          tags: updatedData.tags ?? group.tags,
+          image_url: updatedData.image_url !== undefined ? updatedData.image_url : group.image_url,
+          gradient: updatedData.gradient ?? group.gradient,
+        });
       } else { 
         showErrorToast("Failed to update group. Please try again.");
         return;
@@ -1826,10 +1900,15 @@ const SelectedGroup = () => {
     }
   };
 
-  const handleLeaveGroup = () => {
-    console.log("Leaving group:", group?.group_name);
-    showSuccessToast(`You have left "${group?.group_name}"`);
-    navigate("/forums");
+  const handleLeaveGroup = async () => {
+    if (!group?._id || !currentUserId) return;
+    try {
+      await api.delete(`/api/forum/groups/${group._id}/members/${currentUserId}`);
+      showSuccessToast(`You have left "${group.group_name}"`);
+      navigate("/forums");
+    } catch (err: any) {
+      showErrorToast(err?.response?.data?.error || "Failed to leave group");
+    }
   };
 
   const handleDeleteGroup = async() => {
@@ -1885,6 +1964,25 @@ const SelectedGroup = () => {
   };
 
   const isOwner = group?.members.some(m => m.userId === currentUserId && m.role === "Admin") || false;
+  const ownerFromDetails = membersWithDetails.find(
+    (m) => m.role === "Admin" || m.role.toLowerCase() === "owner"
+  );
+  const ownerFromGroup = group?.members.find(
+    (m) => m.role === "Admin" || m.role.toLowerCase() === "owner"
+  );
+  const ownerName =
+    ownerFromDetails?.name ||
+    ownerFromGroup?.identity?.displayName ||
+    "Unknown";
+  const ownerAvatar = ownerFromDetails?.avatar || DEFAULT_FORUM_AVATAR;
+  const ownerIsVerified = Boolean(
+    ownerFromDetails?.isVerified || (ownerFromGroup?.identity as any)?.is_verified
+  );
+  const ownerSubscriptionPlan =
+    ownerFromDetails?.subscriptionPlan ||
+    (ownerFromGroup?.identity as any)?.subscription_plan ||
+    (ownerFromGroup?.identity as any)?.subscriptionPlan ||
+    "Free";
   const isActiveMember = group?.members.some(
     (member) => String(member.userId) === String(currentUserId) && !member.is_banned
   ) || false;
@@ -1946,226 +2044,296 @@ const SelectedGroup = () => {
       <UserHeader pageTitle={group.group_name} />
 
       <div className="mx-auto max-w-7xl p-6 md:p-8">
-        <div className="mb-6 flex items-center justify-between">
-          <button
-            onClick={() => navigate("/forums")}
-            className="flex items-center gap-2 text-sm text-gray-500 dark:text-zinc-400 transition hover:text-gray-900 dark:text-white"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            Back to Forums
-          </button>
-
-          <div className="relative">
+        <div className="rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface shadow-sm dark:shadow-none">
+          {/* Banner Image / Fallback Gradient */}
+          <div className={`relative w-full overflow-hidden rounded-t-2xl bg-gradient-to-r ${group.gradient || 'from-purple-600 via-pink-600 to-red-600'} ${group.image_url ? 'h-44 sm:h-56' : 'h-24 sm:h-28'}`}>
             <button
-              onClick={() => setShowMenu(!showMenu)}
-              disabled={forumTimedOut}
-              title={forumTimedOut ? forumTimeoutMessage : undefined}
-              className={`rounded-lg p-2 text-gray-500 dark:text-zinc-400 transition hover:bg-gray-100 dark:bg-white/10 hover:text-gray-900 dark:text-white ${forumTimedOut ? FORUM_LOCKED_CLASS : ""}`}
+              type="button"
+              onClick={() => navigate("/forums")}
+              className="absolute top-4 left-4 z-10 inline-flex items-center gap-2 rounded-full border border-white/15 bg-black/55 px-3.5 py-1.5 text-xs font-medium text-white backdrop-blur-md transition hover:bg-black/75"
             >
-              <MoreVertical className="h-5 w-5" />
+              <ArrowLeft className="h-3.5 w-3.5" />
+              Back to Forums
             </button>
-
-            {isForumAuthenticated && showMenu && !forumTimedOut && (
-              <div className="absolute right-0 mt-2 w-56 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface shadow-2xl backdrop-blur-xl overflow-hidden z-20">
-                <div className="p-2">
-                  {canEditGroup && (
-                    <button
-                      onClick={() => {
-                        setShowEditGroupModal(true);
-                        setShowMenu(false);
-                      }}
-                      className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-gray-600 dark:text-zinc-300 transition hover:bg-gray-100 dark:bg-white/10"
-                    >
-                      <Edit3 className="h-4 w-4" />
-                      Edit Group
-                    </button>
-                  )}
-                  {canEditPermissions && (
-                    <button
-                      onClick={() => {
-                        setShowEditPermissionsModal(true);
-                        setShowMenu(false);
-                      }}
-                      className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-gray-600 dark:text-zinc-300 transition hover:bg-gray-100 dark:bg-white/10"
-                    >
-                      <Shield className="h-4 w-4" />
-                      Edit Roles
-                    </button>
-                  )}
-                  {isForumAuthenticated && !isOwner && (
-                    <button
-                      onClick={() => {
-                        setShowReportGroupModal(true);
-                        setShowMenu(false);
-                      }}
-                      className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-gray-600 dark:text-zinc-300 transition hover:bg-gray-100 dark:bg-white/10"
-                    >
-                      <Flag className="h-4 w-4" />
-                      Report Group
-                    </button>
-                  )}
-                  {isForumAuthenticated && !isOwner && (
-                    <button
-                      onClick={() => {
-                        setShowLeaveGroupModal(true);
-                        setShowMenu(false);
-                      }}
-                      className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-red-400 transition hover:bg-red-500/10"
-                    >
-                      <LogOut className="h-4 w-4" />
-                      Leave Group
-                    </button>
-                  )}
-                  {isOwner && (
-                    <button
-                      onClick={() => {
-                        setShowDeleteGroupModal(true);
-                        setShowMenu(false);
-                      }}
-                      className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-red-400 transition hover:bg-red-500/10"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                      Delete Group
-                    </button>
-                  )}
-                </div>
-              </div>
+            {group.image_url && (
+              <img
+                src={
+                  /^https?:\/\//i.test(group.image_url) || group.image_url.startsWith("/")
+                    ? group.image_url
+                    : `${import.meta.env.VITE_CLOUDFRONT_URL}/${group.image_url}`
+                }
+                alt={`${group.group_name} banner`}
+                className="h-full w-full object-cover"
+                onError={(e) => {
+                  (e.target as HTMLImageElement).style.display = "none";
+                }}
+              />
             )}
           </div>
-        </div>
 
-        <div className={`relative overflow-hidden rounded-2xl bg-gradient-to-r ${group.gradient || ' from-purple-600 via-pink-600 to-red-600'} p-8`}>
-          <div className="absolute inset-0 bg-black/50" />
-          <div className="relative z-10">
-            <div className="flex items-center gap-4">
-              {group.image_url && (
-                <img 
-                  src={group.image_url} 
-                  alt={group.group_name}
-                  className="h-20 w-20 rounded-xl object-cover ring-2 ring-white/20"
-                  onError={(e) => (e.target as HTMLImageElement).style.display = 'none'}
-                />
-              )}
-              <div>
-                <h1 className="text-3xl font-bold text-white">{group.group_name}</h1>
-                <p className="mt-2 text-zinc-200 max-w-2xl">{group.description}</p>
+          {/* Group Details Below Banner */}
+          <div className="p-6">
+            <div className="flex items-start justify-between gap-4">
+              <div className="min-w-0 flex-1">
+                <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white">{group.group_name}</h1>
+                <p className="mt-1.5 text-sm sm:text-base text-gray-600 dark:text-zinc-300 max-w-2xl">{group.description}</p>
+              </div>
+              <div className="flex shrink-0 items-center gap-2">
                 {!isActiveMember && (
-                  <button type="button" onClick={() => void handleJoinGroup()} disabled={forumTimedOut || joiningGroup} title={forumTimedOut ? forumTimeoutMessage : undefined} className="mt-4 inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-60">
+                  <button
+                    type="button"
+                    onClick={() => void handleJoinGroup()}
+                    disabled={forumTimedOut || joiningGroup}
+                    title={forumTimedOut ? forumTimeoutMessage : undefined}
+                    className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
                     {joiningGroup ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserPlus className="h-4 w-4" />}
                     {joiningGroup ? "Joining..." : "Join Group"}
                   </button>
                 )}
+
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setShowMenu(!showMenu)}
+                    disabled={forumTimedOut}
+                    title={forumTimedOut ? forumTimeoutMessage : undefined}
+                    className={`rounded-lg p-2 text-gray-500 dark:text-zinc-400 transition hover:bg-gray-100 dark:hover:bg-white/10 hover:text-gray-900 dark:hover:text-white ${forumTimedOut ? FORUM_LOCKED_CLASS : ""}`}
+                  >
+                    <MoreVertical className="h-5 w-5" />
+                  </button>
+
+                  {isForumAuthenticated && showMenu && !forumTimedOut && (
+                    <div className="absolute right-0 mt-2 w-56 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface shadow-2xl backdrop-blur-xl overflow-hidden z-20">
+                      <div className="p-2">
+                        {canEditGroup && (
+                          <button
+                            onClick={() => {
+                              setShowEditGroupModal(true);
+                              setShowMenu(false);
+                            }}
+                            className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-gray-700 dark:text-zinc-300 transition hover:bg-gray-100 dark:hover:bg-white/10"
+                          >
+                            <Edit3 className="h-4 w-4" />
+                            Edit Group
+                          </button>
+                        )}
+                        {canEditPermissions && (
+                          <button
+                            onClick={() => {
+                              setShowEditPermissionsModal(true);
+                              setShowMenu(false);
+                            }}
+                            className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-gray-700 dark:text-zinc-300 transition hover:bg-gray-100 dark:hover:bg-white/10"
+                          >
+                            <Shield className="h-4 w-4" />
+                            Edit Roles
+                          </button>
+                        )}
+                        {isForumAuthenticated && !isOwner && (
+                          <button
+                            onClick={() => {
+                              setShowReportGroupModal(true);
+                              setShowMenu(false);
+                            }}
+                            className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-gray-700 dark:text-zinc-300 transition hover:bg-gray-100 dark:hover:bg-white/10"
+                          >
+                            <Flag className="h-4 w-4" />
+                            Report Group
+                          </button>
+                        )}
+                        {isForumAuthenticated && isActiveMember && !isOwner && (
+                          <button
+                            onClick={() => {
+                              setShowLeaveGroupModal(true);
+                              setShowMenu(false);
+                            }}
+                            className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-red-500 dark:text-red-400 transition hover:bg-red-500/10"
+                          >
+                            <LogOut className="h-4 w-4" />
+                            Leave Group
+                          </button>
+                        )}
+                        {isOwner && (
+                          <button
+                            onClick={() => {
+                              setShowDeleteGroupModal(true);
+                              setShowMenu(false);
+                            }}
+                            className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-red-500 dark:text-red-400 transition hover:bg-red-500/10"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                            Delete Group
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
-            <div className="mt-4 flex flex-wrap items-center gap-4 text-sm text-zinc-300">
-              <div className="flex items-center gap-1">
-                <span>Created at {group.created_at.split('T')[0]}</span>
+            <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-sm text-gray-600 dark:text-zinc-300">
+              <div className="flex items-center gap-1.5">
+                <span>By:</span>
+                <img
+                  src={ownerAvatar}
+                  alt={ownerName}
+                  className="h-5 w-5 rounded-full object-cover ring-1 ring-gray-200 dark:ring-white/20"
+                />
+                <span className="font-semibold text-gray-900 dark:text-white">{ownerName}</span>
+                {ownerIsVerified && (
+                  <img
+                    src="/icons/verification/lvl2_verified.png"
+                    alt="Verified"
+                    className="h-3.5 w-3.5 object-contain"
+                    title="Verified"
+                  />
+                )}
+                {ownerSubscriptionPlan && ownerSubscriptionPlan !== "Free" && (
+                  <img
+                    src={getSubscriptionIcon(ownerSubscriptionPlan)}
+                    alt={ownerSubscriptionPlan}
+                    className="h-3.5 w-3.5 object-contain drop-shadow-[0_0_8px_rgba(255,255,255,0.15)]"
+                    title={`${ownerSubscriptionPlan} Tier`}
+                  />
+                )}
               </div>
-              <div className="flex items-center gap-1">
-                <Users className="h-4 w-4" />
-                <span>{group.members.length} members</span>
+              <span className="text-gray-300 dark:text-zinc-600" aria-hidden="true">|</span>
+              <div className="flex items-center gap-1.5">
+                <Users className="h-4 w-4 text-gray-500 dark:text-zinc-400" />
+                <span>Members <span className="font-semibold text-gray-900 dark:text-white">{group.members.length}</span></span>
               </div>
-              <div className="flex items-center gap-1">
-                <Tag className="h-4 w-4" />
-                <span>{group.tags.length} tags</span>
+              <span className="text-gray-300 dark:text-zinc-600" aria-hidden="true">|</span>
+              <div className="flex items-center gap-1.5">
+                <Tag className="h-4 w-4 text-gray-500 dark:text-zinc-400" />
+                <span>Tags <span className="font-semibold text-gray-900 dark:text-white">{group.tags.length}</span></span>
               </div>
+              <span className="text-gray-300 dark:text-zinc-600" aria-hidden="true">|</span>
+              <span title={group.created_at.split('T')[0]}>Created {getTimeAgo(group.created_at)}</span>
             </div>
           </div>
         </div>
 
-        <div className="mt-6 border-b border-gray-200 dark:border-white/10">
-          <div className="flex gap-6">
+        <div className="mt-6 flex flex-col gap-4 sm:flex-row sm:items-center w-full">
+          {isActiveMember && (
             <button
-              onClick={() => setActiveTab("posts")}
-              className={`pb-3 text-sm font-medium transition ${
-                activeTab === "posts"
-                  ? "border-b-2 border-blue-500 text-blue-400"
-                  : "text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:text-white"
-              }`}
+              onClick={() => setIsNewDiscussionOpen(true)}
+              disabled={forumTimedOut}
+              title={forumTimedOut ? forumTimeoutMessage : undefined}
+              className="shrink-0 flex items-center justify-center gap-2 rounded-full bg-black dark:bg-white px-6 py-3 text-sm font-bold text-white dark:text-black transition hover:scale-105 group whitespace-nowrap disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:scale-100"
             >
-              Posts
+              <PlusCircle className="h-4 w-4 transition-transform duration-300 group-hover:rotate-90" />
+              <span style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
+                New Discussion
+              </span>
             </button>
-            <button
-              onClick={() => setActiveTab("members")}
-              className={`pb-3 text-sm font-medium transition ${
-                activeTab === "members"
-                  ? "border-b-2 border-blue-500 text-blue-400"
-                  : "text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:text-white"
-              }`}
-            >
-              Members
-            </button>
-            <button
-              onClick={() => setActiveTab("about")}
-              className={`pb-3 text-sm font-medium transition ${
-                activeTab === "about"
-                  ? "border-b-2 border-blue-500 text-blue-400"
-                  : "text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:text-white"
-              }`}
-            >
-              About
-            </button>
+          )}
+
+          <div className="relative flex-1 w-full min-w-0">
+            <Search className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400 dark:text-zinc-500" />
+            <input
+              type="text"
+              placeholder="Search discussions..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full rounded-full border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 pl-11 pr-10 py-3 text-sm text-gray-900 dark:text-white focus:outline-none focus:border-blue-500/50 transition-all placeholder:text-gray-400 dark:placeholder:text-zinc-500"
+            />
+            {searchQuery && (
+              <button onClick={() => setSearchQuery("")} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 dark:text-zinc-500 hover:text-gray-900 dark:hover:text-white">
+                <X className="h-4 w-4" />
+              </button>
+            )}
           </div>
+        </div>
+
+        <div className="mt-6 flex flex-wrap items-center justify-between gap-3 border-b border-gray-200 dark:border-white/10">
+          <div className="flex gap-1 relative">
+            {(
+              [
+                { key: "posts", label: "Posts", icon: <MessageCircle className="h-4 w-4" /> },
+                { key: "members", label: "Members", icon: <Users className="h-4 w-4" /> },
+                { key: "about", label: "About", icon: <Info className="h-4 w-4" /> },
+              ] as const
+            ).map((tab) => {
+              const isActive = activeTab === tab.key;
+              return (
+                <button
+                  key={tab.key}
+                  type="button"
+                  onClick={() => setActiveTab(tab.key)}
+                  className={`relative flex items-center gap-2 px-6 py-3 text-sm font-medium transition-colors duration-200 ${
+                    isActive
+                      ? "text-blue-600 dark:text-blue-400"
+                      : "text-gray-700 dark:text-zinc-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100/50 dark:hover:bg-white/5 rounded-t-lg"
+                  }`}
+                >
+                  <span className="relative z-10 flex items-center gap-2">
+                    {tab.icon} {tab.label}
+                  </span>
+
+                  {isActive && (
+                    <>
+                      <motion.div
+                        layoutId="groupActiveTabGlow"
+                        className="absolute inset-0 bg-blue-500/5 rounded-t-lg"
+                        transition={{ duration: 0.2, ease: "easeOut" }}
+                      />
+                      <motion.div
+                        layoutId="groupActiveTabUnderline"
+                        className="absolute bottom-0 left-0 right-0 h-[2px] bg-blue-500 z-10"
+                        transition={{ duration: 0.2, ease: "easeOut" }}
+                      />
+                    </>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+
+          {activeTab === "posts" && (
+            <div className="flex flex-wrap items-center gap-2.5 pb-2 sm:pb-0">
+              <GlideSelect
+                options={[
+                  { value: "all", label: "All Tags" },
+                  ...(group?.tags || []).map((t) => ({
+                    value: String(t.tag_id),
+                    label: t.tag,
+                  })),
+                ]}
+                value={selectedTagFilter}
+                onChange={(val) => setSelectedTagFilter(val)}
+                size="sm"
+                fullWidth={false}
+                menuWidth={170}
+                align="right"
+                triggerIcon={<Tag className="h-3.5 w-3.5 text-gray-500 dark:text-zinc-400" />}
+                ariaLabel="Filter discussions by tag"
+              />
+              <span className="text-xs font-medium text-gray-500 dark:text-zinc-400">Sort by:</span>
+              <div className="flex gap-1.5">
+                {sortOptions.map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => setSortBy(option.value)}
+                    className={`flex items-center gap-1 rounded-lg border px-2.5 py-1.5 text-xs font-semibold transition ${
+                      sortBy === option.value
+                        ? "border-blue-500 bg-blue-500 text-white"
+                        : "border-gray-300 dark:border-white/15 bg-white dark:bg-white/[0.04] text-gray-700 dark:text-zinc-300 hover:border-gray-400 dark:hover:border-white/30"
+                    }`}
+                  >
+                    {option.icon}
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="mt-6">
           {activeTab === "posts" && (
             <>
-              <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center w-full">
-                {isActiveMember && (
-                  <button
-                    onClick={() => setIsNewDiscussionOpen(true)}
-                    disabled={forumTimedOut}
-                    title={forumTimedOut ? forumTimeoutMessage : undefined}
-                    className="shrink-0 flex items-center justify-center gap-2 rounded-full bg-black dark:bg-white px-6 py-3 text-sm font-bold text-white dark:text-black transition hover:scale-105 group whitespace-nowrap disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:scale-100"
-                  >
-                    <PlusCircle className="h-4 w-4 transition-transform duration-300 group-hover:rotate-90" />
-                    <span style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
-                      New Discussion
-                    </span>
-                  </button>
-                )}
-
-                <div className="relative flex-1 w-full min-w-0">
-                  <Search className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400 dark:text-zinc-500" />
-                  <input
-                    type="text"
-                    placeholder="Search discussions..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full rounded-full border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 pl-11 pr-10 py-3 text-sm text-gray-900 dark:text-white focus:outline-none focus:border-blue-500/50 transition-all placeholder:text-gray-400 dark:placeholder:text-zinc-500"
-                  />
-                  {searchQuery && (
-                    <button onClick={() => setSearchQuery("")} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 dark:text-zinc-500 hover:text-gray-900 dark:hover:text-white">
-                      <X className="h-4 w-4" />
-                    </button>
-                  )}
-                </div>
-              </div>
-
-              <div className="mb-6 flex justify-end">
-                <div className="flex items-center gap-4">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs text-gray-500 dark:text-zinc-500">Sort by:</span>
-                    <div className="flex gap-2">
-                      {sortOptions.map((option) => (
-                        <button
-                          key={option.value}
-                          onClick={() => setSortBy(option.value)}
-                          className={`flex items-center gap-1 rounded-full px-3 py-1 text-xs transition-all duration-200 ${
-                            sortBy === option.value
-                              ? "bg-blue-500 text-white shadow-lg shadow-blue-500/25"
-                              : "border border-gray-200 dark:border-white/15 bg-white dark:bg-white/5 shadow-sm dark:shadow-none text-gray-500 dark:text-zinc-400 hover:border-white/30 hover:text-gray-900 dark:hover:text-white"
-                          }`}
-                        >
-                          {option.icon}
-                          {option.label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              </div>
 
               <div className="space-y-4">
                 {displayPosts.length === 0 ? (
@@ -2179,7 +2347,7 @@ const SelectedGroup = () => {
                     const isAuthor = post.user_id === currentUserId;
 
                     return (
-                      <div key={post.id} className="rounded-xl border border-gray-200 dark:border-white/10 bg-gradient-to-br from-white/5 to-transparent p-4 transition hover:border-white/20">
+                      <div key={post.id} className="rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface p-4 shadow-sm dark:shadow-none transition hover:border-gray-300 dark:hover:border-white/20">
                         <div className="flex gap-3">
                           {post.authorAccountId ? (
                             <button
@@ -2247,39 +2415,31 @@ const SelectedGroup = () => {
                               </div>
 
                               {isAuthor ? (
-                                <div className="relative">
-                                  <button
-                                    onClick={() => setPostMenuOpen(postMenuOpen === post.id ? null : post.id)}
+                                <div className={forumTimedOut ? FORUM_LOCKED_CLASS : ""} title={forumTimedOut ? forumTimeoutMessage : undefined}>
+                                  <GlideSelect
+                                    options={[
+                                      { value: "edit", label: "Edit", icon: <Edit2 className="h-3.5 w-3.5" /> },
+                                      {
+                                        value: "delete",
+                                        label: <span className="text-red-500 dark:text-red-400">Delete</span>,
+                                        icon: <TrashIcon className="h-3.5 w-3.5 text-red-500 dark:text-red-400" />,
+                                      },
+                                    ]}
+                                    value=""
+                                    onChange={(val) => {
+                                      if (val === "edit") setEditingPost(post);
+                                      else if (val === "delete") setDeletingPost(post);
+                                    }}
+                                    triggerIcon={<MoreVertical className="h-4 w-4" />}
+                                    triggerLabel={null}
+                                    hideChevron
                                     disabled={forumTimedOut}
-                                    title={forumTimedOut ? forumTimeoutMessage : undefined}
-                                    className={`rounded-lg p-1 text-gray-500 dark:text-zinc-500 transition hover:bg-gray-100 dark:bg-white/10 hover:text-gray-900 dark:text-white ${forumTimedOut ? FORUM_LOCKED_CLASS : ""}`}
-                                  >
-                                    <MoreVertical className="h-4 w-4" />
-                                  </button>
-                                  {postMenuOpen === post.id && !forumTimedOut && (
-                                    <div className="absolute right-0 mt-1 w-36 rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface shadow-xl overflow-hidden z-20">
-                                      <button
-                                        onClick={() => {
-                                          setEditingPost(post);
-                                          setPostMenuOpen(null);
-                                        }}
-                                        className="flex w-full items-center gap-2 px-3 py-2 text-sm text-gray-600 dark:text-zinc-300 transition hover:bg-gray-100 dark:bg-white/10"
-                                      >
-                                        <Edit2 className="h-3.5 w-3.5" />
-                                        Edit
-                                      </button>
-                                      <button
-                                        onClick={() => {
-                                          setDeletingPost(post);
-                                          setPostMenuOpen(null);
-                                        }}
-                                        className="flex w-full items-center gap-2 px-3 py-2 text-sm text-red-400 transition hover:bg-red-500/10"
-                                      >
-                                        <TrashIcon className="h-3.5 w-3.5" />
-                                        Delete
-                                      </button>
-                                    </div>
-                                  )}
+                                    size="sm"
+                                    fullWidth={false}
+                                    menuWidth={144}
+                                    align="right"
+                                    ariaLabel="Discussion actions"
+                                  />
                                 </div>
                               ) : (
                                 <button
@@ -2306,47 +2466,47 @@ const SelectedGroup = () => {
 
                         <ImageGallery attachments={post.attachments} imageKeys={post.imageKeys} />
 
-                        <div className="mt-3 flex flex-wrap items-center gap-4 text-xs">
-                              <button
-                                onClick={() => toggleExpand(post.id)}
-                                className="inline-flex items-center gap-1 text-gray-500 dark:text-zinc-500 transition hover:text-gray-900 dark:text-white"
-                              >
-                                <MessageCircle className="h-3.5 w-3.5" />
-                                <span>{post.commentCount} replies</span>
-                                {expandedPostId === post.id ? (
-                                  <ChevronUp className="h-3.5 w-3.5" />
-                                ) : (
-                                  <ChevronDown className="h-3.5 w-3.5" />
-                                )}
-                              </button>
-
+                        <div className="mt-4 flex flex-wrap items-center gap-2 text-sm">
                               <button
                                 onClick={() => handleLikePost(post.id)}
                                 disabled={forumTimedOut}
                                 title={forumTimedOut ? forumTimeoutMessage : undefined}
-                                className={`inline-flex items-center gap-1 transition-all duration-200 ${
+                                className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 font-medium transition-all duration-200 ${
                                   post.isLiked
-                                    ? "text-red-400 hover:text-red-300"
-                                    : "text-gray-500 dark:text-zinc-500 hover:text-gray-900 dark:text-white"
+                                    ? "bg-red-500/10 text-red-500 dark:text-red-400 hover:bg-red-500/15"
+                                    : "text-gray-600 dark:text-zinc-300 hover:bg-gray-100 dark:hover:bg-white/10 hover:text-gray-900 dark:hover:text-white"
                                 } ${forumTimedOut ? FORUM_LOCKED_CLASS : ""}`}
                                 type="button"
                               >
-                                <Heart className={`h-3.5 w-3.5 transition-all ${post.isLiked ? "fill-red-400" : ""}`} />
+                                <Heart className={`h-4 w-4 transition-all ${post.isLiked ? "fill-red-500 dark:fill-red-400" : ""}`} />
                                 <span>{post.likeCount} likes</span>
+                              </button>
+
+                              <button
+                                onClick={() => toggleExpand(post.id)}
+                                className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 font-medium text-gray-600 dark:text-zinc-300 transition hover:bg-gray-100 dark:hover:bg-white/10 hover:text-gray-900 dark:hover:text-white"
+                              >
+                                <MessageCircle className="h-4 w-4" />
+                                <span>{post.commentCount} replies</span>
+                                {expandedPostId === post.id ? (
+                                  <ChevronUp className="h-4 w-4" />
+                                ) : (
+                                  <ChevronDown className="h-4 w-4" />
+                                )}
                               </button>
 
                               <button
                                 onClick={() => handleSavePost(post.id)}
                                 disabled={forumTimedOut}
                                 title={forumTimedOut ? forumTimeoutMessage : undefined}
-                                className={`inline-flex items-center gap-1 transition-all duration-200 ${
+                                className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 font-medium transition-all duration-200 ${
                                   post.isSaved
-                                    ? "text-yellow-400 hover:text-yellow-300"
-                                    : "text-gray-500 dark:text-zinc-500 hover:text-gray-900 dark:text-white"
+                                    ? "bg-amber-500/10 text-amber-600 dark:text-yellow-400 hover:bg-amber-500/15"
+                                    : "text-gray-600 dark:text-zinc-300 hover:bg-gray-100 dark:hover:bg-white/10 hover:text-gray-900 dark:hover:text-white"
                                 } ${forumTimedOut ? FORUM_LOCKED_CLASS : ""}`}
                                 type="button"
                               >
-                                <Bookmark className={`h-3.5 w-3.5 transition-all ${post.isSaved ? "fill-yellow-400" : ""}`} />
+                                <Bookmark className={`h-4 w-4 transition-all ${post.isSaved ? "fill-amber-500 dark:fill-yellow-400" : ""}`} />
                                 <span>{post.isSaved ? "Saved" : "Save"}</span>
                               </button>
                               <ForumTimeoutPill />
@@ -2411,39 +2571,52 @@ const SelectedGroup = () => {
             </>
           )}
 
-          {activeTab === "members" && (
+          {activeTab === "members" && (() => {
+            const filteredMembers = membersWithDetails.filter((member) => {
+              if (memberRoleFilter === "All") return true;
+              if (memberRoleFilter === "Admin") return member.role === "Admin";
+              return member.role !== "Admin";
+            });
+
+            return (
             <div className="space-y-6">
-              <div className="flex items-center gap-2">
-                <span className="text-sm font-medium text-gray-500 dark:text-zinc-400">Filter roles:</span>
-                <div className="flex rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface p-1">
-                  {(["All", "Admin", "Member"] as const).map((role) => (
-                    <button
-                      key={role}
-                      onClick={() => setMemberRoleFilter(role)}
-                      className={`rounded-md px-3 py-1.5 text-xs font-medium transition-all ${
-                        memberRoleFilter === role
-                          ? "bg-gray-100 dark:bg-white/10 text-gray-900 dark:text-white"
-                          : "text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white"
-                      }`}
-                    >
-                      {role}
-                    </button>
-                  ))}
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <span className="text-sm font-medium text-gray-700 dark:text-zinc-200">
+                  {filteredMembers.length} member{filteredMembers.length !== 1 ? "s" : ""}
+                </span>
+                <div className="flex items-center gap-3">
+                  <span className="text-xs font-semibold uppercase tracking-wider text-gray-700 dark:text-zinc-200">Filter roles:</span>
+                  <GlideSelect
+                    options={[
+                      { value: "All", label: "All Roles" },
+                      { value: "Admin", label: "Admin" },
+                      { value: "Member", label: "Member" },
+                    ]}
+                    value={memberRoleFilter}
+                    onChange={(val) => setMemberRoleFilter(val as "All" | "Admin" | "Member")}
+                    size="md"
+                    fullWidth={false}
+                    menuWidth={180}
+                    align="right"
+                    triggerIcon={<Shield className="h-3.5 w-3.5 text-gray-500 dark:text-zinc-400" />}
+                    ariaLabel="Filter members by role"
+                  />
                 </div>
               </div>
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                {membersWithDetails
-                  .filter((member) => {
-                    if (memberRoleFilter === "All") return true;
-                    if (memberRoleFilter === "Admin") return member.role === "Admin";
-                    return member.role !== "Admin";
-                  })
-                  .map((member) => (
-                  <div key={member.userId} className="flex items-center gap-3 rounded-xl border border-gray-200 dark:border-white/10 bg-gradient-to-br from-white/5 to-transparent p-4">
+                {filteredMembers.map((member) => (
+                  <div key={member.userId} className="flex items-center gap-3.5 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface p-4 shadow-sm dark:shadow-none transition hover:border-gray-300 dark:hover:border-white/20">
                     {(() => {
                       const memberAccountId = (member.userId === currentUserId ? (user?.account_id || user?.accountId) : null)
                         || member.accountId
                         || (typeof member.userId === 'string' && (member.userId as string).length > 10 ? member.userId : undefined);
+                      const isAdmin = member.role === "Admin";
+                      const isModerator = member.role === "Moderator";
+                      const roleBadgeClass = isAdmin
+                        ? "border-amber-300 dark:border-amber-500/30 bg-amber-50 dark:bg-amber-500/15 text-amber-800 dark:text-amber-300"
+                        : isModerator
+                        ? "border-blue-300 dark:border-blue-500/30 bg-blue-50 dark:bg-blue-500/15 text-blue-700 dark:text-blue-300"
+                        : "border-gray-300 dark:border-white/15 bg-gray-100 dark:bg-white/10 text-gray-700 dark:text-zinc-200";
 
                       return (
                         <>
@@ -2456,33 +2629,56 @@ const SelectedGroup = () => {
                               <img
                                 src={member.avatar}
                                 alt={member.name}
-                                className="h-12 w-12 rounded-full object-cover ring-2 ring-white/20"
+                                className="h-12 w-12 rounded-full object-cover ring-2 ring-gray-200 dark:ring-white/15"
                               />
                             </button>
                           ) : (
                             <img
                               src={member.avatar}
                               alt={member.name}
-                              className="h-12 w-12 rounded-full object-cover ring-2 ring-white/20"
+                              className="h-12 w-12 rounded-full object-cover ring-2 ring-gray-200 dark:ring-white/15"
                             />
                           )}
                           <div className="flex-1 min-w-0">
-                            {memberAccountId ? (
-                              <button
-                                type="button"
-                                onClick={() => navigate(`/profile/${encodeURIComponent(memberAccountId)}`)}
-                                className="text-sm font-semibold text-gray-900 dark:text-white hover:underline cursor-pointer text-left truncate block max-w-full"
-                              >
-                                {member.name}
-                              </button>
-                            ) : (
-                              <p className="text-sm font-semibold text-gray-900 dark:text-white truncate">{member.name}</p>
-                            )}
-                            <div className="flex items-center gap-2">
-                              <p className="text-xs text-gray-500 dark:text-zinc-500">Joined {member.joinedAt ? member.joinedAt.split('T')[0] : 'recently'}</p>
-                              {member.role === "Admin" && (
-                                <span className="rounded-full bg-amber-100 dark:bg-amber-500/20 px-2 py-0.5 text-[10px] font-bold text-amber-600 dark:text-amber-400">Admin</span>
+                            <div className="flex items-center gap-1.5 min-w-0">
+                              {memberAccountId ? (
+                                <button
+                                  type="button"
+                                  onClick={() => navigate(`/profile/${encodeURIComponent(memberAccountId)}`)}
+                                  className="text-sm font-semibold text-gray-900 dark:text-white hover:underline cursor-pointer text-left truncate"
+                                >
+                                  {member.name}
+                                </button>
+                              ) : (
+                                <p className="text-sm font-semibold text-gray-900 dark:text-white truncate">{member.name}</p>
                               )}
+                              {member.isVerified && (
+                                <img
+                                  src="/icons/verification/lvl2_verified.png"
+                                  alt="Verified"
+                                  className="h-3.5 w-3.5 shrink-0 object-contain"
+                                  title="Verified"
+                                />
+                              )}
+                              {member.subscriptionPlan && member.subscriptionPlan !== "Free" && (
+                                <img
+                                  src={getSubscriptionIcon(member.subscriptionPlan)}
+                                  alt={member.subscriptionPlan}
+                                  className="h-3.5 w-3.5 shrink-0 object-contain drop-shadow-[0_0_8px_rgba(255,255,255,0.15)]"
+                                  title={`${member.subscriptionPlan} Tier`}
+                                />
+                              )}
+                            </div>
+                            <div className="mt-1 flex flex-wrap items-center gap-2">
+                              <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-[11px] font-semibold ${roleBadgeClass}`}>
+                                {member.role || "Member"}
+                              </span>
+                              <p
+                                className="text-xs text-gray-600 dark:text-zinc-300"
+                                title={member.joinedAt ? member.joinedAt.split('T')[0] : undefined}
+                              >
+                                Joined {member.joinedAt ? getTimeAgo(member.joinedAt) : 'recently'}
+                              </p>
                             </div>
                           </div>
                         </>
@@ -2495,7 +2691,7 @@ const SelectedGroup = () => {
                         onClick={() => setShowMemberMenu(showMemberMenu === member.userId ? null : member.userId)}
                         disabled={forumTimedOut}
                         title={forumTimedOut ? forumTimeoutMessage : undefined}
-                        className={`rounded-lg p-1.5 text-gray-500 dark:text-zinc-500 transition hover:bg-gray-100 dark:bg-white/10 hover:text-gray-900 dark:text-white ${forumTimedOut ? FORUM_LOCKED_CLASS : ""}`}
+                        className={`rounded-lg p-1.5 text-gray-500 dark:text-zinc-400 transition hover:bg-gray-100 dark:hover:bg-white/10 hover:text-gray-900 dark:hover:text-white ${forumTimedOut ? FORUM_LOCKED_CLASS : ""}`}
                       >
                         <MoreVertical className="h-4 w-4" />
                       </button>
@@ -2508,7 +2704,7 @@ const SelectedGroup = () => {
                                 setShowReportMemberModal(true);
                                 setShowMemberMenu(null);
                               }}
-                              className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-gray-600 dark:text-zinc-300 transition hover:bg-gray-100 dark:bg-white/10"
+                              className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-gray-700 dark:text-zinc-200 transition hover:bg-gray-100 dark:hover:bg-white/10"
                             >
                               <Flag className="h-4 w-4" />
                               Report Member
@@ -2520,7 +2716,7 @@ const SelectedGroup = () => {
                                   setShowRemoveMemberModal(true);
                                   setShowMemberMenu(null);
                                 }}
-                                className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-red-400 transition hover:bg-red-500/10"
+                                className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-red-500 dark:text-red-400 transition hover:bg-red-500/10"
                               >
                                 <UserMinus className="h-4 w-4" />
                                 Remove Member
@@ -2535,36 +2731,78 @@ const SelectedGroup = () => {
               ))}
             </div>
           </div>
-          )}
+          );
+          })()}
 
           {activeTab === "about" && (
             <div className="space-y-6">
-              <div className="rounded-xl border border-gray-200 dark:border-white/10 bg-gradient-to-br from-white/5 to-transparent p-6">
+              <div className="rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface p-6 shadow-sm dark:shadow-none">
                 <h3 className="text-lg font-semibold text-gray-900 dark:text-white">About this group</h3>
-                <p className="mt-2 text-gray-500 dark:text-zinc-400">{group.description}</p>
+                <p className="mt-2 text-sm leading-relaxed text-gray-700 dark:text-zinc-200">{group.description}</p>
               </div>
 
-              <div className="rounded-xl border border-gray-200 dark:border-white/10 bg-gradient-to-br from-white/5 to-transparent p-6">
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Tags</h3>
-                <div className="mt-3 flex flex-wrap gap-2">
-                  {group.tags.map((tag) => (
-                    <span key={tag.tag_id} className="rounded-full bg-blue-500/20 px-3 py-1 text-xs text-blue-400">
-                      {tag.tag}
-                    </span>
-                  ))}
-                </div>
-              </div>
-
-              <div className="rounded-xl border border-gray-200 dark:border-white/10 bg-gradient-to-br from-white/5 to-transparent p-6">
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Group Info</h3>
-                <div className="mt-3 space-y-2 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-gray-500 dark:text-zinc-500">Total Members</span>
-                    <span className="text-gray-900 dark:text-white">{group.members.length}</span>
+              <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+                <div className="rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface p-6 shadow-sm dark:shadow-none">
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Tags</h3>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {group.tags.length > 0 ? (
+                      group.tags.map((tag) => (
+                        <span
+                          key={tag.tag_id}
+                          className="inline-flex items-center gap-1.5 rounded-full border border-blue-200 dark:border-blue-500/25 bg-blue-50 dark:bg-blue-500/15 px-3 py-1 text-xs font-medium text-blue-700 dark:text-blue-300"
+                        >
+                          <Tag className="h-3 w-3" />
+                          {tag.tag}
+                        </span>
+                      ))
+                    ) : (
+                      <p className="text-sm text-gray-500 dark:text-zinc-400">No tags added yet.</p>
+                    )}
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-500 dark:text-zinc-500">Total Tags</span>
-                    <span className="text-gray-900 dark:text-white">{group.tags.length}</span>
+                </div>
+
+                <div className="rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface p-6 shadow-sm dark:shadow-none">
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Group Info</h3>
+                  <div className="mt-4 space-y-3 text-sm">
+                    <div className="flex items-center justify-between gap-3 border-b border-gray-100 dark:border-white/10 pb-2.5">
+                      <span className="font-medium text-gray-600 dark:text-zinc-300">Group Owner</span>
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <img
+                          src={ownerAvatar}
+                          alt={ownerName}
+                          className="h-5 w-5 shrink-0 rounded-full object-cover ring-1 ring-gray-200 dark:ring-white/20"
+                        />
+                        <span className="truncate font-semibold text-gray-900 dark:text-white">{ownerName}</span>
+                        {ownerIsVerified && (
+                          <img
+                            src="/icons/verification/lvl2_verified.png"
+                            alt="Verified"
+                            className="h-3.5 w-3.5 shrink-0 object-contain"
+                            title="Verified"
+                          />
+                        )}
+                        {ownerSubscriptionPlan && ownerSubscriptionPlan !== "Free" && (
+                          <img
+                            src={getSubscriptionIcon(ownerSubscriptionPlan)}
+                            alt={ownerSubscriptionPlan}
+                            className="h-3.5 w-3.5 shrink-0 object-contain drop-shadow-[0_0_8px_rgba(255,255,255,0.15)]"
+                            title={`${ownerSubscriptionPlan} Tier`}
+                          />
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between border-b border-gray-100 dark:border-white/10 pb-2.5">
+                      <span className="font-medium text-gray-600 dark:text-zinc-300">Total Members</span>
+                      <span className="font-semibold text-gray-900 dark:text-white">{group.members.length}</span>
+                    </div>
+                    <div className="flex items-center justify-between border-b border-gray-100 dark:border-white/10 pb-2.5">
+                      <span className="font-medium text-gray-600 dark:text-zinc-300">Total Tags</span>
+                      <span className="font-semibold text-gray-900 dark:text-white">{group.tags.length}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="font-medium text-gray-600 dark:text-zinc-300">Total Discussions</span>
+                      <span className="font-semibold text-gray-900 dark:text-white">{(group as any).discussion_count ?? posts.length}</span>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -2583,7 +2821,7 @@ const SelectedGroup = () => {
       <EditGroupModal
         isOpen={showEditGroupModal}
         onClose={() => setShowEditGroupModal(false)}
-        group={{ id: group._id, name: group.group_name, description: group.description, tags: group.tags, gradient: "from-purple-600 via-pink-600 to-red-600", }}
+        group={{ id: group._id, name: group.group_name, description: group.description, tags: group.tags, image_url: group.image_url, gradient: group.gradient || "from-purple-600 via-pink-600 to-red-600" }}
         onSave={handleEditGroup}
       />
 
