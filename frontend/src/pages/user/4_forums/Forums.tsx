@@ -27,9 +27,11 @@ import {
   Italic,
   List,
   Code,
+  Compass,
 } from "lucide-react";
 import { useEffect, useMemo, useState, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
+import { motion } from "framer-motion";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import UserHeader from "@/components/nav/user_header";
@@ -766,7 +768,7 @@ const CommentItem = ({
                   title="Verified"
                 />
               )}
-              {commentSubscriptionPlan && commentSubscriptionPlan !== "Free" && (
+              {commentSubscriptionPlan && (
                 <img
                   src={getSubscriptionIcon(commentSubscriptionPlan)}
                   alt={commentSubscriptionPlan}
@@ -1270,6 +1272,7 @@ const getSubscriptionIcon = (type: string) => {
 
 const Forums = () => {
   const [loading, setLoading] = useState(true);
+  const [groupsLoading, setGroupsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<ForumTab>("feed");
   const [isFilterVisible, setIsFilterVisible] = useState(false);
   const [selectedGroupIds, setSelectedGroupIds] = useState<string[]>([]);
@@ -1381,6 +1384,7 @@ const Forums = () => {
 
     const loadForumData = async () => {
       setLoading(true);
+      setGroupsLoading(true);
       try {
         const groupsResponse = await api.get("/api/forum/groups");
         let normalizedGroups = (groupsResponse.data ?? []).map((group : any, index : any ) => ({
@@ -1405,13 +1409,50 @@ const Forums = () => {
           showErrorToast("Failed to load forum data");
         }
       } finally {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+          setGroupsLoading(false);
+        }
       }
     };
 
     loadForumData();
     return () => { cancelled = true; };
   }, [reloadKey, currentUserId, isForumAuthenticated]);
+
+  useEffect(() => {
+    if (activeTab !== "groups" && activeTab !== "my-groups") return;
+    let cancelled = false;
+    const refreshGroups = async () => {
+      setGroupsLoading(true);
+      try {
+        const groupsResponse = await api.get("/api/forum/groups");
+        let normalizedGroups = (groupsResponse.data ?? []).map((group: any, index: number) => ({
+          ...group,
+          id: group._id,
+          gradient: gradientOptions[index % gradientOptions.length],
+          joined: isForumAuthenticated && (group.members?.some((member: any) => member.userId === currentUserId) || false),
+        }));
+        normalizedGroups = normalizedGroups.filter((group: any) => group.status === "active");
+        const userJoinedGroups = isForumAuthenticated
+          ? normalizedGroups.filter((group: any) =>
+              group.members?.some((member: any) => member.userId === currentUserId)
+            )
+          : [];
+        if (cancelled) return;
+        setJoinedGroups(userJoinedGroups);
+        setGroupsList(normalizedGroups);
+      } catch (error) {
+        if (!cancelled) {
+          console.error(error);
+        }
+      } finally {
+        if (!cancelled) setGroupsLoading(false);
+      }
+    };
+    void refreshGroups();
+    return () => { cancelled = true; };
+  }, [activeTab, currentUserId, isForumAuthenticated]);
 
   const loadFeedPage = useCallback(async (cursor: string | null, append: boolean) => {
     if (!["feed", "my-discussions", "saved"].includes(activeTab)) return;
@@ -2283,7 +2324,7 @@ const Forums = () => {
                     {post.authorIsVerified && (
                       <img src="/icons/verification/lvl2_verified.png" alt="Verified" className="h-3.5 w-3.5 object-contain" title="Verified" />
                     )}
-                    {post.authorSubscriptionPlan && post.authorSubscriptionPlan !== "Free" && (
+                    {post.authorSubscriptionPlan && (
                       <img src={getSubscriptionIcon(post.authorSubscriptionPlan)} alt={post.authorSubscriptionPlan} className="h-3.5 w-3.5 object-contain drop-shadow-[0_0_8px_rgba(255,255,255,0.15)]" title={`${post.authorSubscriptionPlan} Tier`} />
                     )}
                   </div>
@@ -2597,7 +2638,30 @@ const Forums = () => {
   const renderGroupsSkeleton = () => (
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
       {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
-        <div key={i} className="h-48 animate-pulse rounded-xl bg-gray-100 dark:bg-white/10" />
+        <div
+          key={i}
+          className="overflow-hidden rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface shadow-sm dark:shadow-none animate-pulse"
+        >
+          <div className="h-24 w-full bg-gray-200 dark:bg-white/10" />
+          <div className="p-4 space-y-3">
+            <div className="flex items-start justify-between gap-2">
+              <div className="space-y-1.5 flex-1">
+                <div className="h-4 w-3/4 rounded bg-gray-200 dark:bg-white/10" />
+                <div className="h-3 w-1/2 rounded bg-gray-200/80 dark:bg-white/10" />
+              </div>
+              <div className="h-6 w-14 rounded-full bg-gray-200 dark:bg-white/10" />
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="h-3 w-16 rounded bg-gray-200/80 dark:bg-white/10" />
+              <div className="h-3 w-20 rounded bg-gray-200/80 dark:bg-white/10" />
+            </div>
+            <div className="flex gap-1.5">
+              <div className="h-5 w-12 rounded-full bg-gray-200/80 dark:bg-white/10" />
+              <div className="h-5 w-14 rounded-full bg-gray-200/80 dark:bg-white/10" />
+              <div className="h-5 w-10 rounded-full bg-gray-200/80 dark:bg-white/10" />
+            </div>
+          </div>
+        </div>
       ))}
     </div>
   );
@@ -2649,42 +2713,76 @@ const Forums = () => {
           </div>
         </div>
 
-        <div className="mb-4 flex flex-col gap-3 border-b border-gray-200 dark:border-white/10 pb-3">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div data-tour="forums-tabs" className="flex flex-wrap items-center gap-2">
-              {tabOptions.filter((tab) => isForumAuthenticated || ["feed", "groups"].includes(tab.key)).map((tab) => (
-                <button
-                  key={tab.key}
-                  type="button"
-                  onClick={() => {
-                    setActiveTab(tab.key);
-                    setSearchQuery("");
-                  }}
-                  className={`rounded-full px-3 py-1.5 text-xs font-medium transition-all duration-200 ${
-                    activeTab === tab.key
-                      ? "bg-blue-500 text-white shadow-lg shadow-blue-500/25"
-                      : "border border-gray-200 dark:border-white/15 bg-white dark:bg-white/5 shadow-sm dark:shadow-none text-gray-500 dark:text-zinc-400 hover:border-white/30 hover:text-gray-900 dark:hover:text-white"
-                  }`}
-                >
-                  {tab.label}
-                </button>
-              ))}
+        <div className="mb-4 flex flex-col gap-3">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-gray-200 dark:border-white/10">
+            <div data-tour="forums-tabs" className="flex flex-wrap items-center gap-1 relative">
+              {tabOptions
+                .filter((tab) => isForumAuthenticated || ["feed", "groups"].includes(tab.key))
+                .map((tab) => {
+                  const isActive = activeTab === tab.key;
+                  const tabIcon =
+                    tab.key === "feed" ? (
+                      <Compass className="h-4 w-4" />
+                    ) : tab.key === "groups" ? (
+                      <Users className="h-4 w-4" />
+                    ) : tab.key === "my-groups" ? (
+                      <CheckCircle className="h-4 w-4" />
+                    ) : tab.key === "my-discussions" ? (
+                      <MessageCircle className="h-4 w-4" />
+                    ) : (
+                      <Bookmark className="h-4 w-4" />
+                    );
+                  return (
+                    <button
+                      key={tab.key}
+                      type="button"
+                      onClick={() => {
+                        setActiveTab(tab.key);
+                        setSearchQuery("");
+                      }}
+                      className={`relative flex items-center gap-2 px-5 py-3 text-sm font-medium transition-colors duration-200 ${
+                        isActive
+                          ? "text-blue-600 dark:text-blue-400"
+                          : "text-gray-700 dark:text-zinc-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100/50 dark:hover:bg-white/5 rounded-t-lg"
+                      }`}
+                    >
+                      <span className="relative z-10 flex items-center gap-2">
+                        {tabIcon} {tab.label}
+                      </span>
+
+                      {isActive && (
+                        <>
+                          <motion.div
+                            layoutId="forumsActiveTabGlow"
+                            className="absolute inset-0 bg-blue-500/5 rounded-t-lg"
+                            transition={{ duration: 0.2, ease: "easeOut" }}
+                          />
+                          <motion.div
+                            layoutId="forumsActiveTabUnderline"
+                            className="absolute bottom-0 left-0 right-0 h-[2px] bg-blue-500 z-10"
+                            transition={{ duration: 0.2, ease: "easeOut" }}
+                          />
+                        </>
+                      )}
+                    </button>
+                  );
+                })}
             </div>
 
             {activeTab === "feed" && (
               <button
                 onClick={() => setIsFilterVisible(!isFilterVisible)}
-                className="inline-flex items-center gap-2 rounded-lg bg-gray-100 dark:bg-white/5 px-4 py-2 text-sm font-medium text-gray-900 dark:text-white transition hover:bg-gray-200 dark:hover:bg-white/10 shrink-0"
+                className="mb-1.5 inline-flex items-center gap-2 rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 px-3.5 py-1.5 text-xs font-semibold text-gray-800 dark:text-zinc-200 transition hover:bg-gray-100 dark:hover:bg-white/10 shrink-0"
               >
-                <Filter className="h-4 w-4" />
+                <Filter className="h-3.5 w-3.5" />
                 {isFilterVisible ? "Hide Filters" : "Show Filters"}
               </button>
             )}
           </div>
 
           {activeTab === "feed" && selectedGroupIds.length > 0 && (
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <p className="text-sm text-gray-500 dark:text-zinc-500">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-1">
+              <p className="text-sm text-gray-500 dark:text-zinc-400">
                 Showing {displayPosts.length} discussion{displayPosts.length !== 1 ? 's' : ''} from selected groups
               </p>
               <button
@@ -2692,7 +2790,7 @@ const Forums = () => {
                   setSelectedGroupIds([]);
                   setSearchQuery("");
                 }}
-                className="text-sm font-medium text-gray-500 dark:text-zinc-500 transition hover:text-gray-900 dark:hover:text-white"
+                className="text-sm font-medium text-gray-500 dark:text-zinc-400 transition hover:text-gray-900 dark:hover:text-white"
               >
                 Clear All Filters
               </button>
@@ -2718,7 +2816,7 @@ const Forums = () => {
             <div key={activeTab} className="animate-fade-in-up">
               {(activeTab === "groups" || activeTab === "my-groups") && (
                 <>
-                  {loading ? (
+                  {loading || groupsLoading ? (
                     renderGroupsSkeleton()
                   ) : visibleGroups.length === 0 ? (
                     renderEmptyState(

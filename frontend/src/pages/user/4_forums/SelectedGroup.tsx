@@ -725,7 +725,7 @@ const CommentItem = ({
                   title="Verified"
                 />
               )}
-              {commentSubscriptionPlan && commentSubscriptionPlan !== "Free" && (
+              {commentSubscriptionPlan && (
                 <img
                   src={getSubscriptionIcon(commentSubscriptionPlan)}
                   alt={commentSubscriptionPlan}
@@ -2189,7 +2189,7 @@ const SelectedGroup = () => {
                     title="Verified"
                   />
                 )}
-                {ownerSubscriptionPlan && ownerSubscriptionPlan !== "Free" && (
+                {ownerSubscriptionPlan && (
                   <img
                     src={getSubscriptionIcon(ownerSubscriptionPlan)}
                     alt={ownerSubscriptionPlan}
@@ -2393,7 +2393,7 @@ const SelectedGroup = () => {
                                     {post.authorIsVerified && (
                                       <img src="/icons/verification/lvl2_verified.png" alt="Verified" className="h-3.5 w-3.5 object-contain" title="Verified" />
                                     )}
-                                    {post.authorSubscriptionPlan && post.authorSubscriptionPlan !== "Free" && (
+                                    {post.authorSubscriptionPlan && (
                                       <img src={getSubscriptionIcon(post.authorSubscriptionPlan)} alt={post.authorSubscriptionPlan} className="h-3.5 w-3.5 object-contain drop-shadow-[0_0_8px_rgba(255,255,255,0.15)]" title={`${post.authorSubscriptionPlan} Tier`} />
                                     )}
                                   </div>
@@ -2660,7 +2660,7 @@ const SelectedGroup = () => {
                                   title="Verified"
                                 />
                               )}
-                              {member.subscriptionPlan && member.subscriptionPlan !== "Free" && (
+                              {member.subscriptionPlan && (
                                 <img
                                   src={getSubscriptionIcon(member.subscriptionPlan)}
                                   alt={member.subscriptionPlan}
@@ -2781,7 +2781,7 @@ const SelectedGroup = () => {
                             title="Verified"
                           />
                         )}
-                        {ownerSubscriptionPlan && ownerSubscriptionPlan !== "Free" && (
+                        {ownerSubscriptionPlan && (
                           <img
                             src={getSubscriptionIcon(ownerSubscriptionPlan)}
                             alt={ownerSubscriptionPlan}
