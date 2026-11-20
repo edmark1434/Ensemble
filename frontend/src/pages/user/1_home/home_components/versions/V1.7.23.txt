@@ -1,0 +1,6 @@
+1. Added 3-Way Workflow visual guides (Jobs, Gigs, and Contracts execution flow) to Info tabs and the interactive Platform Walkthrough.
+2. Polished Job & Gig card banners with preset visuals, compact application window timers, Successful/Completed order counts, and shining 7-day New listing badges with tooltips.
+3. Added full-page loading animations when opening Job and Gig details via View Full.
+4. Added automatic contract dispute holds, missed-review warnings, per-penalty appeals, and timed merit punishments.
+5. Redesigned the Case Status Bar and Welcome Walkthrough popup into compact hover-to-expand corner badges with a 5-second auto-collapse fuse.
+6. Added an interactive walkthrough tour for the cloud video editor and fixed light-mode refresh background flash.

@@ -353,6 +353,7 @@ export const PlatformTour: React.FC = () => {
           useTourStore.getState().openWelcome();
         }}
       />
+
     </>
   );
 };

@@ -32,6 +32,7 @@ import { NavLink, useNavigate, useLocation, Link } from "react-router-dom";
 import { useState, useEffect } from "react";
 import { motion, LayoutGroup } from "framer-motion";
 import useGlobalState from "@/lib/global_state";
+import { APP_VERSION } from "@/version.tsx";
 import { useTourStore } from "@/lib/tour_state";
 import { isStaffPlatformViewer } from "@/lib/staffPlatformView";
 import { formatUnreadBadge, useInboxUnreadTotals } from "@/components/ui/chat_bubble/useInboxUnreadTotals";
@@ -314,9 +315,20 @@ const UserNav: React.FC<UserNavProps> = () => {
                 />
                 {!isCollapsed && (
                    <div className="overflow-hidden whitespace-nowrap px-2">
-                      <p className="text-base font-semibold text-gray-900 dark:text-white" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
-                         Ensemble
-                      </p>
+                      <div className="flex flex-col leading-none" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
+                         <p className="flex items-baseline gap-1.5 text-base font-semibold text-gray-900 dark:text-white leading-tight">
+                            <span>Ensemble</span>
+                            <span className="text-[10px] font-medium text-zinc-400 dark:text-zinc-500">
+                               {String(APP_VERSION || "").split("|")[0].trim()}
+                            </span>
+                         </p>
+                         <span
+                            className="mt-0.5 text-[8.5px] font-extrabold tracking-[0.26em] uppercase text-transparent bg-clip-text animate-[alphaShine_3.2s_linear_infinite] bg-[length:240%_100%] bg-[linear-gradient(110deg,#71717a_35%,#18181b_50%,#71717a_65%)] dark:bg-[linear-gradient(110deg,#71717a_35%,#ffffff_50%,#71717a_65%)] select-none"
+                         >
+                            ALPHA
+                         </span>
+                      </div>
+                      <style>{'@keyframes alphaShine { 0% { background-position: 150% 0; } 100% { background-position: -100% 0; } }'}</style>
                    </div>
                 )}
              </button>

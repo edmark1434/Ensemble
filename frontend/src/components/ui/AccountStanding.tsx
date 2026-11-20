@@ -652,6 +652,7 @@ export function AccountRestrictionHost() {
 
   // Open cases (disputes, and tickets waiting on the member). Banned and locked members follow
   // theirs on the appeal page, which has its own list.
+  const isSidebarCollapsed = useGlobalState((s) => s.isSidebarCollapsed);
   const caseMember =
     user?.type === 'User' && Boolean(user?.account_id) && !standing?.blocked && !isAppealLimitedMember(user);
   const standingKey = `${user?.status || ''}|${standing?.code || ''}|${standing?.suspended ? 1 : 0}`;
@@ -665,22 +666,26 @@ export function AccountRestrictionHost() {
 
   return (
     <>
-      {showBar || showCaseBar ? (
-        <div className="pointer-events-none fixed inset-x-0 top-[4.25rem] z-[45] flex flex-col items-center gap-1.5 px-3 animate-enter sm:top-[4.75rem] sm:px-4">
-          {showBar ? (
-            <StandingStatusBar
-              conditions={conditions}
-              onDetails={() => setDetailsOpen(true)}
-              onAppeal={() => navigate(APPEAL_PATH)}
-            />
-          ) : null}
-          {showCaseBar && caseSummary ? (
-            <CaseStatusBar
-              summary={caseSummary}
-              onOpen={(item) => navigate(casePath(item.kind, item.id))}
-              onOpenAll={() => navigate(CASES_PATH)}
-            />
-          ) : null}
+      {showBar ? (
+        <div className="pointer-events-none fixed inset-x-0 top-[4.25rem] z-[30] flex flex-col items-center gap-1.5 px-3 animate-enter sm:top-[4.75rem] sm:px-4">
+          <StandingStatusBar
+            conditions={conditions}
+            onDetails={() => setDetailsOpen(true)}
+            onAppeal={() => navigate(APPEAL_PATH)}
+          />
+        </div>
+      ) : null}
+      {showCaseBar && caseSummary ? (
+        <div
+          className={`pointer-events-none fixed left-3 z-[30] animate-enter transition-all duration-200 ${
+            showBar ? 'top-[7.75rem] sm:top-[8.25rem]' : 'top-[4.5rem] sm:top-[5rem]'
+          } ${isSidebarCollapsed ? 'lg:left-[5.5rem]' : 'lg:left-[16.5rem]'}`}
+        >
+          <CaseStatusBar
+            summary={caseSummary}
+            onOpen={(item) => navigate(casePath(item.kind, item.id))}
+            onOpenAll={() => navigate(CASES_PATH)}
+          />
         </div>
       ) : null}
       <StandingDetailsModal open={detailsOpen} conditions={conditions} onClose={() => setDetailsOpen(false)} />
