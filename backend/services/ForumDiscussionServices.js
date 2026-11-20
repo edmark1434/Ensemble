@@ -508,7 +508,7 @@ async function getForumDiscussionByGroupId(groupId) {
     return await getForumDiscussionByGroupIdRepository(groupId);
 }
 
-const FEED_TYPES = new Set(['latest', 'trending', 'popular', 'hot']);
+const FEED_TYPES = new Set(['latest', 'most_saved', 'trending', 'popular', 'hot']);
 
 function decodeFeedCursor(cursor) {
     if (!cursor) return null;
@@ -548,7 +548,7 @@ async function getForumDiscussionFeedServices({
 } = {}) {
     const normalizedType = String(type).toLowerCase();
     if (!FEED_TYPES.has(normalizedType)) {
-        throw new Error('Feed type must be latest, trending, popular, or hot');
+        throw new Error('Feed type must be latest, most_saved, trending, popular, or hot');
     }
 
     const normalizedLimit = Math.min(Math.max(Number.parseInt(limit, 10) || 10, 1), 50);

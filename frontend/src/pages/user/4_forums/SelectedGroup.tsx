@@ -1179,9 +1179,10 @@ const SelectedGroup = () => {
   }, [hasMore, loadingMore, nextCursor, id, sortBy]);
 
   const sortOptions = [
-    { value: "latest", label: "Latest", icon: <Clock className="h-3 w-3" /> },
-    { value: "trending", label: "Trending", icon: <ThumbsUp className="h-3 w-3" /> },
-    { value: "hot", label: "Hot", icon: <MessageCircle className="h-3 w-3" /> },
+    { value: "latest", label: "Latest", icon: <Clock className="h-3 w-3" />, tooltip: "Sort by newest discussions" },
+    { value: "most_saved", label: "Saved", icon: <Bookmark className="h-3 w-3" />, tooltip: "Sort by most saved discussions" },
+    { value: "popular", label: "Popular", icon: <ThumbsUp className="h-3 w-3" />, tooltip: "Sort by most liked discussions" },
+    { value: "hot", label: "Hot", icon: <MessageCircle className="h-3 w-3" />, tooltip: "Sort by most commented discussions" },
   ];
 
   const filteredAndSortedPosts = useMemo(() => {
@@ -2364,6 +2365,7 @@ const SelectedGroup = () => {
                   <button
                     key={option.value}
                     type="button"
+                    title={option.tooltip}
                     onClick={() => setSortBy(option.value)}
                     className={`flex items-center gap-1 rounded-lg border px-2.5 py-1.5 text-xs font-semibold transition ${
                       sortBy === option.value

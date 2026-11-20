@@ -66,15 +66,24 @@ function feedScoreExpression(type) {
         ],
     };
 
-    if (type === 'trending' || type === 'popular') return engagement;
+    if (type === 'most_saved') {
+        return { $size: { $ifNull: ['$saves', []] } };
+    }
+    if (type === 'popular') {
+        return { $size: { $ifNull: ['$likes', []] } };
+    }
     if (type === 'hot') {
         return {
-            $add: [
-                { $log10: { $max: [engagement, 1] } },
-                { $divide: [{ $toLong: createdAtDateExpression }, 45000000] },
-            ],
+            $size: {
+                $filter: {
+                    input: { $ifNull: ['$comments', []] },
+                    as: 'comment',
+                    cond: { $not: [{ $ifNull: ['$$comment.deleted_at', false] }] },
+                },
+            },
         };
     }
+    if (type === 'trending') return engagement;
     return { $toLong: createdAtDateExpression };
 }
 
