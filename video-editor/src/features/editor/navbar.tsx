@@ -55,7 +55,7 @@ import ShareModal from "@/features/editor/modals/share-modal";
 import PresenceAvatars from "@/components/presence-avatars";
 import { useViewOnly } from "@/features/editor/hooks/use-view-only";
 import { useProjectRole } from "@/features/editor/hooks/use-project-role";
-import { canEditWithRole, canManageSharing } from "@/features/editor/types/editor-role";
+import { canEditWithRole, canManageSharing, type EditorRole } from "@/features/editor/types/editor-role";
 import { useCanComment } from "@/features/editor/hooks/use-can-comment";
 import { CommentsSync } from "@/features/editor/comments/comments-sync";
 import { CommentsButton } from "@/features/editor/comments/comments-button";
@@ -63,11 +63,21 @@ import { WorkspaceButton } from "@/features/editor/workspace/workspace-button";
 import { SavesButton } from "@/features/editor/saves/saves-button";
 import { useSnapshotPreview } from "./hooks/use-snapshot-preview";
 
+const SAVE_DATE_FMT = new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric", year: "numeric" });
+const SAVE_TIME_FMT = new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" });
+
+function formatSavePreviewAt(iso: string) {
+  const date = new Date(iso);
+  return `at ${SAVE_DATE_FMT.format(date)} · ${SAVE_TIME_FMT.format(date)}`;
+}
+
 export default function Navbar({
   user,
   stateManager,
   undoManager,
   viewOnly,
+  resolvedRole,
+  ownerName,
   saveStatus,
   compactStatus,
   onForceSave,
@@ -77,6 +87,8 @@ export default function Navbar({
   stateManager: StateManager;
   undoManager?: Y.UndoManager;
   viewOnly?: boolean;
+  resolvedRole?: EditorRole | null;
+  ownerName?: string;
   saveStatus?: "saved" | "saving" | "error";
   compactStatus?: "idle" | "compacting" | "error";
   onForceSave?: () => void;
@@ -180,6 +192,13 @@ export default function Navbar({
   const status = saveStatus ?? "saved";
   const compacting = compactStatus === "compacting";
   const compactError = compactStatus === "error";
+  const effectiveOwner = ownerName ?? preview?.ownerName;
+  const isViewerOrCommenter = resolvedRole === "Viewer" || resolvedRole === "Commenter";
+  const titleSubtitle = preview?.savedAt
+    ? formatSavePreviewAt(preview.savedAt)
+    : effectiveOwner && (portfolio || preview || isViewerOrCommenter)
+      ? `by ${effectiveOwner}`
+      : null;
 
   return (
     <div
@@ -194,10 +213,24 @@ export default function Navbar({
 
       <div className="flex min-w-0 items-center gap-2">
         {portfolio ? <>
-          <Button asChild variant="ghost" size="icon" className="pointer-events-auto shrink-0">
-            <a href={portfolio.profileUrl} aria-label="Back to portfolio" title="Back to portfolio"><ArrowLeft /></a>
-          </Button>
-          <span className="truncate text-sm font-semibold">{projectName}</span>
+          <Tooltip delayDuration={10}>
+            <TooltipTrigger asChild>
+              <Button asChild variant="ghost" size="icon" className="pointer-events-auto shrink-0">
+                <a href={portfolio.profileUrl} aria-label="Back to profile"><ArrowLeft /></a>
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" align="center" sideOffset={1}>
+              Back to profile
+            </TooltipContent>
+          </Tooltip>
+          <div className="flex min-w-0 items-baseline gap-1.5 text-sm">
+            <span className="truncate font-semibold">{projectName}</span>
+            {titleSubtitle && (
+              <span className="shrink-0 truncate font-normal text-muted-foreground">
+                {titleSubtitle}
+              </span>
+            )}
+          </div>
         </> : <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <div
@@ -311,17 +344,24 @@ export default function Navbar({
         </div>
       </div>
 
-      <div className={portfolio ? "col-span-2 row-start-2 lg:col-span-1 lg:col-start-2 lg:row-start-1" : "flex h-13 items-center justify-center gap-2"}>
+      <div className={portfolio ? "col-span-2 row-start-2 lg:col-span-1 lg:col-start-2 lg:row-start-1" : "flex h-13 min-w-0 items-center justify-center gap-2"}>
         {portfolio && <PortfolioRangeFields />}
         {!portfolio && !isSmallScreen && (
-          <div className=" pointer-events-auto flex h-8 items-center gap-2 rounded-md px-2.5">
+          <div className="pointer-events-auto flex h-8 min-w-0 max-w-full items-center gap-2 rounded-md px-2.5">
             {isViewOnly ? (
-              <span
-                title={projectName}
-                className="max-w-[200px] truncate px-3 text-sm font-semibold"
-              >
-                {projectName}
-              </span>
+              <div className="flex min-w-0 max-w-full items-baseline gap-1.5 px-3 text-sm">
+                <span
+                  title={projectName}
+                  className="max-w-[240px] truncate font-semibold"
+                >
+                  {projectName}
+                </span>
+                {titleSubtitle && (
+                  <span className="shrink-0 truncate font-normal text-muted-foreground">
+                    {titleSubtitle}
+                  </span>
+                )}
+              </div>
             ) : (
               <AutosizeInput
                 name="title"

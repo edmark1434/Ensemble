@@ -5,6 +5,6 @@ import { SnapshotPreviewContext, type SnapshotPreviewData } from "./hooks/use-sn
 
 export default function SnapshotPreview(preview: SnapshotPreviewData) {
   return <SnapshotPreviewContext.Provider value={preview}>
-    <Editor role="Viewer" projectName={preview.name} />
+    <Editor role="Viewer" projectName={preview.name} ownerName={preview.ownerName} />
   </SnapshotPreviewContext.Provider>;
 }

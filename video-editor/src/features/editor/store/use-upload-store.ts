@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { processUpload, type UploadCallbacks } from "@/utils/upload-service";
 import useStore from "./use-store";
 import type { UploadedMedia } from "../utils/insert-uploaded-media";
+import { registerLocalMedia } from "../utils/local-media-cache";
 
 interface UploadFile {
   id: string;
@@ -169,6 +170,9 @@ const useUploadStore = create<IUploadStore>()(
                   setUploads((prev) => [...prev, ...uploadData]);
                 } else {
                   // File uploads return a single object
+                  if (upload.file && uploadData?.metadata?.uploadedUrl) {
+                    registerLocalMedia(uploadData.metadata.uploadedUrl, upload.file);
+                  }
                   setUploads((prev) => [...prev, uploadData]);
                   upload.onUploaded?.(uploadData);
                 }

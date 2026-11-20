@@ -51,7 +51,8 @@ export function RenderVisibleItems({
 }: RenderVisibleItemsOptions) {
   const plan = useMemo(() => {
     const groupedItems = groupTrackItems({ trackItemIds, transitionsMap, trackItemsMap });
-    const warmupFrames = Math.max(1, Math.ceil(fps / 2));
+    const premountFrames = Math.max(1, Math.ceil(fps * 3));
+    const postmountFrames = Math.max(1, Math.ceil(fps * 2));
     const containsVideo = (id: string) => {
       const item = trackItemsMap[id];
       if (!item || item.details?.hidden) return false;
@@ -104,7 +105,7 @@ export function RenderVisibleItems({
         : Math.max(...items.map(item => item.display.to * fps / 1000));
       bounds[index] = { from, to };
       if (items.some(item => containsVideo(item.id))) {
-        ranges.push({ index, from: from - warmupFrames, to: to + warmupFrames });
+        ranges.push({ index, from: from - premountFrames, to: to + postmountFrames });
         return;
       }
       if (items.some(item => !["image", "text", "caption"].includes(item.type))) {
@@ -113,16 +114,18 @@ export function RenderVisibleItems({
       }
       ranges.push({ index, from, to });
     });
-    return { groups: visibleGroupedItems, eager, bounds, index: createFrameIndex(ranges), warmupFrames, videoIds: new Set(trackItemIds.filter(containsVideo)) };
+    return { groups: visibleGroupedItems, eager, bounds, index: createFrameIndex(ranges), premountFrames, postmountFrames, videoIds: new Set(trackItemIds.filter(containsVideo)) };
   }, [trackItemIds, trackItemsMap, transitionsMap, fps, nested]);
 
   const activeGroups = [...plan.eager, ...(visualsActive ? groupsAtFrame(plan.index, frame ?? 0) : [])].sort((a, b) => a - b);
 
   const renderItem = (id: string, isTransition: boolean, active: boolean) => {
     const item = trackItemsMap[id];
+    const isVideo = plan.videoIds.has(id);
     return SequenceItem[item.type](item, {
       fps, size, frame, handleTextChange, onTextBlur, editableTextId, isTransition, nested, visualsActive: active,
-      keepMountedFor: plan.videoIds.has(id) ? plan.warmupFrames : undefined,
+      premountFor: isVideo ? plan.premountFrames : undefined,
+      postmountFor: isVideo ? plan.postmountFrames : undefined,
     });
   };
 
@@ -162,8 +165,8 @@ export function RenderVisibleItems({
 
     return (
       <TransitionSeries from={from} key={group[0].id}
-        premountFor={group.some(g => plan.videoIds.has(g.id)) ? plan.warmupFrames : undefined}
-        postmountFor={group.some(g => plan.videoIds.has(g.id)) ? plan.warmupFrames : undefined}>
+        premountFor={group.some(g => plan.videoIds.has(g.id)) ? plan.premountFrames : undefined}
+        postmountFor={group.some(g => plan.videoIds.has(g.id)) ? plan.postmountFrames : undefined}>
         {children.filter(Boolean)}
       </TransitionSeries>
     );

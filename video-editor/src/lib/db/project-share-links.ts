@@ -1,7 +1,28 @@
 import { db } from "@/lib/db";
 import { ROLE_RANK } from "@/features/editor/types/block-members";
-import type { AssignableProjectRole } from "./project-members";
+import { readProjectOwnerName, type AssignableProjectRole } from "./project-members";
 import { assertCollaborativeProjectCapacity } from "./collaborative-projects";
+
+export async function verifyActiveProjectShareLink(projectId: string, link: {
+  issuerId: string; role: AssignableProjectRole; membership: string;
+}): Promise<{ name: string; width: number; height: number; ownerName: string | null } | null> {
+  const project = await db.selectFrom("projects")
+    .select(["project_id", "name", "width", "height"])
+    .where("project_id", "=", projectId).where("deleted_at", "is", null)
+    .where("trashed_at", "is", null)
+    .executeTakeFirst();
+  if (!project) return null;
+  const issuer = await db.selectFrom("project_members")
+    .select(["role", "joined_at"])
+    .where("project_id", "=", projectId).where("user_id", "=", link.issuerId)
+    .where("deleted_at", "is", null)
+    .executeTakeFirst();
+  if (!issuer || (issuer.role !== "Owner" && issuer.role !== "Manager")
+    || (link.role === "Manager" && issuer.role !== "Owner")
+    || String(new Date(issuer.joined_at).getTime()) !== link.membership) return null;
+  const ownerName = await readProjectOwnerName(projectId);
+  return { name: project.name, width: project.width, height: project.height, ownerName };
+}
 
 export async function getShareLinkIssuer(projectId: string, userId: string, role: AssignableProjectRole) {
   const member = await db.selectFrom("project_members as pm")

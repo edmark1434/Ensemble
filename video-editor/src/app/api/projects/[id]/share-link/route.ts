@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { EDITOR_SESSION_COOKIE, verifyEditorSession } from "@/lib/auth/editor-session";
+import { isSameOriginRequest } from "@/lib/auth/request-origin";
 import { signProjectShareLink } from "@/lib/auth/project-share-link";
 import { getShareLinkIssuer } from "@/lib/db/project-share-links";
 import { ASSIGNABLE_PROJECT_ROLES, type AssignableProjectRole } from "@/lib/db/project-members";
@@ -30,6 +31,19 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     throw error;
   }
   const token = await signProjectShareLink(id, user.userId, role, membership);
+  if (role === "Viewer") {
+    const origin = req.headers.get("origin");
+    const forwardedProto = req.headers.get("x-forwarded-proto")?.split(",")[0]?.trim();
+    const forwardedHost = req.headers.get("x-forwarded-host")?.split(",")[0]?.trim() || req.headers.get("host");
+    const editorOrigin = origin && isSameOriginRequest(req)
+      ? origin
+      : forwardedHost
+        ? `${forwardedProto || req.nextUrl.protocol.replace(":", "")}://${forwardedHost}`
+        : req.nextUrl.origin;
+    const url = new URL(`/editor/${id}`, editorOrigin);
+    url.searchParams.set("share", token);
+    return NextResponse.json({ url: url.toString() }, { headers: { "Cache-Control": "private, no-store" } });
+  }
   const url = new URL(`/projects/open/${id}`, process.env.MAIN_APP_URL || "http://localhost:5173");
   url.searchParams.set("share", token);
   return NextResponse.json({ url: url.toString() }, { headers: { "Cache-Control": "private, no-store" } });

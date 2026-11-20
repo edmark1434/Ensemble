@@ -11,6 +11,8 @@ import { collectMarketExportItems } from "../utils/market-export-assets";
 import { marketPlaybackSource } from "../utils/market-playback-source";
 import { PrepareMarketImages } from "./prepared-market-images";
 import { useSnapshotPreview } from "../hooks/use-snapshot-preview";
+import { prefetchImages } from "../utils/decoded-image-cache";
+import type { ISceneDetails } from "../types/ensemble-scene";
 
 export function MarketAssetLicensing({ children }: { children: ReactNode }) {
   const preview = useSnapshotPreview();
@@ -82,6 +84,25 @@ function LiveMarketAssetLicensing({ children }: { children: ReactNode }) {
       window.removeEventListener("market-license-updated", onPurchase);
     };
   }, [idsKey, projectId]);
+  useEffect(() => {
+    const urls: string[] = [];
+    const visit = (ids: string[], map: Record<string, any>, nested = false) => {
+      for (const id of ids) {
+        const item = map[id];
+        if (!item || item.details?.hidden) continue;
+        if (String(item.type) === "scene") {
+          const inner = (item.details as unknown as ISceneDetails).content;
+          if (!nested && inner) visit(inner.trackItemIds, inner.trackItemsMap, true);
+          continue;
+        }
+        if (String(item.type) === "image" && !getMarketAssetId(item) && typeof item.details?.src === "string") {
+          urls.push(item.details.src);
+        }
+      }
+    };
+    visit(trackItemIds, items);
+    if (urls.length > 0) prefetchImages(urls);
+  }, [items, trackItemIds]);
   const imageItems = marketItems.filter(item => String(item.type) === "image"
     && licenses.projectId === projectId && !!licenses.assets[getMarketAssetId(item)!]
     && !licenses.assets[getMarketAssetId(item)!].unavailable);

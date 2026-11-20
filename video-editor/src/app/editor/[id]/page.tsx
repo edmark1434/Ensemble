@@ -7,10 +7,15 @@ import { EDITOR_SESSION_COOKIE, verifyEditorSession } from "@/lib/auth/editor-se
 import { createProject } from "@/lib/db/projects";
 import { db } from "@/lib/db";
 import { verifyProjectShareLink } from "@/lib/auth/project-share-link";
-import { redeemProjectShareLink } from "@/lib/db/project-share-links";
+import { redeemProjectShareLink, verifyActiveProjectShareLink } from "@/lib/db/project-share-links";
+import { readProjectOwnerName } from "@/lib/db/project-members";
+import { loadGuestProjectSharePreview } from "@/lib/collab/snapshot-preview";
+import SnapshotPreview from "@/features/editor/snapshot-preview";
 import { recheckProject } from "@/lib/collab/access-recheck";
 import { CollaborativeProjectLimitError } from "@/lib/db/collaborative-projects";
 import { PlanConfigurationError } from "@/lib/plan-feature-values";
+
+export const dynamic = "force-dynamic";
 
 // Random/garbage segments (e.g. someone fat-fingering /editor/asdf) aren't
 // valid uuid syntax, and postgres throws on that rather than just returning
@@ -33,6 +38,20 @@ export default async function EditorPage({
 
   if (!decoded) {
     if (UUID_PATTERN.test(id)) {
+      if (share) {
+        const link = await verifyProjectShareLink(share, id);
+        if (!link) {
+          return <div className="flex min-h-screen items-center justify-center bg-background p-8 text-sm text-muted-foreground">This share link has expired or is no longer available. Ask the project owner for a new link.</div>;
+        }
+        if (link.role === "Viewer") {
+          const active = await verifyActiveProjectShareLink(id, link);
+          if (!active) {
+            return <div className="flex min-h-screen items-center justify-center bg-background p-8 text-sm text-muted-foreground">This share link has expired or is no longer available. Ask the project owner for a new link.</div>;
+          }
+          const preview = await loadGuestProjectSharePreview(id, link.issuerId, active);
+          return <SnapshotPreview {...preview} />;
+        }
+      }
       const url = new URL(`/projects/open/${id}`, process.env.MAIN_APP_URL || "http://localhost:5173");
       if (share) url.searchParams.set("share", share);
       redirect(url.toString());
@@ -98,12 +117,15 @@ export default async function EditorPage({
     notFound();
   }
 
+  const ownerName = await readProjectOwnerName(id);
+
   return (
     <Editor
       id={id}
       userId={decoded.userId}
       userName={membership.first_name}
       projectName={membership.name}
+      ownerName={ownerName ?? undefined}
       width={membership.width}
       height={membership.height}
       role={membership.role}

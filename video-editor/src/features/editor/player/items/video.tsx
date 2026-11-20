@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
-import { MediaPlaceholder } from "../../components/media-placeholder";
+import { MediaPlaceholder, PendingUploadBadge } from "../../components/media-placeholder";
 import { useMissingMedia } from "../../store/use-missing-media";
-import { isMissingMediaSource } from "../../utils/missing-media";
+import { isMissingMediaSource, isPendingMediaSource } from "../../utils/missing-media";
 import useStore from "../../store/use-store";
 import { getMarketAssetId, useMarketLicenses } from "../../store/use-market-licenses";
 import { useMarketAssetSource } from "../../hooks/use-market-asset-source";
@@ -49,7 +49,7 @@ const VideoMedia = ({ item, fps }: { item: IVideo; fps: number }) => {
   }
 
   if (missing || isMissingMediaSource(item.details.src)) return <MediaPlaceholder missing />;
-  if (!src) return <MediaPlaceholder item={item} />;
+  if (!src) return <MediaPlaceholder item={item} delayMs={600} />;
   return (
     <PreviewVideo
       key={src}
@@ -69,10 +69,18 @@ function PreviewVideo({ item, src, fallbackSrc, trimBefore, trimAfter }: {
 }) {
   const [attempt, setAttempt] = useState(0);
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
+  const [hasFrame, setHasFrame] = useState(false);
   const [useFallback, setUseFallback] = useState(false);
   const video = useRef<HTMLVideoElement>(null);
   const retryDelay = RETRY_DELAYS_MS[attempt];
   const activeSrc = useFallback && fallbackSrc ? fallbackSrc : src;
+
+  useEffect(() => {
+    if (video.current && video.current.readyState >= 2) {
+      setHasFrame(true);
+      setStatus("ready");
+    }
+  }, [attempt, activeSrc]);
 
   useEffect(() => {
     if (status !== "error" || retryDelay === undefined) return;
@@ -84,6 +92,11 @@ function PreviewVideo({ item, src, fallbackSrc, trimBefore, trimAfter }: {
     return () => window.clearTimeout(timer);
   }, [status, retryDelay, fallbackSrc, useFallback]);
 
+  const markReady = () => {
+    setHasFrame(true);
+    setStatus("ready");
+  };
+
   return (<>
     {status !== "error" && <Html5Video
       key={attempt}
@@ -93,10 +106,11 @@ function PreviewVideo({ item, src, fallbackSrc, trimBefore, trimAfter }: {
       playbackRate={item.playbackRate || 1}
       src={activeSrc}
       volume={(item.details.volume ?? 100) / 100}
-      onLoadedData={() => setStatus("ready")}
+      onLoadedData={markReady}
       onWaiting={() => setStatus("loading")}
-      onPlaying={() => setStatus("ready")}
-      onCanPlay={() => setStatus("ready")}
+      onPlaying={markReady}
+      onCanPlay={markReady}
+      onSeeked={() => { if (video.current && video.current.readyState >= 2) markReady(); }}
       onError={() => {
         if (retryDelay === undefined) {
           const error = video.current?.error;
@@ -104,13 +118,21 @@ function PreviewVideo({ item, src, fallbackSrc, trimBefore, trimAfter }: {
             itemId: item.id, code: error?.code, message: error?.message,
           });
         }
+        setHasFrame(false);
         setStatus("error");
       }}
       preload="auto"
       pauseWhenBuffering={false}
-      style={{ visibility: status === "ready" ? "visible" : "hidden", width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+      style={{ visibility: hasFrame ? "visible" : "hidden", width: "100%", height: "100%", objectFit: "cover", display: "block" }}
     />}
-    {status !== "ready" && <MediaPlaceholder item={item} failed={status === "error" && retryDelay === undefined} />}
+    {(status === "error" || !hasFrame) && (
+      <MediaPlaceholder
+        item={item}
+        delayMs={600}
+        failed={status === "error" && retryDelay === undefined}
+      />
+    )}
+    {isPendingMediaSource(item.details.src) && <PendingUploadBadge src={item.details.src} />}
   </>);
 }
 

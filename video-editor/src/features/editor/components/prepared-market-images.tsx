@@ -4,6 +4,7 @@ import { createContext, useCallback, useEffect, useMemo, useRef, useState, type 
 import { createPreparedImageCache } from "../utils/prepared-image-cache";
 
 const RETRY_DELAYS_MS = [350, 1000, 2500];
+const BACKGROUND_PREFETCH_CONCURRENCY = 3;
 
 // Session-local blobs never enter the project document or its saved history.
 export const PreparedMarketImages = createContext<Record<string, string>>({});
@@ -25,6 +26,10 @@ export function PrepareMarketImages({ sourcesKey, downloadUrlsKey = "{}", childr
   downloadUrlsRef.current = downloadUrls;
   const retryTimers = useRef(new Map<string, number>());
   const inFlight = useRef(new Set<string>());
+  const readyRef = useRef(ready);
+  readyRef.current = ready;
+  const prefetchQueue = useRef<string[]>([]);
+  const backgroundActive = useRef(0);
 
   const clearRetry = useCallback((source: string) => {
     const timer = retryTimers.current.get(source);
@@ -41,6 +46,8 @@ export function PrepareMarketImages({ sourcesKey, downloadUrlsKey = "{}", childr
       for (const timer of retryTimers.current.values()) window.clearTimeout(timer);
       retryTimers.current.clear();
       inFlight.current.clear();
+      prefetchQueue.current = [];
+      backgroundActive.current = 0;
       cache.dispose();
     };
   }, [cache]);
@@ -94,9 +101,46 @@ export function PrepareMarketImages({ sourcesKey, downloadUrlsKey = "{}", childr
 
   const prepare = useCallback((source: string) => {
     if (!activeSources.has(source)) return;
+    if (readyRef.current[source]) return;
     if (inFlight.current.has(source) || retryTimers.current.has(source)) return;
     loadWithRetry(source, 0);
   }, [activeSources, downloadUrls, loadWithRetry]);
+
+  // Proactively warm up off-screen timeline market images in the background
+  // with bounded concurrency so scrubbing and playback hit already-decoded blobs.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const drain = () => {
+      while (backgroundActive.current < BACKGROUND_PREFETCH_CONCURRENCY && prefetchQueue.current.length > 0) {
+        const source = prefetchQueue.current.shift()!;
+        if (!mounted.current || !activeSourcesRef.current.has(source)) continue;
+        if (readyRef.current[source] || inFlight.current.has(source) || retryTimers.current.has(source)) continue;
+        backgroundActive.current++;
+        inFlight.current.add(source);
+        const targetUrl = downloadUrlsRef.current[source] || source;
+        void cache.load(source, targetUrl).then(url => {
+          inFlight.current.delete(source);
+          backgroundActive.current = Math.max(0, backgroundActive.current - 1);
+          if (mounted.current && activeSourcesRef.current.has(source)) {
+            setFailed(current => current[source] ? { ...current, [source]: false } : current);
+            setReady(current => current[source] === url ? current : { ...current, [source]: url });
+          }
+          drain();
+        }).catch(() => {
+          inFlight.current.delete(source);
+          backgroundActive.current = Math.max(0, backgroundActive.current - 1);
+          // Leave failed unset for speculative background prefetches; if the
+          // image becomes visible, prepare() runs the full retry sequence.
+          drain();
+        });
+      }
+    };
+    const pending = [...activeSources].filter(
+      source => !readyRef.current[source] && !inFlight.current.has(source) && !retryTimers.current.has(source)
+    );
+    prefetchQueue.current = pending;
+    drain();
+  }, [activeSources, downloadUrls, cache]);
 
   const prepared = Object.fromEntries([...activeSources].filter(source => ready[source]).map(source => [source, ready[source]]));
   // Always mount the canvas. Each image becomes available independently.

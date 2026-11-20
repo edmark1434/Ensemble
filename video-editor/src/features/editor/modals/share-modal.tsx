@@ -511,7 +511,11 @@ export function ShareModal({ open, onOpenChange, projectId, templateSource }: Sh
                 {copying ? <Loader2 className="h-4 w-4 animate-spin" /> : copiedRole === newUserRole ? <Check className="h-4 w-4" /> : <Link className="h-4 w-4" />}
                 {copiedRole === newUserRole ? "Link copied" : `Copy ${SHARE_ACCESS_LABELS[newUserRole]} share link`}
               </Button>
-              <p className="text-xs text-muted-foreground text-center">Anyone with this link can sign in to join. Links expire after 30 days.</p>
+              <p className="text-xs text-muted-foreground text-center">
+                {newUserRole === "Viewer"
+                  ? "Anyone with this link can view without signing in. Links expire after 30 days."
+                  : "Anyone with this link can sign in to join. Links expire after 30 days."}
+              </p>
 
               {hint && <p className="text-xs text-muted-foreground">{hint}</p>}
               {addError && <p className="text-xs text-red-500">{addError}</p>}

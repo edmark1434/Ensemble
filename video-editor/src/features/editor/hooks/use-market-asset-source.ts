@@ -7,6 +7,7 @@ import useStore from "../store/use-store";
 import { marketPlaybackSource, readyMarketPlaybackSource } from "../utils/market-playback-source";
 import { useRemotionEnvironment } from "remotion";
 import { PreparedMarketImages, PrepareMarketImage, FailedMarketImages } from "../components/prepared-market-images";
+import { useLocalMediaCache } from "../utils/local-media-cache";
 
 export function useMarketImageFailed(item: ITrackItem): boolean {
   const failed = useContext(FailedMarketImages);
@@ -21,6 +22,7 @@ export function useMarketAssetSource(item: ITrackItem): string | null {
   const { isRendering } = useRemotionEnvironment();
   const projectId = useStore(state => state.projectId);
   const missing = useMissingMedia(state => state.projectId === projectId && state.missing.has(item.details.src));
+  const localUrl = useLocalMediaCache(state => state.entries[item.details.src]?.url ?? null);
   const assetId = getMarketAssetId(item);
   const status = useMarketLicenses(state => assetId && state.projectId === projectId ? state.assets[assetId] : undefined);
   const preparedImages = useContext(PreparedMarketImages);
@@ -31,8 +33,9 @@ export function useMarketAssetSource(item: ITrackItem): string | null {
   }, [isRendering, source, item.type, prepareImage]);
   // The batch loader covers the timeline and nested scenes. Media components
   // consume its result instead of issuing duplicate license requests on mount.
-  if (isPendingMediaSource(item.details.src)) return null;
+  if (isPendingMediaSource(item.details.src) && !localUrl) return null;
   if (isRendering) return item.details.src;
   if (missing || isMissingMediaSource(item.details.src)) return null;
+  if (localUrl) return localUrl;
   return readyMarketPlaybackSource(item, projectId, status, preparedImages);
 }

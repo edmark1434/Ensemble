@@ -2,13 +2,33 @@ import { sql } from "kysely";
 import { db } from "@/lib/db";
 
 export async function readPublishedMarketTemplate(assetId: string) {
-  const result = await sql<{ market_asset_id: string; name: string; snapshot_id: string; document: Buffer; created_at: Date; project_id: string | null }>`
-    SELECT asset.market_asset_id, asset.name, snapshot.yjs_snapshot_id::text AS snapshot_id, snapshot.document,
+  const result = await sql<{
+    market_asset_id: string;
+    name: string;
+    is_admin_asset: boolean;
+    owner_name: string | null;
+    owner_type: string | null;
+    snapshot_id: string;
+    document: Buffer;
+    created_at: Date;
+    project_id: string | null;
+  }>`
+    SELECT asset.market_asset_id, asset.name, asset.is_admin_asset,
+           owner.display_name AS owner_name, owner.type AS owner_type,
+           snapshot.yjs_snapshot_id::text AS snapshot_id, snapshot.document,
            snapshot.created_at, source.project_id
     FROM market_assets asset
     JOIN market_ydoc_assets template ON template.market_asset_id = asset.market_asset_id
     JOIN yjs_snapshots snapshot ON snapshot.yjs_snapshot_id = template.yjs_snapshot_id
     LEFT JOIN project_yjs_snapshots source ON source.yjs_snapshot_id = snapshot.yjs_snapshot_id
+    LEFT JOIN LATERAL (
+      SELECT submitted_by_account_id
+      FROM marketplace_listings
+      WHERE market_asset_id = asset.market_asset_id
+      ORDER BY created_at DESC, listing_id DESC
+      LIMIT 1
+    ) listing ON true
+    LEFT JOIN accounts owner ON owner.account_id = listing.submitted_by_account_id
     WHERE asset.market_asset_id = ${assetId} AND asset.status = 'published' AND asset.deleted_at IS NULL
   `.execute(db);
   return result.rows[0] || null;

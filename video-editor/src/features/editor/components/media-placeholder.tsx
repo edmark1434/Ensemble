@@ -1,5 +1,5 @@
 import { Loader2 } from "lucide-react";
-import { createContext, useContext, useLayoutEffect, useRef, useState } from "react";
+import { createContext, useContext, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useCurrentScale } from "remotion";
 import { useQuery } from "@tanstack/react-query";
 import type { IImage, IVideo } from "@designcombo/types";
@@ -45,17 +45,82 @@ function LoadingThumbnail({ item }: { item: VisualMedia }) {
 
 export const CanvasPreviewZoomContext = createContext(1);
 
+export function PendingUploadBadge({ src }: { src?: string | null }) {
+  const pendingId = src?.startsWith("pending-upload:") ? src.slice("pending-upload:".length) : null;
+  const upload = useUploadStore(state => pendingId
+    ? (state.activeUploads.find(u => u.id === pendingId) ?? state.pendingUploads.find(u => u.id === pendingId))
+    : undefined);
+  const ref = useRef<HTMLDivElement>(null);
+  const [scale, setScale] = useState(1);
+  const previewZoom = useContext(CanvasPreviewZoomContext);
+  const playerScale = useCurrentScale({ dontThrowIfOutsideOfRemotion: true });
+
+  useLayoutEffect(() => {
+    const element = ref.current?.parentElement;
+    if (!element) return;
+    const update = () => {
+      if (element.clientWidth > 0) setScale(Math.max(0.05, element.getBoundingClientRect().width / element.clientWidth));
+    };
+    const observer = new ResizeObserver(update);
+    observer.observe(element);
+    window.addEventListener("resize", update);
+    update();
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", update);
+    };
+  }, [previewZoom, playerScale]);
+
+  if (!pendingId) return null;
+  const progress = Math.max(0, Math.min(100, Math.round(upload?.progress ?? 0)));
+  return (
+    <div
+      ref={ref}
+      style={{
+        position: "absolute",
+        left: 10 / scale,
+        bottom: 10 / scale,
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 6 / scale,
+        padding: `${4 / scale}px ${8 / scale}px`,
+        borderRadius: 6 / scale,
+        backgroundColor: "rgba(9, 9, 11, 0.72)",
+        color: "#fafafa",
+        fontFamily: "var(--font-plus-jakarta-sans), sans-serif",
+        fontSize: 12 / scale,
+        fontWeight: 500,
+        pointerEvents: "none",
+      }}
+    >
+      <Loader2 className="shrink-0 animate-spin" size={12 / scale} />
+      <span>{progress > 0 ? `Uploading ${progress}%` : "Uploading…"}</span>
+    </div>
+  );
+}
+
 const SCENE_PATTERN = `url("data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12"><path d="M-3 15L15 -3" stroke="white" stroke-opacity=".08" stroke-width="2"/></svg>')}")`;
 export function MediaPlaceholder({
   missing = false,
   failed = false,
   item,
-}: { missing?: boolean; failed?: boolean; item?: VisualMedia }) {
+  delayMs = 0,
+}: { missing?: boolean; failed?: boolean; item?: VisualMedia; delayMs?: number }) {
   const loading = !missing && !failed;
+  const [showSpinner, setShowSpinner] = useState(!loading || delayMs <= 0);
   const ref = useRef<HTMLOutputElement>(null);
   const [scale, setScale] = useState(1);
   const previewZoom = useContext(CanvasPreviewZoomContext);
   const playerScale = useCurrentScale({ dontThrowIfOutsideOfRemotion: true });
+  useEffect(() => {
+    if (!loading || delayMs <= 0) {
+      setShowSpinner(true);
+      return;
+    }
+    setShowSpinner(false);
+    const timer = window.setTimeout(() => setShowSpinner(true), delayMs);
+    return () => window.clearTimeout(timer);
+  }, [loading, delayMs]);
   useLayoutEffect(() => {
     const element = ref.current;
     if (!element) return;
@@ -101,8 +166,9 @@ export function MediaPlaceholder({
       }}
     >
       {loading && item && <LoadingThumbnail item={item} />}
-      <span className="relative inline-flex items-center" style={{
+      <span className="relative inline-flex items-center transition-opacity duration-150" style={{
         gap: 8 / scale,
+        opacity: loading && !showSpinner ? 0 : 1,
         filter: loading ? `drop-shadow(0 0 ${2 / scale}px black)` : undefined,
       }}>
         {loading && <Loader2 className="shrink-0 animate-spin" size={16 / scale} />}
