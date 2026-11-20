@@ -57,6 +57,8 @@ export interface AssetRecord {
   creator_name: string;
   creator_handle: string | null;
   creator_avatar_path: string | null;
+  creator_is_verified?: boolean;
+  creator_subscription_plan?: string | null;
   owner_account_id: string;
   creator_average_rating: number;
   creator_rating_count: number;

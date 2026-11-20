@@ -487,6 +487,14 @@ const ASSET_SELECT = `
            WHEN (COALESCE(ma.is_admin_asset, FALSE) OR owner.type = 'Staff') THEN '/ensemble_lg.svg'
            ELSE owner_avatar.path
          END AS creator_avatar_path,
+         CASE
+           WHEN (COALESCE(ma.is_admin_asset, FALSE) OR owner.type = 'Staff') THEN FALSE
+           ELSE COALESCE(owner_verification.is_verified, FALSE)
+         END AS creator_is_verified,
+         CASE
+           WHEN (COALESCE(ma.is_admin_asset, FALSE) OR owner.type = 'Staff') THEN NULL
+           ELSE COALESCE(owner_plan.name, 'Free')
+         END AS creator_subscription_plan,
          owner.account_id AS owner_account_id,
          (owner.account_id = $1) AS is_owner,
          purchase_access.is_purchased,
@@ -687,6 +695,28 @@ const ASSET_SELECT = `
   LEFT JOIN users owner_user ON owner_user.account_id = listing_owner.account_id
   JOIN accounts owner ON owner.account_id = listing_owner.account_id
     LEFT JOIN files owner_avatar ON owner_avatar.file_id = owner.avatar_file_id
+    LEFT JOIN verifications owner_verification ON owner_verification.account_id = owner.account_id
+    LEFT JOIN LATERAL (
+      SELECT pl.name
+      FROM subscriptions s
+      JOIN plans pl ON pl.plan_id = s.plan_id
+      WHERE s.user_id = owner_user.user_id
+        AND (s.status IS NULL OR UPPER(s.status) IN ('ACTIVE', 'TRIALING', 'TRIAL', 'PENDING'))
+        AND (
+          s.current_period_end IS NULL
+          OR s.current_period_end > CURRENT_TIMESTAMP
+          OR (s.trial_ends_at IS NOT NULL AND s.trial_ends_at > CURRENT_TIMESTAMP)
+        )
+      ORDER BY
+        CASE WHEN s.xendit_plan_id IS NOT NULL THEN 1 ELSE 2 END,
+        CASE
+          WHEN LOWER(pl.name) = 'business' THEN 1
+          WHEN LOWER(pl.name) = 'premium' THEN 2
+          ELSE 3
+        END,
+        s.updated_at DESC, s.created_at DESC
+      LIMIT 1
+    ) owner_plan ON TRUE
   LEFT JOIN LATERAL (
     SELECT EXISTS (
       SELECT 1

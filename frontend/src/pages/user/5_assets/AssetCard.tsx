@@ -17,6 +17,14 @@ function getTypeIcon(type: string) {
   }
 }
 
+function getSubscriptionIcon(type: string) {
+  switch (type.toLowerCase()) {
+    case "premium": return "/icons/subscription/premium.png";
+    case "business": return "/icons/subscription/studio.png";
+    default: return "/icons/subscription/freemium.png";
+  }
+}
+
 export interface AssetCardProps {
   asset: AssetRecord;
   view?: "discover" | "mine" | "purchased" | "saved" | "liked" | "trash";
@@ -59,14 +67,14 @@ export const AssetCard: React.FC<AssetCardProps> = ({
             </span>
             <span className="absolute inset-0 -translate-x-full animate-badge-shine bg-gradient-to-r from-transparent via-white/30 to-transparent" />
           </span>
-          <span className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-black/50 backdrop-blur-sm text-[10px] font-semibold border border-white/10 text-white">
-            <Star className={`h-3 w-3 ${asset.average_rating > 0 ? "fill-yellow-400 text-yellow-400" : "fill-gray-400 text-gray-400"}`} />
-            <span className={asset.average_rating > 0 ? "text-yellow-400" : "text-gray-300 dark:text-zinc-400"}>
-              {asset.average_rating > 0 ? asset.average_rating.toFixed(1) : "N/A"}
-            </span>
-          </span>
         </div>
         <div className="absolute left-2 bottom-2 flex flex-wrap items-center gap-1.5 z-10">
+          <span className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-white/95 dark:bg-black/80 text-gray-700 dark:text-zinc-300 border border-gray-200 dark:border-white/15 backdrop-blur-md text-[9px] font-semibold shadow-xs">
+            <Star className={`h-2.5 w-2.5 ${asset.average_rating > 0 ? "fill-yellow-400 text-yellow-400" : "text-gray-500 dark:text-zinc-400"}`} />
+            <span>
+              {asset.average_rating > 0 ? asset.average_rating.toFixed(1) : "No Rating"}
+            </span>
+          </span>
           {asset.is_purchased && !asset.is_owner && asset.available_license_count > 0 && (
             <span className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-emerald-600 text-[10px] font-semibold uppercase text-white shadow-sm border border-emerald-500">
               <BadgeCheck className="h-3 w-3" /> License available
@@ -222,13 +230,31 @@ export const AssetCard: React.FC<AssetCardProps> = ({
               </span>
             )}
             <div className="flex flex-col min-w-0">
-              <p className="truncate text-xs font-semibold text-gray-900 dark:text-white">
-                {asset.creator_name}
-              </p>
+              <div className="flex items-center gap-1 min-w-0">
+                <p className="truncate text-xs font-semibold text-gray-900 dark:text-white">
+                  {asset.creator_name}
+                </p>
+                {asset.creator_is_verified && (
+                  <img
+                    src="/icons/verification/lvl2_verified.png"
+                    alt="Verified"
+                    className="h-3.5 w-3.5 shrink-0 object-contain"
+                    title="Verified"
+                  />
+                )}
+                {asset.creator_subscription_plan && (
+                  <img
+                    src={getSubscriptionIcon(asset.creator_subscription_plan)}
+                    alt={asset.creator_subscription_plan}
+                    className="h-3.5 w-3.5 shrink-0 object-contain drop-shadow-[0_0_8px_rgba(255,255,255,0.15)]"
+                    title={`${asset.creator_subscription_plan} Tier`}
+                  />
+                )}
+              </div>
               <div className="flex items-center gap-1 mt-0.5">
                 <Star className={`h-2.5 w-2.5 ${asset.average_rating > 0 ? "fill-yellow-400 text-yellow-400" : "fill-gray-400 text-gray-500"}`} />
                 <span className={`text-[10px] font-semibold ${asset.average_rating > 0 ? "text-yellow-400" : "text-gray-500 dark:text-zinc-500"}`}>
-                  {asset.average_rating > 0 ? asset.average_rating.toFixed(1) : "N/A"}
+                  {asset.average_rating > 0 ? asset.average_rating.toFixed(1) : "No Rating"}
                 </span>
               </div>
             </div>
