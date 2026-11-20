@@ -46,7 +46,7 @@ import AssetReportButton from "./AssetReportButton";
 import AssetPurchaseModal from "./AssetPurchaseModal";
 import TemplateUseModal from "./TemplateUseModal";
 import { marketTemplatePreviewUrl } from "./templatePreview";
-import { mediaUrl, readableDuration, readableSize, type AssetComment, type AssetMediaFile, type AssetPurchaseResponse, type AssetRecord, type AssetReply, type AssetReview } from "./assetTypes";
+import { isVideoPreviewPath, mediaUrl, readableDuration, readableSize, type AssetComment, type AssetMediaFile, type AssetPurchaseResponse, type AssetRecord, type AssetReply, type AssetReview } from "./assetTypes";
 
 function errorMessage(error: unknown, fallback: string) {
   if (typeof error === "object" && error && "response" in error) {
@@ -983,7 +983,7 @@ function MediaAssetPreview({
         className="relative block aspect-video w-full cursor-pointer overflow-hidden bg-gray-100 text-left dark:bg-black/30"
         aria-label={canAccessOriginal ? `View original ${mediaAsset.name}` : `View watermarked preview of ${mediaAsset.name}`}
       >
-        {previewUrl && !failed && mediaAsset.type === "video" ? (
+        {previewUrl && !failed && isVideoPreviewPath(previewUrl) ? (
           <video src={previewUrl} muted playsInline preload="metadata" onError={() => setFailed(true)} className="pointer-events-none h-full w-full object-contain" aria-label={`Watermarked preview of ${mediaAsset.name}`} />
         ) : previewUrl && !failed ? (
           <img

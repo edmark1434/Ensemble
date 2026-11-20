@@ -1,12 +1,11 @@
-# Editor walkthrough controls
+# Fix video asset preview on asset library info page
 
 ## Implementation objective
 
-Restore first-time onboarding and let presenters replay the editor walkthrough on demand.
+Render MP4 video thumbnail previews properly with `<video>` instead of `<img>` on the asset details info page (carousel, package preview cards, and purchase modal).
 
 ## Acceptance criteria
 
-- The tour dialog has an outlined Skip tour button. Its inset progress bar sits 4px below the walkthrough label and step count, with 12px before the step title.
-- Automatic editor and workspace walkthroughs use the existing per-account history.
-- Shift+T opens the full tour from step one in an editable project, including after a skip or finish.
-- Demo replays leave onboarding history alone. The shortcut stays out of the shortcuts modal and ignores text entry.
+- `AssetThumbnailCarousel` renders video thumbnail slides (`assets/thumbnails/video-5s-(320|480)/` or `.mp4` files) with `<video>` in both the main preview stage and the slide strip, falls back to `proxy_path` for video/image assets without `thumbnail_path`, and shows `MediaFallback` on error.
+- `MediaAssetPreview` in `AssetDetails` chooses `<video>` vs `<img>` based on the resolved preview path so both MP4 video previews and legacy image thumbnails render cleanly.
+- `AssetPurchaseModal` renders `<video>` instead of `<img>` when `asset.thumbnail_path` is a video preview.
