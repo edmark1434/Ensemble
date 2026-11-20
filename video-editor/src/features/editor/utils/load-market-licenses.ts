@@ -9,10 +9,16 @@ export async function loadMarketLicenses(projectId: string, ids: string[], signa
   const response = await fetch(`/api/market-assets/licenses?${params}`, { signal, cache: "no-store" });
   if (!response.ok) throw Object.assign(new Error("Unable to load asset licenses."), { status: response.status });
   const data = await response.json() as { assets: MarketLicenseStatus[] };
+  const found = new Set(data.assets.map(asset => asset.assetId.toLowerCase()));
+  for (const id of ids) {
+    if (!found.has(id.toLowerCase())) {
+      data.assets.push({ assetId: id, name: "", licensed: false, priceCredits: 0, trashed: true, unavailable: true });
+    }
+  }
   // Paid/previously licensed assets can start loading while first-use free claims run.
-  if (!signal?.aborted) onResolved?.(data.assets.filter(asset => asset.licensed || asset.priceCredits !== 0));
+  if (!signal?.aborted) onResolved?.(data.assets.filter(asset => asset.licensed || asset.trashed || asset.priceCredits !== 0));
   return Promise.all(data.assets.map(async asset => {
-    if (asset.licensed || asset.priceCredits !== 0 || signal?.aborted) return asset;
+    if (asset.licensed || asset.trashed || asset.priceCredits !== 0 || signal?.aborted) return asset;
     const key = `${projectId}:${asset.assetId}`;
     let claim = freeClaims.get(key);
     if (!claim) {

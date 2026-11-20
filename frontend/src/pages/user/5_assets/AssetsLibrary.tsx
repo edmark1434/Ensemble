@@ -7,6 +7,7 @@ import api from "@/lib/axios";
 import socket from "@/lib/socket";
 import UserHeader from "@/components/nav/user_header";
 import ConfirmationModal from "@/components/ui/ConfirmationModal";
+import GlideSelect from "@/components/ui/GlideSelect";
 import SuccessModal from "@/components/ui/SuccessModal";
 import { showErrorToast, showSuccessToast } from "@/components/utility/toast";
 import AssetEditorModal from "./AssetEditorModal";
@@ -37,12 +38,12 @@ const MINE_STATUS_OPTIONS: { id: MineStatus; label: string }[] = [
   { id: "draft", label: "Drafts" },
 ];
 
-const FILTERS: { value: FilterType; label: string; icon?: typeof Image }[] = [
+const FILTERS = [
   { value: "all", label: "All" },
-  { value: "image", label: "Images", icon: Image },
-  { value: "video", label: "Videos", icon: Clapperboard },
-  { value: "audio", label: "Audio", icon: AudioLines },
-  { value: "template", label: "Templates", icon: LayoutTemplate },
+  { value: "image", label: "Images", icon: <Image className="h-3.5 w-3.5" /> },
+  { value: "video", label: "Videos", icon: <Clapperboard className="h-3.5 w-3.5" /> },
+  { value: "audio", label: "Audio", icon: <AudioLines className="h-3.5 w-3.5" /> },
+  { value: "template", label: "Templates", icon: <LayoutTemplate className="h-3.5 w-3.5" /> },
 ];
 
 function requestError(error: unknown) {
@@ -152,9 +153,10 @@ export default function AssetsLibrary() {
     title: "Asset Uploaded Successfully!",
     message: "Your asset package has been submitted successfully to your library.",
   });
-  const availableViews: AssetView[] = isGuestView
-    ? ["discover"]
-    : ["discover", "mine", "seller", "purchased", "liked", "saved", "trash"];
+  const viewGroups: { label: string; views: AssetView[] }[] = [
+    { label: "Browse assets", views: isGuestView ? ["discover"] : ["discover", "purchased", "liked", "saved"] },
+  ];
+  if (!isGuestView) viewGroups.push({ label: "Manage assets", views: ["mine", "seller", "trash"] });
 
   useEffect(() => {
     if (isGuestView && view !== "discover") {
@@ -533,72 +535,62 @@ export default function AssetsLibrary() {
         </div>
 
           {/* Tabs & View Toggle */}
-          <div className="mb-8 flex flex-wrap items-end justify-between gap-4 border-b border-gray-200 dark:border-white/10">
-            <div className="relative flex min-w-0 flex-1 flex-wrap gap-1">
-            {availableViews.map((tab) => {
-              const isActive = view === tab;
-              return (
-                <button
-                  key={tab}
-                  onClick={() => handleTabClick(tab)}
-                  className={`relative px-4 py-3 text-sm font-semibold transition-colors ${
-                    isActive ? "text-blue-600 dark:text-blue-400" : "text-gray-700 dark:text-zinc-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100/50 dark:hover:bg-white/5 rounded-t-lg"
-                  }`}
-                >
-                  <span className="relative z-10 flex items-center gap-2 capitalize">
-                    {tab === "discover" && <Compass className="h-4 w-4" />}
-                    {tab === "mine" && <Folder className="h-4 w-4" />}
-                    {tab === "seller" && <TrendingUp className="h-4 w-4" />}
-                    {tab === "purchased" && <ShoppingBag className="h-4 w-4" />}
-                    {tab === "saved" && <Bookmark className="h-4 w-4" />}
-                    {tab === "liked" && <Heart className="h-4 w-4" />}
-                    {tab === "trash" && <Trash2 className="h-4 w-4" />}
-                    {tab === "mine" ? "My Assets" : tab === "seller" ? "Seller Dashboard" : tab === "trash" ? "Trash" : tab}
-                  </span>
+          <div className="mb-8 flex flex-wrap items-end justify-between gap-x-4 gap-y-2 border-b border-gray-200 dark:border-white/10">
+            <nav aria-label="Asset library" className="flex min-w-0 flex-1 flex-col gap-1 xl:flex-row xl:items-end xl:gap-3">
+              {viewGroups.map(({ label, views }, index) => (
+                <div key={label} role="group" aria-label={label}
+                  className={`flex flex-wrap gap-1 ${index === 0 ? "" : "relative border-t border-gray-200 pt-1 dark:border-white/10 xl:border-t-0 xl:pl-3 xl:pt-0 xl:before:absolute xl:before:inset-y-2 xl:before:left-0 xl:before:w-px xl:before:bg-gray-200 xl:dark:before:bg-white/10"}`}>
+                  {views.map((tab) => {
+                    const isActive = view === tab;
+                    return (
+                      <button
+                        key={tab}
+                        type="button"
+                        aria-current={isActive ? "page" : undefined}
+                        onClick={() => handleTabClick(tab)}
+                        className={`relative px-4 py-3 text-sm font-semibold transition-colors ${
+                          isActive ? "text-blue-600 dark:text-blue-400" : "text-gray-700 dark:text-zinc-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100/50 dark:hover:bg-white/5 rounded-t-lg"
+                        }`}
+                      >
+                        <span className="relative z-10 flex items-center gap-2 capitalize">
+                          {tab === "discover" && <Compass className="h-4 w-4" />}
+                          {tab === "mine" && <Folder className="h-4 w-4" />}
+                          {tab === "seller" && <TrendingUp className="h-4 w-4" />}
+                          {tab === "purchased" && <ShoppingBag className="h-4 w-4" />}
+                          {tab === "saved" && <Bookmark className="h-4 w-4" />}
+                          {tab === "liked" && <Heart className="h-4 w-4" />}
+                          {tab === "trash" && <Trash2 className="h-4 w-4" />}
+                          {tab === "mine" ? "My Assets" : tab === "seller" ? "Analytics" : tab === "trash" ? "Trash" : tab}
+                        </span>
 
-                  {isActive && (
-                    <>
-                      <motion.div
-                        layoutId="activeAssetTabGlow"
-                        className="absolute inset-0 bg-blue-500/5 rounded-t-lg"
-                        transition={{ duration: 0.2, ease: "easeOut" }}
-                      />
-                      <motion.div
-                        layoutId="activeAssetTabUnderline"
-                        className="absolute bottom-0 left-0 right-0 h-[2px] bg-blue-500 z-10"
-                        transition={{ duration: 0.2, ease: "easeOut" }}
-                      />
-                    </>
-                  )}
-                </button>
-              );
-            })}
-            </div>
-  
-            {view !== "seller" && (
-              <div className="flex flex-wrap items-center justify-end gap-4 pb-2">
-                {/* Filters */}
-                <div className="flex flex-wrap items-center gap-1 rounded-lg border border-gray-200 bg-white p-1 dark:border-white/15 dark:bg-white/5" role="tablist" aria-label="Media types">
-                  {FILTERS.map(({ value, label, icon: Icon }) => (
-                    <button
-                      key={value}
-                      type="button"
-                      role="tab"
-                      aria-selected={filter === value}
-                      onClick={() => { setPage(1); setFilter(value); }}
-                      className={`inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-xs font-semibold transition ${
-                        filter === value
-                          ? "bg-gray-100 text-gray-900 shadow-sm dark:bg-white/10 dark:text-white"
-                          : "text-gray-500 hover:text-gray-700 dark:text-zinc-400 dark:hover:text-zinc-300"
-                      }`}
-                    >
-                      {Icon && <Icon className="h-3.5 w-3.5" />} {label}
-                    </button>
-                  ))}
+                        {isActive && (
+                          <>
+                            <motion.div
+                              layoutId="activeAssetTabGlow"
+                              className="absolute inset-0 bg-blue-500/5 rounded-t-lg"
+                              transition={{ duration: 0.2, ease: "easeOut" }}
+                            />
+                            <motion.div
+                              layoutId="activeAssetTabUnderline"
+                              className="absolute bottom-0 left-0 right-0 h-[2px] bg-blue-500 z-10"
+                              transition={{ duration: 0.2, ease: "easeOut" }}
+                            />
+                          </>
+                        )}
+                      </button>
+                    );
+                  })}
                 </div>
+              ))}
+            </nav>
+
+            {view !== "seller" && (
+              <div className="w-36 pb-2">
+                <GlideSelect ariaLabel="Media type" size="sm" options={FILTERS} value={filter} maxVisibleItems={FILTERS.length}
+                  onChange={(value) => { setPage(1); setFilter(value as FilterType); }} />
               </div>
             )}
-        </div>
+          </div>
 
         {view === "seller" ? (
           <AssetSellerDashboard />

@@ -76,8 +76,6 @@ function placeCard(target: DOMRect | null, card: HTMLElement, preferSide: boolea
   return { left: clamp(best.left, maxX), top: clamp(best.top, maxY) };
 }
 
-const walkthroughReviewMode = true;
-
 type TourPart = "editor" | "workspace";
 
 async function claimPart(part: TourPart) {
@@ -88,6 +86,7 @@ async function claimPart(part: TourPart) {
 export function EditorWalkthrough({ projectId, userId }: { projectId: string; userId: string }) {
   const [index, setIndex] = useState<number | null>(null);
   const [workspaceOnly, setWorkspaceOnly] = useState(false);
+  const [demoReplay, setDemoReplay] = useState(false);
   const [highlights, setHighlights] = useState<DOMRect[]>([]);
   const [commentOpenedFromTimeline, setCommentOpenedFromTimeline] = useState(false);
 
@@ -107,21 +106,32 @@ export function EditorWalkthrough({ projectId, userId }: { projectId: string; us
   const selector = step?.surface
     ? (step.surface === "export" ? '[data-tour-surface="export"] > div:first-child' : '[data-tour-surface="' + step.surface + '"]')
     : atTrigger ? step!.trigger! : step?.selector;
-  const reviewKey = "ensemble:walkthrough-review:" + userId;
+  const running = index !== null;
 
   useEffect(() => {
-    if (!workspaceReady) return;
+    if (running) return;
+    const replay = (event: KeyboardEvent) => {
+      if (event.code !== "KeyT" || !event.shiftKey || event.altKey || event.ctrlKey || event.metaKey ||
+          event.repeat || event.isComposing || event.defaultPrevented) return;
+      if (event.target instanceof HTMLElement &&
+          (event.target.isContentEditable || event.target.closest('input, textarea, select, [role="textbox"], [role="dialog"]'))) return;
+      event.preventDefault();
+      setDemoReplay(true);
+      setWorkspaceOnly(false);
+      setCommentOpenedFromTimeline(false);
+      setIndex(0);
+    };
+    window.addEventListener("keydown", replay);
+    return () => window.removeEventListener("keydown", replay);
+  }, [running]);
+
+  useEffect(() => {
+    if (!workspaceReady || demoReplay) return;
     let mounted = true;
     const timer = window.setTimeout(async () => {
       try {
         let onlyWorkspace = false;
-        if (walkthroughReviewMode) {
-          // Rehearse the follow-up in this tab without consuming account history.
-          try {
-            onlyWorkspace = workspaceVisible && sessionStorage.getItem(reviewKey) === "editor";
-            if (!onlyWorkspace && !sessionStorage.getItem(reviewKey)) sessionStorage.setItem(reviewKey, "editor");
-          } catch { /* Storage is optional for review. */ }
-        } else if (!await claimPart("editor")) {
+        if (!await claimPart("editor")) {
           if (!mounted || !workspaceVisible || !await claimPart("workspace")) return;
           onlyWorkspace = true;
         }
@@ -129,16 +139,13 @@ export function EditorWalkthrough({ projectId, userId }: { projectId: string; us
       } catch { /* Keep editing available if the walkthrough request fails. */ }
     }, 0);
     return () => { mounted = false; clearTimeout(timer); };
-  }, [workspaceReady, workspaceVisible, reviewKey]);
+  }, [workspaceReady, workspaceVisible, demoReplay]);
 
   useEffect(() => {
-    if (step?.panel !== "workspace") return;
-    if (walkthroughReviewMode) {
-      try { sessionStorage.setItem(reviewKey, "workspace"); } catch { /* Optional in review. */ }
-    } else if (!workspaceOnly) {
+    if (step?.panel === "workspace" && !workspaceOnly && !demoReplay) {
       void claimPart("workspace").catch(() => {});
     }
-  }, [step, reviewKey, workspaceOnly]);
+  }, [step, workspaceOnly, demoReplay]);
 
   useLayoutEffect(() => {
     if (!step) return;
@@ -152,7 +159,6 @@ export function EditorWalkthrough({ projectId, userId }: { projectId: string; us
     return () => useLayoutStore.setState({ activeMenuItem, showMenuItem, activeRightItem });
   }, [step, workspaceVisible]);
 
-  const running = index !== null;
   useLayoutEffect(() => {
     if (!running) return;
     return () => {
@@ -362,14 +368,22 @@ export function EditorWalkthrough({ projectId, userId }: { projectId: string; us
         onKeyUp={event => { if (["Escape", "Enter", " "].includes(event.key)) event.stopPropagation(); }}
         className="pointer-events-auto absolute grid max-h-[calc(100dvh-2rem)] w-96 max-w-[calc(100vw-2rem)] min-w-0 gap-6 overflow-y-auto overflow-x-hidden rounded-lg border bg-card px-6 py-6 shadow-xl">
         <div aria-live="polite" aria-atomic="true" className="grid gap-2">
-          <p className="flex justify-between gap-3 text-xs text-muted-foreground"><span>Editor walkthrough</span>{steps.length > 1 && <span>{index + 1} of {steps.length}</span>}</p>
+          <div className="mb-1 grid gap-1">
+            <p className="flex justify-between gap-3 text-xs text-muted-foreground"><span>Editor walkthrough</span>{steps.length > 1 && <span>{index + 1} of {steps.length}</span>}</p>
+            <div role="progressbar" aria-label="Tour progress" aria-valuemin={0} aria-valuemax={steps.length}
+              aria-valuenow={index + 1} aria-valuetext={`Step ${index + 1} of ${steps.length}`}
+              className="h-1 w-full overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
+              <div className="h-full rounded-full bg-primary motion-safe:transition-[width] motion-safe:duration-300 ease-out"
+                style={{ width: `${(index + 1) / steps.length * 100}%` }} />
+            </div>
+          </div>
           <h2 id="editor-tour-title" className="flex items-center gap-2 text-md font-semibold"><Icon className="size-4 text-primary" />{step.title}</h2>
           <p id="editor-tour-description" className="text-pretty text-sm leading-relaxed text-muted-foreground">
             {atTrigger ? step.prompt : step.body}
           </p>
         </div>
         <div className="flex min-w-0 flex-wrap items-center justify-end gap-2">
-          {steps.length > 1 && <Button size="sm" variant="ghost" className="mr-auto" onClick={finish}>Skip tour</Button>}
+          {steps.length > 1 && <Button size="sm" variant="outline" className="mr-auto" onClick={finish}>Skip tour</Button>}
           {index > 0 && <Button size="sm" variant="outline" onClick={() => setIndex(index - 1)}>Back</Button>}
           <Button size="sm" onClick={next}>
             {atTrigger ? "Open panel" : index === steps.length - 1 ? "Finish" : "Next"}

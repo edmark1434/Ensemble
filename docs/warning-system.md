@@ -109,10 +109,10 @@ Ticket/report “staff follow-up” maps to `staff_follow_up` (3 points) when no
 
 ### 4a. Automatic warning: missed contract review
 
-A contract stays `Done` until both parties review each other (then `Completed`). Each **member** party has **7 days** from `contracts.ended_at` to review the other party.
+A contract stays `Done` until both parties review each other (then `Completed`). Each **member** party has **24 hours** from `contracts.ended_at` to review the other party.
 
-1. With 24 hours or less left, the party gets one reminder notification (`CONTRACT_REVIEW_REMINDER`, links to the contract). Contracts that ended more than 14 days ago are never reminded.
-2. After the deadline, and at least 24 hours after the reminder, the system issues the `missed_review` catalog row (seeded 2 points, 5 days) with no staff author (`violations.staff_id IS NULL`). It then runs the same path as a staff warning: activity `ACCOUNT_WARNED`, `account:warning`, §8 punishments.
+1. With 6 hours or less left, the party gets one reminder notification (`CONTRACT_REVIEW_REMINDER`, links to the contract). Contracts that ended more than 14 days ago are never reminded.
+2. After the deadline, and at least 6 hours after the reminder, the system issues the `missed_review` catalog row (seeded 2 points, 5 days) with no staff author (`violations.staff_id IS NULL`). It then runs the same path as a staff warning: activity `ACCOUNT_WARNED`, `account:warning`, §8 punishments.
 3. Each party is reminded and warned at most once per contract (`contract_review_obligations`). Team accounts and contracts with an open dispute are skipped. Hiding the `missed_review` row at `/admin/warnings` turns these warnings off; editing it changes points and duration.
 
 Hourly job at :50 (`reconcileMissedReviews` in `MissedReviewServices`, queries in `MissedReviewRepositories`). Staff rescind it like any warning.

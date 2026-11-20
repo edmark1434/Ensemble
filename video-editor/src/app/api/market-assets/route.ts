@@ -1,4 +1,3 @@
-import { activeProjectIds } from "@/lib/db/project-availability";
 import { connection, NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { buildPublicUrl } from "@/lib/s3";
@@ -48,15 +47,17 @@ export async function GET(request: NextRequest) {
         .innerJoin("projects as p", "p.project_id", "pm.project_id")
         .where("pm.project_id", "=", projectId!).where("pm.user_id", "=", session!.userId)
         .where("pm.deleted_at", "is", null).where("p.deleted_at", "is", null)
+        .where("p.trashed_at", "is", null)
         .select("pm.role").executeTakeFirst();
       if (!member) return NextResponse.json({ error: "Project access required." }, { status: 403 });
     }
     let query = db
       .selectFrom("market_assets as ma")
-      .$if(view !== "licensed", q => q.where("ma.status", "=", "published"))
-      .where("ma.deleted_at", "is", null)
+      .$if(view !== "licensed", q => q.where("ma.status", "=", "published")
+        .where("ma.deleted_at", "is", null).where("ma.trashed_at", "is", null))
       .select([
         "ma.market_asset_id",
+        "ma.is_admin_asset",
         "ma.name as market_name",
         "ma.description",
         "ma.price_credits",
@@ -79,7 +80,7 @@ export async function GET(request: NextRequest) {
           .select("filter_link.market_asset_id")
           .whereRef("filter_link.market_asset_id", "=", "ma.market_asset_id")
           .$if(Boolean(type), (q) => q.where("filter_media.type", "=", type!))
-          .where("filter_media.deleted_at", "is", null)
+          .$if(view !== "licensed", q => q.where("filter_media.deleted_at", "is", null))
       ));
     if (view === "licensed") {
       query = query.where(eb => eb.exists(eb.selectFrom("market_asset_licenses as license")
@@ -129,7 +130,7 @@ export async function GET(request: NextRequest) {
         .innerJoin("market_media_assets as collection_link", "collection_link.market_asset_id", "ma.market_asset_id")
         .innerJoin("media_assets as collection_media", "collection_media.media_asset_id", "collection_link.media_asset_id")
         .innerJoin("files as collection_original", "collection_original.file_id", "collection_media.original_file_id")
-        .where("collection_media.deleted_at", "is", null)
+        .$if(view !== "licensed", q => q.where("collection_media.deleted_at", "is", null))
         .where("collection_original.deleted_at", "is", null)
         .$if(Boolean(type), (q) => q.where("collection_media.type", "=", type!))
         .select((eb) => eb.fn.countAll<number>().as("count"))
@@ -158,13 +159,13 @@ export async function GET(request: NextRequest) {
           .onRef("thumb.file_id", "!=", "m.original_file_id")
           .on("thumb.deleted_at", "is", null)
           .on("thumb.path", "not like", "asset-originals/%"))
-        .innerJoin(db.selectFrom("marketplace_listings").distinctOn("market_asset_id")
+        .leftJoin(db.selectFrom("marketplace_listings").distinctOn("market_asset_id")
           .select(["market_asset_id", "submitted_by_account_id as account_id"])
           .orderBy("market_asset_id").orderBy("created_at", "desc").orderBy("listing_id", "desc").as("listing_owner"),
           "listing_owner.market_asset_id", "mma.market_asset_id")
-        .innerJoin("users as u", "u.account_id", "listing_owner.account_id")
+        .leftJoin("accounts as owner", "owner.account_id", "listing_owner.account_id")
         .where("mma.market_asset_id", "in", marketAssetIds)
-        .where("m.deleted_at", "is", null)
+        .$if(view !== "licensed", q => q.where("m.deleted_at", "is", null))
         .where("orig.deleted_at", "is", null)
         .select([
           "mma.market_asset_id",
@@ -181,9 +182,9 @@ export async function GET(request: NextRequest) {
           "proxy.mime_type as proxy_mime_type",
           "thumb.path as thumbnail_path",
           "thumb.mime_type as thumbnail_mime_type",
-          "u.account_id as owner_account_id",
-          "u.first_name",
-          "u.last_name"
+          "owner.account_id as owner_account_id",
+          "owner.display_name as creator_name",
+          "owner.type as owner_type"
         ])
         .orderBy("mma.position")
         .execute(),
@@ -198,7 +199,7 @@ export async function GET(request: NextRequest) {
             .whereRef("content_link.media_asset_id", "=", "m.media_asset_id"))),
         ]))
         .where("mat.market_asset_id", "in", marketAssetIds)
-        .where("m.deleted_at", "is", null)
+        .$if(view !== "licensed", q => q.where("m.deleted_at", "is", null))
         .where("thumb.deleted_at", "is", null)
         .where("thumb.path", "not like", "asset-originals/%")
         .select([
@@ -247,9 +248,8 @@ export async function GET(request: NextRequest) {
           price_credits: listing.price_credits
         }
       }));
-      const author = content[0]
-        ? [content[0].first_name, content[0].last_name].filter(Boolean).join(" ")
-        : "";
+      const author = listing.is_admin_asset || content[0]?.owner_type === "Staff"
+        ? "By Ensemble" : content[0]?.creator_name ?? "";
       const assets = content.map((row) => {
         const ready = isGeneratedMarketProxy(
           row.type, row.original_file_id, row.proxy_file_id,

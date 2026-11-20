@@ -328,7 +328,7 @@ export const ActiveMilestoneTimerCard: React.FC<ActiveMilestoneTimerCardProps> =
 
         {isActive && !isCompleted && paused && (
           <p className="text-[10px] text-amber-700 dark:text-amber-300 leading-normal pt-1">
-            The clock is stopped while this contract is on dispute hold. When the hold lifts, this deadline
+            The clock is stopped while this contract is on hold for a dispute. If it continues, this deadline
             moves forward by the time spent on hold.
           </p>
         )}

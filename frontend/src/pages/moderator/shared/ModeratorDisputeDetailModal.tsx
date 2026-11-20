@@ -1948,6 +1948,55 @@ export default function ModeratorDisputeDetailModal({
                 )}
               </SidebarSection>
 
+              {detail?.contractAfterCase && (() => {
+                const after = detail.contractAfterCase;
+                const decision = after.decision;
+                const choiceLabel = (choice: string | null) =>
+                  choice === "continue" ? "Continue" : choice === "end" ? "End" : "No answer yet";
+                const resolutionLabel: Record<string, string> = {
+                  both_continued: "Both parties chose to continue",
+                  auto_continued: "Continued (nobody ended it in time)",
+                  ended_by_client: "Ended by the client",
+                  ended_by_freelancer: "Ended by the freelancer",
+                  reopened: "Question withdrawn: the case was reopened",
+                  contract_ended: "Question withdrawn: the contract ended",
+                };
+                // Only worth a section once the case has a say over the contract.
+                if (!decision && !after.onHoldSince) return null;
+                return (
+                  <SidebarSection title="Contract after this case">
+                    <div className="space-y-1.5 text-xs text-zinc-300">
+                      <p>
+                        Contract is <span className="font-semibold">{after.contractStatus}</span>
+                        {after.onHoldSince && decision?.status !== "ended"
+                          ? `, on hold since ${formatDateTime(after.onHoldSince)}`
+                          : ""}
+                        .
+                      </p>
+                      {decision ? (
+                        decision.status === "pending" ? (
+                          <>
+                            <p className="text-amber-200">
+                              The parties are choosing whether to continue it, by {formatDateTime(decision.decideBy)}.
+                              If nobody ends it by then, it continues.
+                            </p>
+                            <p className="text-zinc-400">
+                              Client: {choiceLabel(decision.clientChoice)} · Freelancer:{" "}
+                              {choiceLabel(decision.freelancerChoice)}
+                            </p>
+                          </>
+                        ) : (
+                          <p className="text-zinc-400">
+                            {resolutionLabel[decision.resolution || ""] || `Decision ${decision.status}`}
+                            {decision.resolvedAt ? ` on ${formatDateTime(decision.resolvedAt)}` : ""}.
+                          </p>
+                        )
+                      ) : null}
+                    </div>
+                  </SidebarSection>
+                );
+              })()}
+
               {hasPayouts && (
                 <SidebarSection
                   title="Payouts"

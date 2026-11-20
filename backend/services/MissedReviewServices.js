@@ -2,7 +2,7 @@
  * Missed contract reviews cost merit (docs/warning-system.md §4a).
  *
  * A contract stays `Done` until both parties review each other. Each member party has
- * REVIEW_WINDOW_DAYS from when the contract ended to review the other party:
+ * REVIEW_WINDOW_HOURS from when the contract ended to review the other party:
  *   1. Reminder: once there are REMINDER_LEAD_HOURS or fewer left, the party is told once.
  *   2. Warning: after the deadline, and at least REMINDER_LEAD_HOURS after the reminder, the
  *      system issues the `missed_review` warning (catalog points and clock, no staff author).
@@ -17,8 +17,8 @@ const {
   insertMissedReviewViolation,
 } = require('../repositories/MissedReviewRepositories');
 
-const REVIEW_WINDOW_DAYS = 7;
-const REMINDER_LEAD_HOURS = 24;
+const REVIEW_WINDOW_HOURS = 24;
+const REMINDER_LEAD_HOURS = 6;
 // Contracts that ended longer ago than this are never reminded (keeps old contracts out at launch).
 const REMINDER_LOOKBACK_DAYS = 14;
 // A party reminded late (e.g. at launch) can still be warned up to this long after the contract ended.
@@ -43,7 +43,7 @@ function emitNotification(accountId, notification) {
 async function sendReviewReminders() {
   const rows = await listPendingReviewers({
     stage: 'remind',
-    endedBefore: `${REVIEW_WINDOW_DAYS * 24 - REMINDER_LEAD_HOURS} hours`,
+    endedBefore: `${REVIEW_WINDOW_HOURS - REMINDER_LEAD_HOURS} hours`,
     endedAfter: `${REMINDER_LOOKBACK_DAYS} days`,
   });
 
@@ -53,7 +53,7 @@ async function sendReviewReminders() {
       const claimed = await markReviewReminded(row.contract_id, row.reviewer_account_id);
       if (!claimed) continue;
 
-      const deadline = new Date(new Date(row.ended_at).getTime() + REVIEW_WINDOW_DAYS * 86400000);
+      const deadline = new Date(new Date(row.ended_at).getTime() + REVIEW_WINDOW_HOURS * 3600000);
       // Late reminders (e.g. contracts that ended before this rule existed) still get a full lead time.
       const effectiveDeadline = new Date(Math.max(deadline.getTime(), Date.now() + REMINDER_LEAD_HOURS * 3600000));
       const who = row.reviewee_name ? ` ${row.reviewee_name}` : ' the other party';
@@ -85,7 +85,7 @@ async function issueMissedReviewWarning(row, issued) {
 
   const { warningExpiry } = require('../lib/AccountRestriction');
   const expiresAt = warningExpiry({ durationDays: issued.durationDays, points: issued.points });
-  const reason = `No review left for ${row.reviewee_name || 'the other party'} within ${REVIEW_WINDOW_DAYS} days of ${contractLabel(row)} ending.`;
+  const reason = `No review left for ${row.reviewee_name || 'the other party'} within ${REVIEW_WINDOW_HOURS} hours of ${contractLabel(row)} ending.`;
 
   const inserted = await insertMissedReviewViolation({
     contractId: row.contract_id,
@@ -152,7 +152,7 @@ async function issueMissedReviewWarning(row, issued) {
 async function issueMissedReviewWarnings() {
   const rows = await listPendingReviewers({
     stage: 'warn',
-    endedBefore: `${REVIEW_WINDOW_DAYS} days`,
+    endedBefore: `${REVIEW_WINDOW_HOURS} hours`,
     endedAfter: `${WARNING_LOOKBACK_DAYS} days`,
     remindedBefore: `${REMINDER_LEAD_HOURS} hours`,
   });
@@ -184,6 +184,6 @@ async function reconcileMissedReviews() {
 }
 
 module.exports = {
-  REVIEW_WINDOW_DAYS,
+  REVIEW_WINDOW_HOURS,
   reconcileMissedReviews,
 };

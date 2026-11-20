@@ -17,7 +17,7 @@ export function marketPlaybackSource(item: ITrackItem, projectId: string, status
 export function readyMarketPlaybackSource(item: ITrackItem, projectId: string,
   status: MarketLicenseStatus | undefined, preparedImages: Record<string, string>): string | null {
   if (!getMarketAssetId(item)) return item.details.src;
-  if (!status) return null;
+  if (!status || status.unavailable) return null;
   const source = marketPlaybackSource(item, projectId, status);
   return String(item.type) === "image" ? preparedImages[source] ?? null : source;
 }

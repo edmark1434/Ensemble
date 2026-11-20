@@ -4658,6 +4658,15 @@ async function getDisputeDetail(disputeId, staffSession = null) {
   const waiting = payouts.filter((p) => ['scheduled', 'failed'].includes(p.status));
   const closed = String(row.status || '').toLowerCase() === 'closed';
 
+  // What happened to the contract after this case: on hold, the parties' continue-or-end
+  // answers, or how that question was settled.
+  let contractAfterCase = null;
+  try {
+    contractAfterCase = await require('./ContractDisputeHoldRepositories').getContractAfterCase(disputeId);
+  } catch (err) {
+    console.error('Error loading contract state after dispute:', err.message);
+  }
+
   // The exact text the server posts, so the console preview never drifts from it.
   const names = {
     disputer: row.initiator_handle ? `@${row.initiator_handle}` : row.initiator_name || 'The disputer',
@@ -4712,6 +4721,7 @@ async function getDisputeDetail(disputeId, staffSession = null) {
       defaultDays: DISPUTE_PAYOUT_DEFAULT_DAYS,
       maxDays: DISPUTE_PAYOUT_MAX_DAYS,
     },
+    contractAfterCase,
     // Drive the Resolve / Reopen prompts, so the console never hardcodes these lists.
     resolutionOptions: withPreview(
       listDisputeResolutionOptions(),

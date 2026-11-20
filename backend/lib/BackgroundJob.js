@@ -660,8 +660,9 @@ function startPaymentReconciliationJob() {
         }
     });
 
-    // Contract dispute hold: end contracts whose settlement ruling stands, and pause / resume
-    // contracts to match their disputes (resuming moves deadlines forward) — runs every 5 minutes.
+    // Contract dispute hold: end contracts whose settlement ruling stands, pause contracts under
+    // dispute, ask both parties to continue or end after a case closes, continue those nobody
+    // ended in time (with a reminder first) — runs every 5 minutes.
     // Each dispute change already syncs its contract; this catches anything else.
     let isContractDisputeHoldJobRunning = false;
     cron.schedule("*/5 * * * *", async () => {
@@ -670,12 +671,18 @@ function startPaymentReconciliationJob() {
         try {
             const { reconcileContractDisputeHoldsServices } = require('../services/ContractDisputeHoldServices');
             const result = await reconcileContractDisputeHoldsServices();
-            if (result.ended || result.synced) {
-                console.log(`Contract dispute holds: ended ${result.ended}, synced ${result.synced}`);
+            if (result.ended || result.synced || result.continued || result.reminded) {
+                console.log(
+                    `Contract dispute holds: ended ${result.ended}, synced ${result.synced}, ` +
+                    `auto-continued ${result.continued}, reminded ${result.reminded}`
+                );
             }
         } catch (err) {
-            // The hold columns arrive with migration 1829900000000; stay quiet until it runs.
-            if (err.code !== '42703') console.error("Contract dispute hold reconcile failed:", err.message);
+            // The hold columns and decisions table arrive with migrations 1829900000000 and
+            // 1830000000000; stay quiet until they run.
+            if (err.code !== '42703' && err.code !== '42P01') {
+                console.error("Contract dispute hold reconcile failed:", err.message);
+            }
         } finally {
             isContractDisputeHoldJobRunning = false;
         }

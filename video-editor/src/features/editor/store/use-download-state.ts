@@ -218,15 +218,6 @@ export const useDownloadState = create<DownloadState>((set, get) => ({
           body: JSON.stringify(payload)
         });
 
-        if (response.status === 409) {
-          toast.error("You already have a pending export. Refresh to see progress.", { id: "editor-export" });
-          set({
-            exporting: false,
-            error: "You already have a pending export.\nRefresh to see progress."
-          });
-          return;
-        }
-
         if (!response.ok) {
           const errorBody = await response.json().catch(() => null);
           console.error("Export request failed:", response.status, errorBody?.issues ?? errorBody);

@@ -83,7 +83,8 @@ function LiveMarketAssetLicensing({ children }: { children: ReactNode }) {
     };
   }, [idsKey, projectId]);
   const imageItems = marketItems.filter(item => String(item.type) === "image"
-    && licenses.projectId === projectId && !!licenses.assets[getMarketAssetId(item)!]);
+    && licenses.projectId === projectId && !!licenses.assets[getMarketAssetId(item)!]
+    && !licenses.assets[getMarketAssetId(item)!].unavailable);
   const sourcesKey = JSON.stringify([...new Set(imageItems
     .map(item => marketPlaybackSource(item, projectId, licenses.assets[getMarketAssetId(item)!])))].sort());
   const downloadUrlsKey = JSON.stringify(Object.fromEntries(imageItems.map(item => {

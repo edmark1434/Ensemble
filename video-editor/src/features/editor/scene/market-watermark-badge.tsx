@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
-import { Sparkles } from "lucide-react";
+import { CircleOff, Sparkles } from "lucide-react";
 import useStore from "../store/use-store";
 import { getMarketAssetId, useMarketLicenses } from "../store/use-market-licenses";
 import { getTargetById } from "../utils/target";
@@ -16,7 +16,8 @@ export function MarketWatermarkBadge({ container, transforming }: { container: H
   const asset = useMarketLicenses(state => assetId ? state.assets[assetId] : undefined);
   const openPurchase = useMarketLicenses(state => state.openPurchase);
   const buttonRef = useRef<HTMLButtonElement>(null);
-  const show = !!asset && !asset.licensed && asset.priceCredits > 0 && !!item && ['image', 'video'].includes(item.type) && !transforming;
+  const takenDown = !!asset?.trashed;
+  const show = !!asset && !asset.licensed && (takenDown || asset.priceCredits > 0) && !!item && ['image', 'video'].includes(item.type) && !transforming;
   useEffect(() => {
     if (!container || !selectedId || !show) return;
     let frame = 0;
@@ -39,10 +40,10 @@ export function MarketWatermarkBadge({ container, transforming }: { container: H
     return () => cancelAnimationFrame(frame);
   }, [container, selectedId, show, playerRef]);
   if (!container || !show || !assetId) return null;
-  return createPortal(<button ref={buttonRef} type="button" data-market-purchase="" style={{ visibility: "hidden" }}
-    className="absolute z-[210] inline-flex h-8 items-center gap-1.5 rounded-md border bg-card px-2.5 text-xs font-medium text-foreground shadow-md hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+  return createPortal(<button ref={buttonRef} type="button" disabled={takenDown} data-market-purchase={takenDown ? undefined : ""} style={{ visibility: "hidden" }}
+    className="absolute z-[210] inline-flex h-8 items-center gap-1.5 rounded-md border bg-card px-2.5 text-xs font-medium text-foreground shadow-md disabled:pointer-events-none enabled:hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
     onPointerDown={event => event.stopPropagation()} onMouseDown={event => event.stopPropagation()}
     onClick={async event => { event.stopPropagation(); if (await exitFullscreenForModal()) openPurchase(assetId); }}>
-    <Sparkles className="size-3.5" />Remove watermarks
+    {takenDown ? <><CircleOff className="size-3.5" />This asset was taken down</> : <><Sparkles className="size-3.5" />Remove watermarks</>}
   </button>, container);
 }

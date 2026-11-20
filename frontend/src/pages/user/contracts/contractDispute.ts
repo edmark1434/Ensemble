@@ -18,13 +18,36 @@ export type ContractActiveDispute = {
 export type ContractDisputeFilingCode =
   | "DISPUTE_ALREADY_FILED"
   | "DISPUTE_WINDOW_CLOSED"
-  | "DISPUTE_PAYOUT_PENDING";
+  | "DISPUTE_PAYOUT_PENDING"
+  | "DISPUTE_DECISION_PENDING";
 
 export const CONTRACT_DISPUTE_FILING_CODES: readonly ContractDisputeFilingCode[] = [
   "DISPUTE_ALREADY_FILED",
   "DISPUTE_WINDOW_CLOSED",
   "DISPUTE_PAYOUT_PENDING",
+  "DISPUTE_DECISION_PENDING",
 ];
+
+/**
+ * After a dispute closes without a ruling that ends the contract, both parties choose whether to
+ * continue it (`dispute_decision` from the contracts API). Continuing needs both; ending needs one;
+ * if nobody ends it by `decideBy`, it continues. The contract stays on hold meanwhile.
+ * `viewerSide` is null for someone who can see the contract but cannot decide for either party.
+ */
+export type ContractDisputeDecision = {
+  id: string;
+  decideBy: string;
+  createdAt?: string;
+  viewerSide: "client" | "freelancer" | null;
+  viewerChoice: "continue" | "end" | null;
+  otherChoice: "continue" | "end" | null;
+  dispute?: ContractActiveDispute | null;
+  /**
+   * Work the freelancer delivered before the question opened that still waits for the client's
+   * review. The client approves it or requests a revision before they can end the contract.
+   */
+  reviewPending?: { id: string; name: string }[];
+};
 
 /**
  * An earlier dispute (by either side) whose ruled payout has not been paid yet. Its credits stay
@@ -73,6 +96,8 @@ export type ContractHoldState =
   | { kind: "none" }
   /** A dispute on the contract is open. */
   | { kind: "dispute"; since: string | null }
+  /** The dispute closed; the parties choose whether to continue (still on hold). */
+  | { kind: "decision"; since: string | null; decision: ContractDisputeDecision }
   /** The case is closed but a ruling's payout has not been paid yet. */
   | { kind: "payout"; since: string | null; payout: ContractDisputePendingPayout | null }
   /** An escrow settlement ruling ended the contract. */
@@ -84,6 +109,7 @@ export function contractHoldState(contract: {
   activeDispute?: ContractActiveDispute | null;
   disputeFiling?: ContractDisputeFiling | null;
   disputeHold?: ContractDisputeHold | null;
+  disputeDecision?: ContractDisputeDecision | null;
 }): ContractHoldState {
   const ended = ENDED_CONTRACT_STATUSES.includes(String(contract.status || "").toLowerCase());
   const payout = contract.disputeFiling?.pendingPayout || null;
@@ -94,7 +120,48 @@ export function contractHoldState(contract: {
   const since = contract.disputeHold?.since || null;
   if (contract.activeDispute) return { kind: "dispute", since };
   if (payout) return { kind: "payout", since, payout };
+  if (contract.disputeDecision) return { kind: "decision", since, decision: contract.disputeDecision };
   return { kind: "none" };
+}
+
+function shortDateTime(value?: string | null): string | null {
+  if (!value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return date.toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+}
+
+/** Headline and explanation for the continue-or-end prompt, from the viewer's side. */
+export function contractDecisionCopy(decision: ContractDisputeDecision): { title: string; body: string } {
+  const by = shortDateTime(decision.decideBy);
+  const deadline = by ? ` by ${by}` : "";
+  const otherParty = decision.viewerSide === "client" ? "The freelancer" : "The client";
+  const caseName = capitalizeFirst(disputeName(decision.dispute));
+  if (!decision.viewerSide) {
+    return {
+      title: "Waiting for the parties to decide",
+      body: `${caseName} is closed. The client and the freelancer are choosing whether to continue this contract${deadline}.`,
+    };
+  }
+  if (decision.viewerChoice === "continue") {
+    return {
+      title: "You chose to continue",
+      body:
+        decision.otherChoice === "continue"
+          ? "You both chose to continue."
+          : `Waiting for ${otherParty.toLowerCase()} to answer${deadline}. If nobody ends the contract by then, it continues. You can still end it instead.`,
+    };
+  }
+  return {
+    title: "Continue this contract?",
+    body: `${caseName} is closed. Choose whether to keep working on this contract${deadline}. If you both continue, it resumes right away; either of you can end it instead. If nobody ends it by then, it continues.${
+      decision.otherChoice === "continue" ? ` ${otherParty} already chose to continue.` : ""
+    } Deadlines stay paused until then.`,
+  };
+}
+
+function capitalizeFirst(text: string): string {
+  return text ? text.charAt(0).toUpperCase() + text.slice(1) : text;
 }
 
 function shortDate(value?: string | null): string | null {
@@ -122,6 +189,9 @@ export function contractHoldDetail(state: ContractHoldState): string | null {
       failed ? " (staff are retrying the payout)" : ""
     }. Until then escrow stays frozen and deadlines stay paused; they move forward by the time spent on hold once it is paid.`;
   }
+  if (state.kind === "decision") {
+    return "The dispute is closed, and the contract stays on hold until both parties choose whether to continue it. Deadlines are paused and escrow is frozen meanwhile, except that the client can still approve delivered work.";
+  }
   if (state.kind === "settled") {
     const ended = shortDate(state.settlement.endedAt);
     const date = state.payout?.payoutStatus === "scheduled" ? shortDate(state.payout?.releaseAt) : null;
@@ -138,6 +208,7 @@ export function contractDisputeBlockLabel(filing?: ContractDisputeFiling | null)
   if (filing.code === "DISPUTE_ALREADY_FILED") return "You already filed a dispute";
   if (filing.code === "DISPUTE_WINDOW_CLOSED") return "Dispute window closed";
   if (filing.code === "DISPUTE_PAYOUT_PENDING") return "Dispute payout pending";
+  if (filing.code === "DISPUTE_DECISION_PENDING") return "Decide on the contract first";
   return "Can't be disputed";
 }
 
@@ -145,6 +216,8 @@ export function contractDisputeBlockLabel(filing?: ContractDisputeFiling | null)
 export function contractDisputeBlockingDispute(filing?: ContractDisputeFiling | null): ContractActiveDispute | null {
   if (!filing || filing.canFile) return null;
   if (filing.code === "DISPUTE_PAYOUT_PENDING") return filing.pendingPayout || null;
+  // The decision lives on the contract page, not in a case.
+  if (filing.code === "DISPUTE_DECISION_PENDING") return null;
   return filing.previousDispute || null;
 }
 

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Bookmark, Flag, Heart, MoreHorizontal } from "lucide-react";
 import { create } from "zustand";
 import { toast } from "sonner";
@@ -39,6 +39,8 @@ export function MarketAssetActions({ bundle, menuOnly = false, kind = "asset" }:
   const engagementPending = useMarketEngagement((state) => !!state.pending[bundle.marketAssetId]);
   const pending = engagementPending;
   const [reportOpen, setReportOpen] = useState(false);
+  const reportTrigger = useRef<HTMLButtonElement>(null);
+  const openingReport = useRef(false);
 
   const toggle = async (action: "like" | "save") => {
     const id = bundle.marketAssetId;
@@ -67,17 +69,23 @@ export function MarketAssetActions({ bundle, menuOnly = false, kind = "asset" }:
     {!menuOnly && <>
       <Button type="button" size="icon" variant="ghost" className={`size-7 ${current.is_liked ? "text-red-400" : "text-muted-foreground"}`} disabled={pending} aria-label={current.is_liked ? "Unlike asset" : "Like asset"} aria-pressed={current.is_liked} onClick={() => void toggle("like")}><Heart className={`size-4 ${current.is_liked ? "fill-current" : ""}`} /></Button>
       <Button type="button" size="icon" variant="ghost" className={`size-7 ${current.is_saved ? "text-amber-400" : "text-muted-foreground"}`} disabled={pending} aria-label={current.is_saved ? "Unsave asset" : "Save asset"} aria-pressed={current.is_saved} onClick={() => void toggle("save")}><Bookmark className={`size-4 ${current.is_saved ? "fill-current" : ""}`} /></Button>
-      {!bundle.is_owner && <Button type="button" size="icon" variant="ghost" className="size-7 text-muted-foreground" aria-label="Report asset" onClick={() => setReportOpen(true)}><Flag className="size-4" /></Button>}
+      {!bundle.is_owner && <Button ref={reportTrigger} type="button" size="icon" variant="ghost" className="size-7 text-muted-foreground" aria-label="Report asset" onClick={() => setReportOpen(true)}><Flag className="size-4" /></Button>}
     </>}
-    {menuOnly && <DropdownMenu>
-      <DropdownMenuTrigger asChild><Button type="button" size="icon" variant="ghost" className="size-7 rounded-full bg-black/50 text-white hover:bg-black/60 hover:text-white" aria-label={`Actions for ${bundle.name}`}><MoreHorizontal className="size-4" /></Button></DropdownMenuTrigger>
-      <DropdownMenuContent align="end" onClick={(event) => event.stopPropagation()}>
+    {menuOnly && <DropdownMenu modal={false}>
+      <DropdownMenuTrigger asChild><Button ref={reportTrigger} type="button" size="icon" variant="ghost" className="size-7 rounded-full bg-black/50 text-white hover:bg-black/60 hover:text-white" aria-label={`Actions for ${bundle.name}`}><MoreHorizontal className="size-4" /></Button></DropdownMenuTrigger>
+      <DropdownMenuContent align="end" onClick={(event) => event.stopPropagation()} onCloseAutoFocus={(event) => {
+        if (openingReport.current) {
+          event.preventDefault();
+          openingReport.current = false;
+          setReportOpen(true);
+        }
+      }}>
         <DropdownMenuItem disabled={pending} onSelect={() => void toggle("like")}><Heart className={current.is_liked ? "fill-current text-red-400" : ""} />{current.is_liked ? "Unlike" : "Like"}</DropdownMenuItem>
         <DropdownMenuItem disabled={pending} onSelect={() => void toggle("save")}><Bookmark className={current.is_saved ? "fill-current text-amber-400" : ""} />{current.is_saved ? "Unsave" : "Save"}</DropdownMenuItem>
-        {!bundle.is_owner && <DropdownMenuItem onSelect={() => setReportOpen(true)}><Flag />Report</DropdownMenuItem>}
+        {!bundle.is_owner && <DropdownMenuItem onSelect={() => { openingReport.current = true; }}><Flag />Report</DropdownMenuItem>}
       </DropdownMenuContent>
     </DropdownMenu>}
-    <AssetReportModal open={reportOpen} onOpenChange={setReportOpen} assetName={bundle.name} busy={engagementPending} kind={kind}
+    <AssetReportModal open={reportOpen} onOpenChange={setReportOpen} onReturnFocus={() => reportTrigger.current?.focus()} assetName={bundle.name} kind={kind}
       onSubmit={(report) => marketAction(bundle.marketAssetId, { action: "report", ...report }, kind)} />
   </div>;
 }

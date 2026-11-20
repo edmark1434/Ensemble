@@ -27,7 +27,7 @@ interface AssetReportModalProps {
   onOpenChange: (open: boolean) => void;
   assetName: string;
   kind?: "asset" | "template";
-  busy?: boolean;
+  onReturnFocus: () => void;
   onSubmit: (report: { type: string; description: string }) => Promise<unknown>;
 }
 
@@ -39,22 +39,26 @@ const REPORT_REASONS = [
   "Other",
 ];
 
-export function AssetReportModal({ open, onOpenChange, assetName, busy = false, onSubmit, kind = "asset" }: AssetReportModalProps) {
+export function AssetReportModal({ open, onOpenChange, assetName, onReturnFocus, onSubmit, kind = "asset" }: AssetReportModalProps) {
   const fieldId = useId();
   const [reason, setReason] = useState(REPORT_REASONS[0]);
   const [description, setDescription] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
-  const pending = busy || submitting;
 
   const submitReport = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (pending || description.trim().length < 20) return;
+    if (submitting) return;
+    const details = description.trim();
+    if (details.length < 20) {
+      setError("Enter at least 20 characters describing the issue.");
+      return;
+    }
     setSubmitting(true);
     setError("");
     const toastId = toast.info(`Submitting ${kind} report…`);
     try {
-      await onSubmit({ type: reason, description });
+      await onSubmit({ type: reason, description: details });
       onOpenChange(false);
       setDescription("");
       toast.success(`${kind === "template" ? "Template" : "Asset"} report submitted to marketplace moderators.`, { id: toastId });
@@ -67,9 +71,10 @@ export function AssetReportModal({ open, onOpenChange, assetName, busy = false, 
   };
 
   return (
-    <Dialog open={open} onOpenChange={(value) => { if (!pending) onOpenChange(value); }}>
+    <Dialog open={open} onOpenChange={(value) => { if (!submitting) onOpenChange(value); }}>
       <DialogContent className="z-[300] max-h-[calc(100dvh-2rem)] overflow-y-auto border bg-card px-2 py-8 gap-6 sm:max-w-lg"
-        onClick={(event) => event.stopPropagation()}>
+        onClick={(event) => event.stopPropagation()}
+        onCloseAutoFocus={(event) => { event.preventDefault(); onReturnFocus(); }}>
         <DialogHeader className="px-6 -mt-0.75">
           <DialogTitle className="text-md font-semibold">Report {kind}</DialogTitle>
           <DialogDescription className="break-words leading-relaxed">
@@ -80,7 +85,7 @@ export function AssetReportModal({ open, onOpenChange, assetName, busy = false, 
         <form className="space-y-6 px-6" onSubmit={(event) => { void submitReport(event); }}>
           <div className="flex flex-col gap-2">
             <Label htmlFor={`${fieldId}-reason`}>Reason</Label>
-            <Select value={reason} onValueChange={setReason} disabled={pending}>
+            <Select value={reason} onValueChange={setReason} disabled={submitting}>
               <SelectTrigger id={`${fieldId}-reason`} className="w-full"><SelectValue /></SelectTrigger>
               <SelectContent className="z-[1000]">
                 {REPORT_REASONS.map((value) => <SelectItem key={value} value={value}>{value}</SelectItem>)}
@@ -90,12 +95,12 @@ export function AssetReportModal({ open, onOpenChange, assetName, busy = false, 
           <div className="flex flex-col gap-2">
             <Label htmlFor={`${fieldId}-details`}>Details (at least 20 characters)</Label>
             <Textarea id={`${fieldId}-details`} required minLength={20} maxLength={2000} rows={4}
-              value={description} onChange={(event) => setDescription(event.target.value)} disabled={pending} />
+              value={description} onChange={(event) => { setDescription(event.target.value); setError(""); }} disabled={submitting} />
           </div>
           {error && <p role="alert" className="text-xs text-red-500">{error}</p>}
           <DialogFooter>
-            <Button type="button" variant="outline" disabled={pending} onClick={() => onOpenChange(false)}>Cancel</Button>
-            <Button type="submit" disabled={pending || description.trim().length < 20}>
+            <Button type="button" variant="outline" disabled={submitting} onClick={() => onOpenChange(false)}>Cancel</Button>
+            <Button type="submit" disabled={submitting}>
               {submitting && <Loader2 className="size-4 animate-spin" />}
               {submitting ? "Submitting…" : "Submit report"}
             </Button>

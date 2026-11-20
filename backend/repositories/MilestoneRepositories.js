@@ -700,7 +700,39 @@ async function cancelContractAndRefundUnfinishedMilestones({ contractId, clientA
     const client = await pool.connect();
     try {
         await client.query('BEGIN');
-        await assertNoOpenContractDispute(client, contractId);
+        const result = await cancelContractAndRefundInTransaction(client, {
+            contractId,
+            clientAccountId,
+            freelancerAccountId,
+        });
+        await client.query('COMMIT');
+        return result;
+    } catch (err) {
+        await client.query('ROLLBACK');
+        throw err;
+    } finally {
+        client.release();
+    }
+}
+
+/**
+ * The cancellation itself, inside the caller's transaction. Options for ending a contract from
+ * the continue-or-end question after a dispute:
+ *   allowDecision         the pending question does not block it (it is what ends the contract)
+ *   allowNothingToRefund  a contract with no unfinished milestones just closes
+ *   withdrawPendingRequests  a pending mutual cancellation request is withdrawn (moot once ended)
+ */
+async function cancelContractAndRefundInTransaction(client, {
+    contractId,
+    clientAccountId,
+    freelancerAccountId,
+    allowDecision = false,
+    allowNothingToRefund = false,
+    withdrawPendingRequests = false,
+    archiveReason = 'Contract cancelled',
+}) {
+    {
+        await assertNoOpenContractDispute(client, contractId, { allowDecision });
 
         // 1. Lock contract
         const contractRes = await client.query(`
@@ -730,7 +762,7 @@ async function cancelContractAndRefundUnfinishedMilestones({ contractId, clientA
         `, [contractId]);
         const completedCnt = parseInt(completedCounts.rows[0].completed_cnt, 10);
 
-        if (milestonesRes.rows.length === 0) {
+        if (milestonesRes.rows.length === 0 && !allowNothingToRefund) {
             throw new Error('No uncompleted milestones to cancel or refund');
         }
 
@@ -813,9 +845,15 @@ async function cancelContractAndRefundUnfinishedMilestones({ contractId, clientA
                 SELECT gig_request_id FROM gig_contracts WHERE contract_id = $1
             )
         `, [contractId]);
-        await TeamProjectRepositories.syncContractWorkspacesArchived(client, contractId, clientAccountId, 'Contract cancelled');
+        if (withdrawPendingRequests) {
+            await client.query(`
+                UPDATE contract_cancellation_requests
+                SET status = 'withdrawn', responded_at = NOW()
+                WHERE contract_id = $1 AND status = 'pending'
+            `, [contractId]);
+        }
+        await TeamProjectRepositories.syncContractWorkspacesArchived(client, contractId, clientAccountId, archiveReason);
 
-        await client.query('COMMIT');
         return {
             transactionId: txId,
             refundedCredits: refundableCredits,
@@ -825,11 +863,6 @@ async function cancelContractAndRefundUnfinishedMilestones({ contractId, clientA
             completedMilestonesCount: completedCnt,
             cancelledMilestonesCount: milestonesRes.rows.length,
         };
-    } catch (err) {
-        await client.query('ROLLBACK');
-        throw err;
-    } finally {
-        client.release();
     }
 }
 
@@ -840,7 +873,9 @@ async function approveMilestoneSubmit({ milestoneId, contractId, milestoneIndex,
     const client = await pool.connect();
     try {
         await client.query('BEGIN');
-        await assertNoOpenContractDispute(client, contractId);
+        // Approving delivered work stays possible while the parties decide whether to continue
+        // after a dispute: the client must review it before they can end the contract.
+        await assertNoOpenContractDispute(client, contractId, { allowDecision: true });
 
         // Lock the latest under_review submission for this milestone
         const submitRes = await client.query(`
@@ -1220,6 +1255,20 @@ async function getExpiredPendingCancellationRequests() {
     return res.rows;
 }
 
+/** Undo a request status set just before a cancellation that then failed. Never throws. */
+async function revertCancellationRequestToPending(requestId, fromStatus) {
+    try {
+        await pool.query(
+            `UPDATE contract_cancellation_requests
+             SET status = 'pending', responded_at = NULL
+             WHERE request_id = $1 AND status = $2`,
+            [requestId, fromStatus]
+        );
+    } catch (error) {
+        console.error(`Could not reset cancellation request ${requestId}:`, error.message);
+    }
+}
+
 async function autoApproveCancellationRequest(requestId) {
     await pool.query(
         `UPDATE contract_cancellation_requests
@@ -1244,6 +1293,7 @@ module.exports = {
     // Client action queries
     cancelMilestoneAndRefund,
     cancelContractAndRefundUnfinishedMilestones,
+    cancelContractAndRefundInTransaction,
     extendMilestoneDeadline,
     extendContractDeadline,
     approveMilestoneSubmit,
@@ -1256,5 +1306,6 @@ module.exports = {
     withdrawCancellationRequestRepository,
     getExpiredPendingCancellationRequests,
     autoApproveCancellationRequest,
+    revertCancellationRequestToPending,
 };
 

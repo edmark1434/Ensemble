@@ -262,6 +262,11 @@ async function reviewMilestoneServices({ accountId, contractId, milestoneId, pay
         action: input.status,
     });
 
+    // Approving the last milestone completes the contract; close an open post-dispute question.
+    if (result.contractCompletion) {
+        await require('./ContractDisputeHoldServices').syncHoldForContractQuietly(normalizedContractId);
+    }
+
     if (result.contractCompletion) {
         const ioComp = safeIo();
         if (ioComp) {

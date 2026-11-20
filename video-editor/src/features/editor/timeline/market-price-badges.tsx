@@ -43,15 +43,15 @@ export function TimelineMarketPriceBadges({ readOnly }: { readOnly: boolean }) {
     {Object.values(items).map(item => {
       const assetId = getMarketAssetId(item);
       const asset = assetId ? assets[assetId] : null;
-      if (!assetId || !asset || asset.licensed || asset.priceCredits === 0) return null;
+      if (!assetId || !asset || asset.licensed || (!asset.trashed && asset.priceCredits === 0)) return null;
       const price = asset.priceCredits;
       return <button key={item.id} type="button" ref={element => { if (element) buttons.current.set(item.id, element); else buttons.current.delete(item.id); }}
-        data-market-purchase="" style={{ visibility: "hidden" }}
+        disabled={asset.trashed} data-market-purchase={asset.trashed ? undefined : ""} style={{ visibility: "hidden", pointerEvents: asset.trashed ? "none" : undefined }}
         className="pointer-events-auto absolute inline-flex h-6 items-center gap-1 rounded-md border border-yellow-500/30 bg-secondary px-1.5 text-xs font-medium text-yellow-600 shadow-sm dark:text-yellow-200 hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        aria-label={`Purchase a project license for ${asset.name}: ${price.toLocaleString()} credits`}
+        aria-label={asset.trashed ? "This asset was taken down" : `Purchase a project license for ${asset.name}: ${price.toLocaleString()} credits`}
         onPointerDown={event => event.stopPropagation()} onMouseDown={event => event.stopPropagation()}
         onClick={event => { event.stopPropagation(); openPurchase(assetId); }}>
-        <CreditIcon className="size-3.5" />{price > 0 ? price.toLocaleString() : "Free"}
+        {asset.trashed ? "Taken down" : <><CreditIcon className="size-3.5" />{price > 0 ? price.toLocaleString() : "Free"}</>}
       </button>;
     })}
   </div>;

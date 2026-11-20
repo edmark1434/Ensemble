@@ -78,7 +78,7 @@ async function preparePrivatePreview(snapshot: DocSnapshot, scenes: Record<strin
     return metadata?.market && metadata.market_asset_id ? [metadata.market_asset_id] : [];
   }))];
   const licenses = assetIds.length ? await getProjectMarketLicenses(projectId, userId, assetIds) : null;
-  const missing = new Set(await missingUploadSources(mediaSources(snapshot)));
+  const missing = new Set(await missingUploadSources(mediaSources(snapshot), projectId, userId));
   for (const item of media) {
     const metadata = item.metadata as { market?: boolean; market_asset_id?: string; media_asset_id?: string } | undefined;
     if (!metadata?.market || !metadata.market_asset_id) continue;

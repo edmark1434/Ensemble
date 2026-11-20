@@ -25,7 +25,7 @@ import { cn } from "@/lib/utils";
 import useStore from "../store/use-store";
 import { useMarketLicenses } from "../store/use-market-licenses";
 import { loadMarketLicenses } from "../utils/load-market-licenses";
-import { collectMarketExportAssetSpans } from "../utils/market-export-assets";
+import { collectMarketExportAssetSpans, getExportLicenseChoices } from "../utils/market-export-assets";
 import { millisecondsToHHMMSS } from "../utils/format";
 import { usePortfolioPicker } from "../portfolio/portfolio-picker";
 import { MarketExportPurchaseModal } from "./market-export-purchase-modal";
@@ -50,10 +50,6 @@ export function PortfolioClipModal() {
     () => picker?.marketSpans ?? collectMarketExportAssetSpans({ trackItemIds, trackItemsMap }),
     [picker?.marketSpans, trackItemIds, trackItemsMap],
   );
-  const allAssetIdsKey = useMemo(
-    () => [...new Set(spans.map((span) => span.assetId))].sort().join(","),
-    [spans],
-  );
   const assetIdsKey = useMemo(
     () =>
       [...new Set(spans.filter((span) => span.from < clipEnd && span.to > clipStart).map((span) => span.assetId))]
@@ -61,15 +57,13 @@ export function PortfolioClipModal() {
         .join(","),
     [spans, clipStart, clipEnd],
   );
-  const scopeKey = `${projectId}:project:${allAssetIdsKey}`;
+  const scopeKey = `${projectId}:project:${assetIdsKey}`;
   const [checkedScope, setCheckedScope] = useState("");
   const [checkError, setCheckError] = useState("");
   const [checkRetry, setCheckRetry] = useState(0);
   const [purchaseIds, setPurchaseIds] = useState<string[] | null>(null);
   const licensesReady = !assetIdsKey || checkedScope === scopeKey;
-  const unpaidIds = assetIdsKey
-    .split(",")
-    .filter((id) => id && licenseProjectId === projectId && assets[id] && !assets[id].licensed && assets[id].priceCredits > 0);
+  const { unpaidIds, draftOnlyNames } = getExportLicenseChoices(assetIdsKey.split(","), licenseProjectId === projectId ? assets : {});
 
   useEffect(() => {
     if (!projectId) return;
@@ -79,12 +73,15 @@ export function PortfolioClipModal() {
   }, [projectId]);
 
   useEffect(() => {
-    if (!projectId || !allAssetIdsKey) return;
+    if (!projectId || !assetIdsKey) {
+      setCheckError("");
+      return;
+    }
     const controller = new AbortController();
     setCheckedScope("");
     setCheckError("");
     const check = async () => {
-      const ids = allAssetIdsKey.split(",");
+      const ids = assetIdsKey.split(",");
       for (let offset = 0; offset < ids.length; offset += 100) {
         const batch = ids.slice(offset, offset + 100);
         const result = await loadMarketLicenses(projectId, batch, controller.signal);
@@ -103,7 +100,7 @@ export function PortfolioClipModal() {
       }
     });
     return () => controller.abort();
-  }, [projectId, allAssetIdsKey, scopeKey, checkRetry]);
+  }, [projectId, assetIdsKey, scopeKey, checkRetry]);
 
   useEffect(() => {
     const onLicenseUpdated = () => setCheckRetry((value) => value + 1);
@@ -185,7 +182,7 @@ export function PortfolioClipModal() {
             onClose={() => setPopoverOpen(false)}
             className="w-96"
           >
-            <h3 className="text-sm font-semibold">This project contains paid assets</h3>
+            <h3 className="text-sm font-semibold">Marketplace licenses</h3>
             {assetIdsKey && checkError ? (
               <>
                 <p role="alert" className="text-xs text-red-500">{checkError}</p>
@@ -198,18 +195,20 @@ export function PortfolioClipModal() {
             ) : unpaidIds.length > 0 ? (
               <>
                 <p className="text-xs leading-relaxed text-muted-foreground">
-                  This project contains paid assets that haven’t been licensed. Pay to remove their watermarks, or export a watermarked draft.
+                  {draftOnlyNames.length
+                    ? `Removed from the marketplace: ${draftOnlyNames.join(", ")}. Export a watermarked draft or replace these assets for a clean export.`
+                    : "Confirm licenses for these assets to export cleanly, or export a watermarked draft."}
                 </p>
                 <div className="space-y-3">
-                  <Button
+                  {!draftOnlyNames.length && <Button
                     className="h-auto min-h-9 w-full whitespace-normal py-2"
                     onClick={() => {
                       setPurchaseIds(unpaidIds);
                       setPopoverOpen(false);
                     }}
                   >
-                    Pay for assets in the project
-                  </Button>
+                    Review asset licenses
+                  </Button>}
                   <Button
                     variant="outline"
                     className="w-full"

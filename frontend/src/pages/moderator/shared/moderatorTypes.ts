@@ -164,6 +164,32 @@ export type DisputeDetail = {
   payouts?: DisputePayout[];
   payoutState?: DisputePayoutState;
   payoutPolicy?: DisputePayoutPolicy;
+  /** What happened to the contract after this case (hold, the parties' continue-or-end answers). */
+  contractAfterCase?: DisputeContractAfterCase | null;
+};
+
+/**
+ * After a case closes without ending the contract, both parties choose whether to continue it.
+ * Continuing needs both; ending needs one; nobody ending it by `decideBy` means it continues.
+ */
+export type DisputeContractAfterCase = {
+  contractId: string;
+  contractStatus: string;
+  /** When the contract's current hold began; null when it is not on hold. */
+  onHoldSince: string | null;
+  decision: {
+    id: string;
+    status: "pending" | "continued" | "ended" | "superseded";
+    clientChoice: "continue" | "end" | null;
+    clientChosenAt: string | null;
+    freelancerChoice: "continue" | "end" | null;
+    freelancerChosenAt: string | null;
+    decideBy: string;
+    /** both_continued | auto_continued | ended_by_client | ended_by_freelancer | reopened | contract_ended */
+    resolution: string | null;
+    resolvedAt: string | null;
+    createdAt: string;
+  } | null;
 };
 
 export type Alert = {

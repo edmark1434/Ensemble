@@ -7,10 +7,6 @@ import AssetMedia from "./AssetMedia";
 import type { AssetRecord } from "./assetTypes";
 import { mediaUrl } from "./assetTypes";
 
-function formatDate(value: string) {
-  return new Intl.DateTimeFormat(undefined, { dateStyle: "medium" }).format(new Date(value));
-}
-
 function getTypeIcon(type: string) {
   switch (type.toLowerCase()) {
     case "video": return <Clapperboard className="h-3 w-3" />;
@@ -50,7 +46,7 @@ export const AssetCard: React.FC<AssetCardProps> = ({
       onClick={() => { if (!unavailable) navigate(`/assets/${asset.market_asset_id}`); }}
       aria-disabled={unavailable}
       style={unavailable ? { cursor: "default" } : undefined}
-      className="group cursor-pointer overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:border-blue-400 hover:shadow-md dark:border-white/10 dark:bg-dark-surface dark:shadow-none dark:hover:border-blue-500/50"
+      className="group flex flex-col cursor-pointer overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:border-blue-400 hover:shadow-md dark:border-white/10 dark:bg-dark-surface dark:shadow-none dark:hover:border-blue-500/50"
     >
       <div className="relative overflow-hidden">
         <AssetMedia asset={asset} compact />
@@ -152,7 +148,7 @@ export const AssetCard: React.FC<AssetCardProps> = ({
           </div>
         )}
       </div>
-      <div className="p-4 flex flex-col gap-3">
+      <div className="flex flex-1 flex-col gap-3 p-4">
         {/* Price Row */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-1.5">
@@ -205,13 +201,7 @@ export const AssetCard: React.FC<AssetCardProps> = ({
           </div>
         )}
 
-        {/* Divider */}
-        <div className="my-1 h-px w-full bg-gray-100 dark:bg-white/5" />
-
-        {/* Footer (Creator & Date/Stats) */}
-        <div className="flex items-center justify-between">
-          {/* Creator */}
-          <div className="flex items-center gap-2 min-w-0">
+        <div className="mt-auto flex min-w-0 items-center gap-2 border-t border-gray-100 pt-3 dark:border-white/5">
             {asset.is_admin_asset || asset.creator_avatar_path === "/ensemble_lg.svg" ? (
               <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-gray-100 p-1 dark:bg-white/10">
                 <img
@@ -242,15 +232,6 @@ export const AssetCard: React.FC<AssetCardProps> = ({
                 </span>
               </div>
             </div>
-          </div>
-
-          {/* Date */}
-          <div className="flex items-center gap-1 text-[10px] text-gray-500 dark:text-zinc-500 shrink-0">
-            <span className="flex items-center gap-1">
-              <Clock className="h-3 w-3" />
-              {formatDate(asset.created_at)}
-            </span>
-          </div>
         </div>
         
         {/* Action Buttons */}

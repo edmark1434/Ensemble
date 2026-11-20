@@ -41,13 +41,41 @@ const PENDING_PAYOUT_DISPUTES_SQL = `
 `;
 
 /**
- * SQL boolean: the contract is on dispute hold. A dispute on it is open, or a ruling's payout on
- * it is still waiting. Meanwhile its escrow is frozen and its clock is stopped: deadline,
- * auto-approve, reminder and auto-cancel jobs skip it. When the hold lifts,
- * `syncContractDisputeHold` moves its deadlines forward by the time spent on hold.
+ * SQL boolean: the contract is on dispute hold. A dispute on it is open, a ruling's payout on it
+ * is still waiting, or the parties have not yet chosen whether to continue after its dispute.
+ * Meanwhile its escrow is frozen and its clock is stopped: deadline, auto-approve, reminder and
+ * auto-cancel jobs skip it. When the hold lifts, `syncContractDisputeHold` moves its deadlines
+ * forward by the time spent on hold.
  * `contractIdExpr` is a trusted column reference such as `c.contract_id`, never user input.
  */
 function contractOnDisputeHoldSql(contractIdExpr) {
+  return `(${contractDisputeActiveSql(contractIdExpr)} OR ${contractDecisionPendingSql(contractIdExpr)})`;
+}
+
+/** SQL boolean: the parties have a pending continue-or-end question after a dispute. */
+function contractDecisionPendingSql(contractIdExpr) {
+  return `EXISTS (
+    SELECT 1 FROM contract_dispute_decisions hold_q
+    WHERE hold_q.contract_id = ${contractIdExpr}
+      AND hold_q.status = 'pending'
+  )`;
+}
+
+/**
+ * SQL timestamp: when the contract's current dispute round began — the last time both parties
+ * chose to continue after a dispute (or -infinity). Disputes filed before it no longer count
+ * toward "one dispute per side", so a continued contract can be disputed again.
+ */
+function disputeRoundStartSql(contractIdExpr) {
+  return `COALESCE((
+    SELECT MAX(round_q.resolved_at) FROM contract_dispute_decisions round_q
+    WHERE round_q.contract_id = ${contractIdExpr}
+      AND round_q.status = 'continued'
+  ), '-infinity'::timestamp)`;
+}
+
+/** SQL boolean: a dispute on the contract is open, or a ruling's payout on it is still waiting. */
+function contractDisputeActiveSql(contractIdExpr) {
   return `EXISTS (
     SELECT 1 FROM disputes hold_d
     WHERE hold_d.contract_id = ${contractIdExpr}
@@ -222,7 +250,10 @@ const DISPUTE_FILING_WINDOW_DAYS = 30;
  *   DISPUTE_PAYOUT_PENDING an earlier dispute (by either side) was ruled with a payout that is
  *                          still scheduled or failed; its credits stay earmarked, and a new case
  *                          would see them as unsettled escrow and could split them again
- * `previousDispute` is the filer's own earlier dispute on the contract (not deleted).
+ *   DISPUTE_DECISION_PENDING the last dispute closed and the parties have not yet chosen whether
+ *                          to continue the contract; they choose first
+ * `previousDispute` is the filer's own earlier dispute in the current round (since the parties
+ * last chose to continue, `disputeRoundStartSql`), not deleted.
  * `pendingPayout` is a row from getPendingPayoutContractDispute; its dispute number is named only
  * when the case is open to both parties or the viewer filed it (`viewerAccountIds`).
  * The permanent blocks are reported first.
@@ -232,13 +263,14 @@ function disputeFilingBlock({
   previousDispute = null,
   windowClosed = false,
   pendingPayout = null,
+  decisionPending = false,
   viewerAccountIds = [],
 } = {}) {
   if (previousDispute) {
     const number = previousDispute.dispute_number ? ` ${previousDispute.dispute_number}` : '';
     return {
       code: 'DISPUTE_ALREADY_FILED',
-      message: `You already filed dispute${number} on this contract. Each side can file one dispute per contract, and its ruling is final. If something new has happened, contact Support to reopen that case.`,
+      message: `You already filed dispute${number} on this contract. Each side can file one dispute per contract until both of you choose to continue it, and its ruling is final. If something new has happened, contact Support to reopen that case.`,
     };
   }
   if (windowClosed) {
@@ -254,6 +286,12 @@ function disputeFilingBlock({
       message: pendingPayout.payout_status === 'failed'
         ? `The payout from ${dispute} on this contract didn't go through and is waiting for staff to retry it. You can file a new dispute once it's paid. If it isn't resolved soon, contact Support.`
         : `The payout from ${dispute} on this contract hasn't been paid yet. You can file a new dispute once it's paid. To challenge that ruling, contact Support.`,
+    };
+  }
+  if (decisionPending) {
+    return {
+      code: 'DISPUTE_DECISION_PENDING',
+      message: "The last dispute on this contract just closed. First choose on the contract page whether to continue or end it. If you both continue, either of you can file a new dispute.",
     };
   }
   return null;
@@ -307,11 +345,44 @@ async function getPendingPayoutContractDispute(db, contractId) {
   return map.get(String(contractId)) || null;
 }
 
-async function assertNoOpenContractDispute(db, contractId) {
+let decisionsTableReady = false;
+async function decisionsTableExists(runner) {
+  if (decisionsTableReady) return true;
+  const result = await runner.query(`SELECT to_regclass('public.contract_dispute_decisions') AS t`);
+  decisionsTableReady = Boolean(result.rows[0]?.t);
+  return decisionsTableReady;
+}
+
+/** Whether the parties still have to choose to continue or end the contract after its dispute. */
+async function hasPendingContractDecision(db, contractId) {
+  if (!contractId) return false;
+  const runner = db || pool;
+  if (!(await decisionsTableExists(runner))) return false;
+  const result = await runner.query(
+    `SELECT 1 FROM contract_dispute_decisions WHERE contract_id = $1 AND status = 'pending' LIMIT 1`,
+    [contractId]
+  );
+  return result.rows.length > 0;
+}
+
+/**
+ * Escrow guard for every money action on a contract: refuses while a dispute is open, a ruling's
+ * payout is waiting, or (unless `allowDecision`, for ending the contract from that question) the
+ * parties have not chosen whether to continue after a dispute.
+ */
+async function assertNoOpenContractDispute(db, contractId, { allowDecision = false } = {}) {
   const open = await getOpenContractDispute(db, contractId);
   if (open) throw frozenEscrowError(open);
   const pending = await getPendingPayoutContractDispute(db, contractId);
   if (pending) throw frozenEscrowError(pending, { pendingPayout: true });
+  if (!allowDecision && (await hasPendingContractDecision(db, contractId))) {
+    const error = new Error(
+      'This contract is on hold until both parties choose whether to continue it after its dispute. Choose on the contract page first.'
+    );
+    error.statusCode = 409;
+    error.code = 'CONTRACT_DECISION_PENDING';
+    throw error;
+  }
   return null;
 }
 
@@ -375,6 +446,11 @@ module.exports = {
   getPendingPayoutDisputesForContracts,
   pendingPayoutDisputeVisible,
   contractOnDisputeHoldSql,
+  contractDisputeActiveSql,
+  contractDecisionPendingSql,
+  disputeRoundStartSql,
+  decisionsTableExists,
+  hasPendingContractDecision,
   assertNoOpenContractDispute,
   freezeContractEscrowForDispute,
   remainingContractEscrowCredits,

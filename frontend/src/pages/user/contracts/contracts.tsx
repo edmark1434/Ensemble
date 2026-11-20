@@ -32,8 +32,10 @@ import {
   type ContractActiveDispute,
   type ContractDisputeFiling,
   type ContractDisputeHold,
+  type ContractDisputeDecision,
   contractDisputeHeadline,
   contractDisputePath,
+  contractDecisionCopy,
   contractHoldDetail,
   contractHoldState,
 } from "./contractDispute";
@@ -137,6 +139,7 @@ export interface DetailedContract {
   activeDispute?: ContractActiveDispute | null;
   disputeFiling?: ContractDisputeFiling | null;
   disputeHold?: ContractDisputeHold | null;
+  disputeDecision?: ContractDisputeDecision | null;
 }
 
 // ============================================================================
@@ -317,6 +320,7 @@ export const Contracts: React.FC = () => {
         activeDispute: c.active_dispute || null,
         disputeFiling: c.dispute_filing || null,
         disputeHold: c.dispute_hold || null,
+        disputeDecision: c.dispute_decision || null,
       };
     });
   }, []);
@@ -593,6 +597,38 @@ export const Contracts: React.FC = () => {
             </div>
           </div>
 
+          {(() => {
+            // Contracts whose dispute closed and still wait for this member's continue-or-end answer.
+            const awaiting = contracts.filter(
+              (c) => c.disputeDecision?.viewerSide && !c.disputeDecision.viewerChoice
+            );
+            if (!awaiting.length) return null;
+            return (
+              <div className="flex flex-col gap-2 rounded-2xl border border-amber-300 bg-amber-50 p-4 dark:border-amber-500/30 dark:bg-amber-500/10">
+                <p className="text-sm font-bold text-amber-900 dark:text-amber-100">
+                  {awaiting.length === 1
+                    ? "A contract needs your decision after its dispute"
+                    : `${awaiting.length} contracts need your decision after their disputes`}
+                </p>
+                <p className="text-xs text-amber-800 dark:text-amber-200">
+                  Choose whether to continue or end each one. They stay on hold until you decide.
+                </p>
+                <div className="flex flex-wrap gap-2 pt-1">
+                  {awaiting.map((c) => (
+                    <button
+                      key={c.id}
+                      type="button"
+                      onClick={() => navigate(`/contracts/${c.id}`)}
+                      className="rounded-lg bg-amber-600 px-3 py-1.5 text-[11px] font-bold text-white hover:bg-amber-700"
+                    >
+                      {c.title}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
+
           {/* Animated Tab Switch Container */}
           <AnimatePresence mode="wait">
             <motion.div
@@ -815,6 +851,9 @@ export const Contracts: React.FC = () => {
                     const holdState = contractHoldState(contract);
                     const holdDetail =
                       holdState.kind === "payout" || holdState.kind === "settled" ? contractHoldDetail(holdState) : null;
+                    // After a dispute closes, both parties choose to continue or end the contract.
+                    const decision = holdState.kind === "decision" ? holdState.decision : null;
+                    const decisionNeeded = Boolean(decision?.viewerSide && !decision.viewerChoice);
 
                     return (
                       <motion.div
@@ -837,7 +876,7 @@ export const Contracts: React.FC = () => {
                         {/* Top accent bar */}
                         <div className={`h-1.5 w-full ${
                           contract.activeDispute ? 'bg-rose-500' :
-                          holdState.kind === 'payout' ? 'bg-amber-500' :
+                          holdState.kind === 'payout' || holdState.kind === 'decision' ? 'bg-amber-500' :
                           contract.status === 'Active' ? 'bg-emerald-500' :
                           contract.status === 'Waiting' ? 'bg-sky-500' : 
                           contract.status === 'Done' ? 'bg-purple-500' : 'bg-zinc-300 dark:bg-zinc-700'
@@ -879,9 +918,9 @@ export const Contracts: React.FC = () => {
                                 <span className="inline-flex items-center gap-1 rounded-lg border border-rose-300 bg-rose-50 px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-rose-800 dark:border-rose-500/40 dark:bg-rose-500/15 dark:text-rose-200">
                                   Under dispute
                                 </span>
-                              ) : holdState.kind === "payout" ? (
+                              ) : holdState.kind === "payout" || holdState.kind === "decision" ? (
                                 <span className="inline-flex items-center gap-1 rounded-lg border border-amber-300 bg-amber-50 px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-amber-800 dark:border-amber-500/40 dark:bg-amber-500/15 dark:text-amber-200">
-                                  On hold
+                                  {decisionNeeded ? "Decision needed" : "On hold"}
                                 </span>
                               ) : holdState.kind === "settled" ? (
                                 <span className="inline-flex items-center gap-1 rounded-lg border border-zinc-300 bg-zinc-50 px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-zinc-700 dark:border-white/15 dark:bg-white/5 dark:text-zinc-300">
@@ -937,6 +976,26 @@ export const Contracts: React.FC = () => {
                               </div>
                             );
                           })() : null}
+
+                          {decision ? (
+                            <div className="flex items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 dark:border-amber-500/30 dark:bg-amber-500/10">
+                              <p className="text-xs font-semibold text-amber-800 dark:text-amber-200">
+                                {contractDecisionCopy(decision).title}
+                              </p>
+                              {decision.viewerSide ? (
+                                <button
+                                  type="button"
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    navigate(`/contracts/${contract.id}`);
+                                  }}
+                                  className="shrink-0 rounded-lg bg-amber-600 px-3 py-1.5 text-[11px] font-bold text-white hover:bg-amber-700"
+                                >
+                                  {decisionNeeded ? "Choose" : "Review"}
+                                </button>
+                              ) : null}
+                            </div>
+                          ) : null}
 
                           {holdDetail ? (
                             <p
