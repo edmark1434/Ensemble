@@ -1,10 +1,12 @@
-# Retry an export after a portfolio clip fails
+# Editor walkthrough controls
 
-## Implementation Objective
-Allow a project or portfolio export to start as soon as a previous portfolio export fails.
+## Implementation objective
 
-## Acceptance Criteria
-- Late render progress cannot return a failed or removed local job to the active queue.
-- The portfolio worker releases the specific render when it records a failure and retries unsuccessful cleanup.
-- A queued or running export, or a completed export awaiting download, still holds its slot.
-- The project editor displays the server's reason for an export conflict.
+Restore first-time onboarding and let presenters replay the editor walkthrough on demand.
+
+## Acceptance criteria
+
+- The tour dialog has an outlined Skip tour button. Its inset progress bar sits 4px below the walkthrough label and step count, with 12px before the step title.
+- Automatic editor and workspace walkthroughs use the existing per-account history.
+- Shift+T opens the full tour from step one in an editable project, including after a skip or finish.
+- Demo replays leave onboarding history alone. The shortcut stays out of the shortcuts modal and ignores text entry.
