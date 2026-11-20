@@ -8,6 +8,9 @@ export interface MarketLicenseStatus {
   priceCredits: number;
   licensed: boolean;
   isOwner?: boolean;
+  trashed?: boolean;
+  unavailable?: boolean;
+  draftOnly?: boolean;
   // Temporary delivery URLs live only in this store, never in saved project items.
   imageSources?: Record<string, string>;
   playbackSources?: Record<string, { url: string; expiresAt: number }>;

@@ -1,5 +1,15 @@
 import type { ITrackItem } from "@designcombo/types";
 import type { ISceneDetails } from "../types/ensemble-scene";
+import type { MarketLicenseStatus } from "../store/use-market-licenses";
+
+export function getExportLicenseChoices(ids: string[], statuses: Record<string, MarketLicenseStatus>) {
+  const unpaidIds = ids.filter(id => {
+    const asset = statuses[id];
+    return asset && !asset.unavailable && !asset.licensed && (asset.priceCredits > 0 || asset.trashed);
+  });
+  const draftOnlyNames = unpaidIds.filter(id => statuses[id].draftOnly).map(id => statuses[id].name);
+  return { unpaidIds, draftOnlyNames };
+}
 
 export interface MarketExportContent {
   trackItemIds: string[];
@@ -13,6 +23,7 @@ export interface MarketExportTimeRange {
 
 export interface MarketExportAssetSpan {
   assetId: string;
+  source?: string;
   from: number;
   to: number;
 }
@@ -63,13 +74,14 @@ export function collectMarketExportAssetSpans(
     }
     const metadata = item.metadata as { market?: boolean; market_asset_id?: string } | undefined;
     if (metadata?.market && metadata.market_asset_id) {
-      result.push({ assetId: metadata.market_asset_id, from: itemFrom, to: itemTo });
+      result.push({ assetId: metadata.market_asset_id, from: itemFrom, to: itemTo, source: item.details.src });
     }
   }
   return result;
 }
 
-export function collectMarketExportAssetIds(content: MarketExportContent, range?: MarketExportTimeRange): string[] {
-  return [...new Set(collectMarketExportItems(content, false, range).map(item =>
+export function collectMarketExportAssetIds(content: MarketExportContent, range?: MarketExportTimeRange, missing?: Set<string>): string[] {
+  return [...new Set(collectMarketExportItems(content, false, range).filter(item => !missing?.has(item.details.src)
+    && !item.details.src?.startsWith("missing-template-media:")).map(item =>
     (item.metadata as { market_asset_id: string }).market_asset_id))].sort();
 }

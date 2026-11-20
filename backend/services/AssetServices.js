@@ -859,7 +859,7 @@ async function getEditorAssetRenderSource(assetId, accountId, payload) {
   const context = await getEditorAssetPurchaseContextRepository(assetId, accountId, payload.projectId);
   if (!context) throw new AssetError('Project access required.', 403);
   const file = await getAssetDownloadRepository(assetId, accountId, payload.mediaAssetId, payload.projectId, true);
-  if (!file) throw new AssetError('Asset file not found.', 404);
+  if (!file) throw new AssetError('Asset file not found.', 404, 'ASSET_FILE_NOT_FOUND');
   if (file.is_purchased) return { sourceUrl: await generateProtectedAssetRenderUrl(file.path, file.name, file.mime_type) };
   if (!payload.draft) throw new AssetError('This export contains unlicensed assets. Pay for the assets or choose a watermarked draft.', 409, 'ASSET_PURCHASE_REQUIRED');
   if (!file.proxy_file_id || file.proxy_file_id === file.original_file_id || !file.proxy_path?.startsWith('assets/proxies/') || !file.proxy_mime_type?.startsWith(`${file.media_type}/`)) {

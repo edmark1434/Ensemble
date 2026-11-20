@@ -31,7 +31,7 @@ export async function POST(request: NextRequest) {
       .executeTakeFirst();
     if (!member) return NextResponse.json({ error: "Project unavailable." }, { status: 403 });
     return NextResponse.json(
-      { missing: await missingUploadSources(sources) },
+      { missing: await missingUploadSources(sources, projectId, session.userId) },
       { headers: { "Cache-Control": "private, no-store" } },
     );
   } catch {

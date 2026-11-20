@@ -31,6 +31,8 @@ interface MediaAssetsTable {
 
 interface AccountsTable {
   account_id: Generated<string>;
+  type: string;
+  display_name: string;
   avatar_file_id: string | null;
 }
 
@@ -214,6 +216,8 @@ interface BlockYjsUpdatesTable {
 
 interface MarketAssetsTable {
   market_asset_id: Generated<string>;
+  is_admin_asset: Generated<boolean>;
+  trashed_at: Date | null;
   name: string;
   description: string;
   price_credits: number;

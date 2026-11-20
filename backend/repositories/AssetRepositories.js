@@ -1022,11 +1022,12 @@ async function getAssetDownloadRepository(assetId, accountId, mediaAssetId = nul
   const { rows } = await pool.query(
     `WITH asset_file AS (
      SELECT media.media_asset_id, link.position,
-            ma.deleted_at AS asset_deleted_at, media.deleted_at AS media_deleted_at,
+            ma.deleted_at AS asset_deleted_at, ma.trashed_at AS asset_trashed_at, ma.status AS asset_status,
+            media.deleted_at AS media_deleted_at,
             original.path, original.name, original.mime_type, original.size_bytes,
             media.type AS media_type, media.original_file_id, media.proxy_file_id,
             proxy.path AS proxy_path, proxy.name AS proxy_name, proxy.mime_type AS proxy_mime_type,
-            (owner.account_id = $2) AS is_owner,
+            (listing_owner.account_id = $2) AS is_owner,
             EXISTS (
               SELECT 1
               FROM market_asset_licenses owned_asset
@@ -1040,6 +1041,7 @@ async function getAssetDownloadRepository(assetId, accountId, mediaAssetId = nul
                       JOIN projects project ON project.project_id = member.project_id
                       WHERE member.project_id = $4 AND collaborator.account_id = $2
                         AND member.deleted_at IS NULL AND project.deleted_at IS NULL
+                        AND project.trashed_at IS NULL
                         AND ($5::boolean OR member.role IN ('Owner', 'Manager', 'Editor'))
                     ))
                 AND owned_asset.status = 'active'
@@ -1050,17 +1052,16 @@ async function getAssetDownloadRepository(assetId, accountId, mediaAssetId = nul
      JOIN media_assets media ON media.media_asset_id = link.media_asset_id
      JOIN files original ON original.file_id = media.original_file_id
      LEFT JOIN files proxy ON proxy.file_id = media.proxy_file_id AND proxy.deleted_at IS NULL
-     JOIN (SELECT DISTINCT ON (market_asset_id) market_asset_id, submitted_by_account_id AS account_id
+     LEFT JOIN (SELECT DISTINCT ON (market_asset_id) market_asset_id, submitted_by_account_id AS account_id
          FROM marketplace_listings WHERE market_asset_id IS NOT NULL
          ORDER BY market_asset_id, created_at DESC, listing_id DESC) listing_owner ON listing_owner.market_asset_id = ma.market_asset_id
-     LEFT JOIN users owner_user ON owner_user.account_id = listing_owner.account_id
-     JOIN accounts owner ON owner.account_id = listing_owner.account_id
      WHERE ma.market_asset_id = $1
        AND original.deleted_at IS NULL
        AND ($3::uuid IS NULL OR media.media_asset_id = $3)
      )
      SELECT * FROM asset_file
-     WHERE (asset_deleted_at IS NULL AND media_deleted_at IS NULL)
+     WHERE (asset_deleted_at IS NULL AND media_deleted_at IS NULL
+            AND ($4::uuid IS NULL OR asset_trashed_at IS NULL OR asset_status = 'published' OR is_owner))
         OR ($4::uuid IS NOT NULL AND is_purchased)
      ORDER BY position, media_asset_id
      LIMIT 1`,
@@ -1085,7 +1086,7 @@ async function getEditorAssetPurchaseContextRepository(assetId, accountId, proje
      JOIN users buyer ON buyer.user_id = member.user_id
      LEFT JOIN account_wallets account_wallet ON account_wallet.account_id = buyer.account_id
      LEFT JOIN wallets wallet ON wallet.wallet_id = account_wallet.wallet_id AND wallet.type = 'account wallets'
-     WHERE project.project_id = $1 AND project.deleted_at IS NULL AND buyer.account_id = $2
+     WHERE project.project_id = $1 AND project.deleted_at IS NULL AND project.trashed_at IS NULL AND buyer.account_id = $2
      ${lock ? 'FOR SHARE OF project, member' : ''}`,
     [projectId, accountId, assetId]
   );
@@ -1120,7 +1121,7 @@ async function purchaseAssetRepository(assetId, buyerAccountId, feePercent = DEF
     }
 
     const assetResult = await client.query(
-      `SELECT ma.market_asset_id, ma.name, ma.price_credits, ma.status,
+      `SELECT ma.market_asset_id, ma.name, ma.price_credits, ma.status, ma.trashed_at,
               (COALESCE(ma.is_admin_asset, FALSE) OR owner.type = 'Staff') AS is_admin_asset,
               owner.account_id AS owner_account_id,
               CASE
@@ -1151,7 +1152,22 @@ async function purchaseAssetRepository(assetId, buyerAccountId, feePercent = DEF
       error.code = 'ASSET_NOT_FOUND';
       throw error;
     }
-    if (asset.status !== 'published') {
+    const isCreator = String(asset.owner_account_id) === String(buyerAccountId);
+    if (asset.trashed_at) {
+      // Trash closes new sales. Checkout may still assign an existing purchase or the creator's use.
+      if (!projectId || freeOnly || expectedCharge !== 0) throw repoError('ASSET_NOT_PUBLISHED');
+      if (!isCreator) {
+        if (!projectContext.available_license_id) throw repoError('ASSET_NOT_PUBLISHED');
+        const { rows: [license] } = await client.query(
+          `UPDATE market_asset_licenses SET project_id = $2, assigned_at = CURRENT_TIMESTAMP
+           WHERE market_asset_license_id = $1 AND project_id IS NULL AND status = 'active' AND deleted_at IS NULL
+           RETURNING *`, [projectContext.available_license_id, projectId]
+        );
+        if (!license) throw repoError('ASSET_LICENSE_COST_CHANGED');
+        await client.query('COMMIT');
+        return { alreadyPurchased: true, license, buyerBalanceCredits: projectContext.balance_credits, notifications: [] };
+      }
+    } else if (asset.status !== 'published') {
       const error = new Error('ASSET_NOT_PUBLISHED');
       error.code = 'ASSET_NOT_PUBLISHED';
       throw error;
@@ -1159,7 +1175,6 @@ async function purchaseAssetRepository(assetId, buyerAccountId, feePercent = DEF
     // The automatic path must never turn a stale free listing or owner discount
     // into permission for a currently paid asset.
     if (freeOnly && Number(asset.price_credits) !== 0) throw repoError('ASSET_PRICE_CHANGED');
-    const isCreator = String(asset.owner_account_id) === String(buyerAccountId);
     if (freeOnly || (isCreator && projectId)) {
       if (expectedCharge !== 0) throw repoError('ASSET_LICENSE_COST_CHANGED');
       const { rows: [license] } = await client.query(
@@ -1757,7 +1772,7 @@ async function deleteAssetRepository(assetId, accountId, { permanent = false } =
        LIMIT 1`,
       [assetId]
     );
-    if (purchases.rowCount) throw repoError('ASSET_HAS_PURCHASES');
+    if (permanent && purchases.rowCount) throw repoError('ASSET_HAS_PURCHASES');
 
     if (permanent) {
       await client.query(

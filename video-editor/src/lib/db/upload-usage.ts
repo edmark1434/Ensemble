@@ -76,7 +76,7 @@ export async function getUploadUsage(userId: string, id: string) {
   return { name: upload.name, sources, projects: used };
 }
 
-export async function missingUploadSources(sources: string[]): Promise<string[]> {
+export async function missingUploadSources(sources: string[], projectId: string | null, userId: string): Promise<string[]> {
   const placeholders = new Set(sources.filter(source => source.startsWith("missing-template-media:")));
   const paths = [...new Set(sources.filter(source => !placeholders.has(source)).map(mediaSourceKey))];
   if (!paths.length) return [...placeholders];
@@ -89,6 +89,21 @@ export async function missingUploadSources(sources: string[]): Promise<string[]>
     .select("files.path")
     .where("files.path", "in", paths)
     .where("media_assets.deleted_at", "is not", null)
+    // A listing can be removed while its linked original is still licensed to this project.
+    .$if(!!projectId, query => query.where(eb => eb.not(eb.exists(
+      eb.selectFrom("market_media_assets as link")
+        .innerJoin("market_asset_licenses as license", "license.market_asset_id", "link.market_asset_id")
+        .innerJoin("project_members as member", "member.project_id", "license.project_id")
+        .innerJoin("projects as project", "project.project_id", "member.project_id")
+        .innerJoin("files as original", "original.file_id", "media_assets.original_file_id")
+        .select("link.media_asset_id")
+        .whereRef("link.media_asset_id", "=", "media_assets.media_asset_id")
+        .where("original.deleted_at", "is", null)
+        .where("license.project_id", "=", projectId!).where("license.status", "=", "active")
+        .where("license.deleted_at", "is", null)
+        .where("member.user_id", "=", userId).where("member.deleted_at", "is", null)
+        .where("project.deleted_at", "is", null).where("project.trashed_at", "is", null)
+    ))))
     // A purchased template copy can retain the same file after the source upload
     // is deleted. Only report a missing source when no live media record retains it.
     .where(eb => eb.not(eb.exists(eb.selectFrom("media_assets as retained")

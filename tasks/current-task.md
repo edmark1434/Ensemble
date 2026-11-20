@@ -1,6 +1,14 @@
-# Editor GIF playback
+# Editor marketplace and asset library
 
-Use the timeline frame and the image item's playback rate when drawing GIFs in the editor. Scrubbing and pausing should show the corresponding GIF frame. Resolve prepared marketplace images using their downloaded media type and retain the existing image loading, missing-media and error placeholders.
+Fix reporting and marketplace media access in the editor, and update the main-site asset library.
+
+- Members can submit a valid report, dismiss the dialog, and resume editing.
+- Platform-posted images, videos, and audio with ready previews can be added like member listings.
+- Active project licenses retain playback, reuse, and export access after listing deletion. Deleted personal uploads still show Missing media.
+- Moving a listing to Trash preserves project licenses and unused purchases. Export can assign an existing purchase or the creator's license at zero cost. A previously published, unlicensed clip can still use its watermarked draft. Portfolio exports check only assets in the selected clip.
+- Asset cards align the owner footer and omit the upload date. The shared site dropdown filters by media type and resets pagination.
+- Group Discover, Purchased, Liked, and Saved separately from My Assets, Analytics, and Trash. Show all five media types in the dropdown at once.
+- Editor and portfolio render requests omit missing clips, including inside scenes, and remove their track and transition references while preserving timing. For taken-down, unlicensed assets, the canvas and timeline display a status label in place of purchase controls.
 
 ---
 

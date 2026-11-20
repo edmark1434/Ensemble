@@ -31,8 +31,9 @@ import {
 } from "./constants/download-options";
 import { DraggablePanel } from "@/components/draggable-panel";
 import { useMarketLicenses } from "./store/use-market-licenses";
+import { useMissingMedia } from "./store/use-missing-media";
 import { loadMarketLicenses } from "./utils/load-market-licenses";
-import { collectMarketExportAssetIds } from "./utils/market-export-assets";
+import { collectMarketExportAssetIds, getExportLicenseChoices } from "./utils/market-export-assets";
 import { MarketExportPurchaseModal } from "./modals/market-export-purchase-modal";
 import { getSafeCurrentFrame } from "@/features/editor/utils/time";
 import { useEditorPlan } from "./hooks/use-editor-plan";
@@ -76,7 +77,8 @@ export const DownloadPopover = ({ stateManager }: { stateManager: StateManager }
   const [assetStepScope, setAssetStepScope] = useState<string | null>(null);
   const assets = useMarketLicenses(state => state.assets);
   const licenseProjectId = useMarketLicenses(state => state.projectId);
-  const assetIdsKey = useMemo(() => collectMarketExportAssetIds({ trackItemIds, trackItemsMap }).join(","), [trackItemIds, trackItemsMap]);
+  const missing = useMissingMedia(state => state.projectId === projectId ? state.missing : undefined);
+  const assetIdsKey = useMemo(() => collectMarketExportAssetIds({ trackItemIds, trackItemsMap }, undefined, missing).join(","), [trackItemIds, trackItemsMap, missing]);
   const scopeKey = `${projectId}:${activeSceneBlockId || "project"}:${assetIdsKey}`;
   const [checkedScope, setCheckedScope] = useState("");
   const [checkError, setCheckError] = useState("");
@@ -84,7 +86,7 @@ export const DownloadPopover = ({ stateManager }: { stateManager: StateManager }
   const [purchaseIds, setPurchaseIds] = useState<string[] | null>(null);
   const licensesReady = !assetIdsKey || checkedScope === scopeKey;
   const showAssetStep = assetStepScope === scopeKey;
-  const unpaidIds = assetIdsKey.split(",").filter(id => id && licenseProjectId === projectId && assets[id] && !assets[id].licensed && assets[id].priceCredits > 0);
+  const { unpaidIds, draftOnlyNames } = getExportLicenseChoices(assetIdsKey.split(","), licenseProjectId === projectId ? assets : {});
   useEffect(() => {
     if (!open || !assetIdsKey) return;
     const controller = new AbortController();
@@ -321,11 +323,13 @@ export const DownloadPopover = ({ stateManager }: { stateManager: StateManager }
       >
         <DraggablePanel title="Export" onClose={() => { if (tourExport) tourAction("close"); else setOpen(false); setAssetStepScope(null); }} onBack={showAssetStep ? () => setAssetStepScope(null) : undefined} className="w-96">
           {showAssetStep ? <>
-            <h3 className="text-sm font-semibold">This {inScene ? "scene" : "project"} contains paid assets</h3>
+            <h3 className="text-sm font-semibold">Marketplace licenses</h3>
             {assetIdsKey && checkError ? <><p role="alert" className="text-xs text-red-500">{checkError}</p><Button variant="outline" onClick={() => setCheckRetry(value => value + 1)}>Try again</Button></> : !licensesReady ? <Button disabled>Checking asset licenses…</Button> : unpaidIds.length > 0 ? <>
-              <p className="text-xs leading-relaxed text-muted-foreground">This {inScene ? "scene" : "project"} contains paid assets that haven’t been licensed. Pay to remove their watermarks, or export a watermarked draft.</p>
+              <p className="text-xs leading-relaxed text-muted-foreground">{draftOnlyNames.length
+                ? `Removed from the marketplace: ${draftOnlyNames.join(", ")}. Export a watermarked draft or replace these assets for a clean export.`
+                : "Confirm licenses for these assets to export cleanly, or export a watermarked draft."}</p>
               <div className="space-y-3">
-                <Button className="h-auto min-h-9 w-full whitespace-normal py-2" onClick={() => { setPurchaseIds(unpaidIds); setOpen(false); }}>Pay for assets in the {inScene ? "scene" : "project"}</Button>
+                {!draftOnlyNames.length && <Button className="h-auto min-h-9 w-full whitespace-normal py-2" onClick={() => { setPurchaseIds(unpaidIds); setOpen(false); }}>Review asset licenses</Button>}
                 <Button variant="outline" className="w-full" onClick={() => handleExport(true)}>Get watermarked draft</Button>
               </div>
             </> : <><p className="text-xs text-muted-foreground">All assets in this {inScene ? "scene" : "project"} are licensed.</p><Button onClick={() => handleExport()}>Export {inScene ? "scene" : "project"}</Button></>}

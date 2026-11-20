@@ -20,9 +20,12 @@ export default async function PortfolioPage({ params }: { params: Promise<{ id: 
     if (!composition?.duration || !composition.snapshot.trackItemIds.length) throw new PortfolioError("This project has no timeline content to export.", 422);
     const marketSpans = collectMarketExportAssetSpans(composition.snapshot);
     const preview = await portfolioPlayback(composition, id, session.userId, terms.name);
+    const missing = new Set(preview.missingSources);
+    const exportSpans = marketSpans.filter(span => span.source && !missing.has(span.source))
+      .map(({ assetId, from, to }) => ({ assetId, from, to }));
     preview.snapshot.size ??= { width: terms.width, height: terms.height };
     return <PortfolioPicker projectId={id} version={composition.version} profileUrl={profileUrl}
-      name={terms.name} duration={Math.floor(composition.duration)} maxSeconds={terms.maxSeconds} marketSpans={marketSpans}>
+      name={terms.name} duration={Math.floor(composition.duration)} maxSeconds={terms.maxSeconds} marketSpans={exportSpans}>
       <SnapshotPreview {...preview} scenes={{}} />
     </PortfolioPicker>;
   } catch (error) {
