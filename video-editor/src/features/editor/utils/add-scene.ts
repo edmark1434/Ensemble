@@ -1,7 +1,8 @@
 import { tourAction } from "@/features/editor/store/use-tour-demo";
 import type StateManager from "@designcombo/state";
 import useStore from "../store/use-store";
-import { DEFAULT_SCENE_DURATION_MS, isSceneItem, makeSceneTrack, makeSceneTrackItem, SCENE_TYPE, type ISceneTrackItem } from "../types/ensemble-scene";
+import { DEFAULT_SCENE_DURATION_MS, makeSceneTrack, makeSceneTrackItem, SCENE_TYPE, type ISceneTrackItem } from "../types/ensemble-scene";
+import { findReusableTrackForItem, reconcileAdjacentTransitions } from "./item-actions";
 
 export function createSceneItem(time: number, size: { width: number; height: number }, blockId: string = crypto.randomUUID()): ISceneTrackItem {
   const id = crypto.randomUUID();
@@ -24,23 +25,11 @@ export function createSceneItem(time: number, size: { width: number; height: num
 
 export function addScene(stateManager: StateManager, time: number) {
   if (tourAction("scene")) return;
-  const { trackItemsMap, trackItemIds, tracks, duration, projectId, size } = useStore.getState();
+  const { trackItemsMap, trackItemIds, tracks, transitionsMap, transitionIds, duration, projectId, size, scale } = useStore.getState();
   const sceneItem = createSceneItem(time, size);
   const { id } = sceneItem;
 
-  let targetTrack = tracks.find(
-    (t) =>
-      isSceneItem(t.type) &&
-      !t.static &&
-      !t.items.some((itemId) => {
-        const other = trackItemsMap[itemId];
-        return (
-          !!other &&
-          other.display.from < sceneItem.display.to &&
-          other.display.to > sceneItem.display.from
-        );
-      }),
-  );
+  let targetTrack = findReusableTrackForItem(makeSceneTrackItem(sceneItem), tracks, trackItemsMap);
 
   let nextTracks = tracks;
   if (!targetTrack) {
@@ -57,16 +46,35 @@ export function addScene(stateManager: StateManager, time: number) {
     nextTracks = [targetTrack, ...tracks.map((t) => ({ ...t, index: (t.index ?? 0) + 1 }))];
   }
 
+  const nextTrackItemsMap = { ...trackItemsMap, [id]: makeSceneTrackItem(sceneItem) };
   const targetTrackId = targetTrack.id;
   nextTracks = nextTracks.map((t) =>
-    t.id === targetTrackId ? { ...t, items: [...t.items, id] } : t,
+    t.id === targetTrackId
+      ? {
+          ...t,
+          items: [...t.items, id].sort(
+            (a, b) => (nextTrackItemsMap[a]?.display.from ?? 0) - (nextTrackItemsMap[b]?.display.from ?? 0)
+          ),
+        }
+      : t,
+  );
+
+  const reconciled = reconcileAdjacentTransitions(
+    nextTracks,
+    nextTrackItemsMap,
+    transitionsMap,
+    transitionIds,
+    scale.zoom,
   );
 
   stateManager.updateState(
     {
-      trackItemsMap: { ...trackItemsMap, [id]: makeSceneTrackItem(sceneItem) },
+      trackItemsMap: nextTrackItemsMap,
       trackItemIds: [...trackItemIds, id],
       tracks: nextTracks,
+      ...(reconciled.changed
+        ? { transitionsMap: reconciled.transitionsMap, transitionIds: reconciled.transitionIds }
+        : {}),
       duration: Math.max(duration, sceneItem.display.to),
     },
     { updateHistory: true, kind: "update" },

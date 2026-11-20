@@ -9,17 +9,24 @@ export const groupTrackItems = (data: {
 }): GroupElement[][] => {
   const { trackItemIds, transitionsMap, trackItemsMap } = data;
 
-  // Create a map to track which items are part of transitions
-  const itemTransitionMap = new Map<string, ITransition[]>();
+  const activeTransitions = Object.values(transitionsMap).filter(
+    (t) => t.kind !== "none" && !!trackItemsMap[t.fromId] && !!trackItemsMap[t.toId]
+  );
 
-  // Initialize transition maps
-  Object.values(transitionsMap).forEach((transition) => {
-    const { fromId, toId, kind } = transition;
-    if (kind === "none") return; // Skip transitions of kind 'none'
+  // Track which items participate in an active (non-"none") transition and
+  // which items have an incoming active transition.
+  const itemTransitionMap = new Map<string, ITransition[]>();
+  const incomingTransitionTargetIds = new Set<string>();
+  const outgoingByFromId = new Map<string, ITransition>();
+
+  activeTransitions.forEach((transition) => {
+    const { fromId, toId } = transition;
     if (!itemTransitionMap.has(fromId)) itemTransitionMap.set(fromId, []);
     if (!itemTransitionMap.has(toId)) itemTransitionMap.set(toId, []);
     itemTransitionMap.get(fromId)?.push(transition);
     itemTransitionMap.get(toId)?.push(transition);
+    incomingTransitionTargetIds.add(toId);
+    if (!outgoingByFromId.has(fromId)) outgoingByFromId.set(fromId, transition);
   });
 
   const groups: GroupElement[][] = [];
@@ -28,20 +35,19 @@ export const groupTrackItems = (data: {
   // Helper function to build a connected group starting from an item
   const buildGroup = (startItemId: string): GroupElement[] => {
     const group: GroupElement[] = [];
-    let currentId = startItemId;
+    let currentId: string | undefined = startItemId;
 
     while (currentId) {
       if (processed.has(currentId)) break;
 
-      processed.add(currentId);
       const currentItem = trackItemsMap[currentId];
+      if (!currentItem) break;
+
+      processed.add(currentId);
       group.push(currentItem);
 
-      // Find transition from this item
-      const transition = Object.values(transitionsMap).find(
-        (t) => t.fromId === currentId && t.kind !== "none" // Filter here
-      );
-      if (!transition) break;
+      const transition = outgoingByFromId.get(currentId);
+      if (!transition || processed.has(transition.toId) || !trackItemsMap[transition.toId]) break;
 
       group.push(transition);
       currentId = transition.toId;
@@ -50,15 +56,13 @@ export const groupTrackItems = (data: {
     return group;
   };
 
-  // Process all items
+  // Start groups from standalone items and the heads of active transition chains.
+  // Only active (kind !== "none") transitions count as incoming links — a "none"
+  // placeholder before an active transition must not suppress the chain head.
   for (const itemId of trackItemIds) {
     if (processed.has(itemId)) continue;
 
-    // If item is not part of any transition or is the start of a sequence
-    if (
-      !itemTransitionMap.has(itemId) ||
-      !Object.values(transitionsMap).some((t) => t.toId === itemId)
-    ) {
+    if (!itemTransitionMap.has(itemId) || !incomingTransitionTargetIds.has(itemId)) {
       const group = buildGroup(itemId);
       if (group.length > 0) {
         groups.push(group);
@@ -66,15 +70,14 @@ export const groupTrackItems = (data: {
     }
   }
 
-  // Sort items within each group by display.from
-  groups.forEach((group) => {
-    group.sort((a, b) => {
-      if ("display" in a && "display" in b) {
-        return a.display.from - b.display.from;
-      }
-      return 0;
-    });
-  });
+  // Fallback for any cyclic transition chain so no item is ever silently dropped.
+  for (const itemId of trackItemIds) {
+    if (processed.has(itemId)) continue;
+    const group = buildGroup(itemId);
+    if (group.length > 0) {
+      groups.push(group);
+    }
+  }
 
   return groups;
 };

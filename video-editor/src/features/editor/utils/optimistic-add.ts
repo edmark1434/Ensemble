@@ -7,6 +7,12 @@ import { normalizeDimensionsToCanvas } from "./dimensions";
 import { ensureFont } from "./fonts";
 import { seedDefaultFont } from "./seed-default-font";
 import { calculateTextHeight } from "./text";
+import {
+  findReusableTrackForItem,
+  reconcileAdjacentTransitions,
+  trackAcceptsItemType,
+  trackHasCollision,
+} from "./item-actions";
 
 const kinds = new Map([
   [ADD_IMAGE, "image"], [ADD_VIDEO, "video"], [ADD_AUDIO, "audio"], [ADD_TEXT, "text"],
@@ -54,11 +60,52 @@ export function updateAddedItem(id: string, update: (item: ITrackItem) => ITrack
   const updated = update(item);
   if (updated === item) return;
   const trackItemsMap = { ...state.trackItemsMap, [id]: updated };
-  if (updated.display.to - updated.display.from !== item.display.to - item.display.from) {
-    const track = state.tracks.find(track => track.magnetic && track.items.includes(id));
-    if (track) packMagneticTrack(track, trackItemsMap);
+  let tracks: ITrack[] | undefined;
+
+  const timingChanged = updated.display.from !== item.display.from || updated.display.to !== item.display.to;
+  if (timingChanged) {
+    const currentTrackIndex = state.tracks.findIndex(track => track.items.includes(id));
+    const currentTrack = currentTrackIndex >= 0 ? state.tracks[currentTrackIndex] : undefined;
+    if (currentTrack?.magnetic) {
+      packMagneticTrack(currentTrack, trackItemsMap);
+    } else if (currentTrack && trackHasCollision(currentTrack, updated.display.from, updated.display.to, trackItemsMap, id)) {
+      // Async metadata probing expanded the clip into a neighbor on the reused lane:
+      // relocate to another compatible free lane, or create a new lane right above.
+      tracks = state.tracks.map(track => ({ ...track, items: [...track.items] }));
+      tracks[currentTrackIndex].items = tracks[currentTrackIndex].items.filter(itemId => itemId !== id);
+      const fallbackTrack = findReusableTrackForItem(updated, tracks, trackItemsMap, currentTrackIndex);
+      if (fallbackTrack) {
+        fallbackTrack.items.push(id);
+        fallbackTrack.items.sort((a, b) => (trackItemsMap[a]?.display.from ?? 0) - (trackItemsMap[b]?.display.from ?? 0));
+      } else {
+        tracks.splice(currentTrackIndex, 0, {
+          id: generateId(), type: updated.type as ITrack["type"], items: [id],
+          accepts: Object.keys(getAcceptsMap()), magnetic: false, static: false,
+        });
+      }
+    }
   }
-  manager.updateState({ trackItemsMap, duration: durationOf(trackItemsMap) }, { updateHistory: false });
+  const nextTracks = tracks ?? state.tracks;
+  const reconciled = timingChanged
+    ? reconcileAdjacentTransitions(
+        nextTracks,
+        trackItemsMap,
+        state.transitionsMap,
+        state.transitionIds,
+        useStore.getState().scale.zoom,
+      )
+    : null;
+  manager.updateState(
+    {
+      ...(tracks ? { tracks } : {}),
+      trackItemsMap,
+      ...(reconciled?.changed
+        ? { transitionsMap: reconciled.transitionsMap, transitionIds: reconciled.transitionIds }
+        : {}),
+      duration: durationOf(trackItemsMap),
+    },
+    { updateHistory: false }
+  );
 }
 
 function createItem(payload: AddPayload, type: string, state: State, options: Record<string, any>): ITrackItem {
@@ -137,18 +184,47 @@ function add(event: EventBusData, stateManager: StateManager) {
   const state = stateManager.getState();
   const item = createItem(payload, type, state, options);
   const tracks = state.tracks.map(track => ({ ...track, items: [...track.items] }));
-  const existingTrack = !options.isNewTrack && (options.targetTrackId
-    ? tracks.find(track => track.id === options.targetTrackId)
-    : options.trackIndex !== undefined ? tracks[options.trackIndex] : undefined);
-  if (existingTrack) existingTrack.items.push(item.id);
-  else tracks.splice(Math.max(0, options.trackIndex ?? 0), 0, {
-    id: generateId(), type: item.type as ITrack["type"], items: [item.id],
-    accepts: Object.keys(getAcceptsMap()), magnetic: false, static: false,
-  });
   const trackItemsMap = { ...state.trackItemsMap, [item.id]: item };
-  if (existingTrack && existingTrack.magnetic) packMagneticTrack(existingTrack, trackItemsMap, item.id);
+
+  let existingTrack: ITrack | undefined;
+  if (!options.isNewTrack) {
+    const requested = options.targetTrackId
+      ? tracks.find(track => track.id === options.targetTrackId)
+      : options.trackIndex !== undefined ? tracks[options.trackIndex] : undefined;
+    if (requested && !requested.static && trackAcceptsItemType(requested, String(item.type)) &&
+      (requested.magnetic || !trackHasCollision(requested, item.display.from, item.display.to, state.trackItemsMap))) {
+      existingTrack = requested;
+    } else {
+      const preferredIdx = requested ? tracks.indexOf(requested) : options.trackIndex;
+      existingTrack = findReusableTrackForItem(item, tracks, state.trackItemsMap, preferredIdx);
+    }
+  }
+
+  if (existingTrack) {
+    existingTrack.items.push(item.id);
+    if (existingTrack.magnetic) {
+      packMagneticTrack(existingTrack, trackItemsMap, item.id);
+    } else {
+      existingTrack.items.sort((a, b) => (trackItemsMap[a]?.display.from ?? 0) - (trackItemsMap[b]?.display.from ?? 0));
+    }
+  } else {
+    tracks.splice(Math.max(0, options.trackIndex ?? 0), 0, {
+      id: generateId(), type: item.type as ITrack["type"], items: [item.id],
+      accepts: Object.keys(getAcceptsMap()), magnetic: false, static: false,
+    });
+  }
+  const reconciled = reconcileAdjacentTransitions(
+    tracks,
+    trackItemsMap,
+    state.transitionsMap,
+    state.transitionIds,
+    useStore.getState().scale.zoom,
+  );
   stateManager.updateState({
     tracks, trackItemsMap, trackItemIds: [...state.trackItemIds, item.id],
+    ...(reconciled.changed
+      ? { transitionsMap: reconciled.transitionsMap, transitionIds: reconciled.transitionIds }
+      : {}),
     duration: durationOf(trackItemsMap),
     ...(options.isSelected ? { activeIds: [item.id] } : {}),
   }, { updateHistory: true, kind: "add" });
