@@ -25,6 +25,7 @@ import {
   XCircle,
 } from "lucide-react";
 import { showSuccessToast, showErrorToast } from "@/components/utility/toast";
+import GlideSelect from "@/components/ui/GlideSelect";
 import api from "@/lib/axios";
 import { uploadFileWithIntent } from "@/lib/uploadFile";
 import { useForumTimeout } from "@/pages/user/4_forums/useForumTimeout";
@@ -145,11 +146,11 @@ const RichTextToolbar = ({ onFormat, onImageUpload, onTogglePreview, showPreview
   }, []);
 
   return (
-    <div className="flex flex-wrap items-center gap-1 rounded-t-lg border border-gray-200 dark:border-white/15 border-b-0 bg-gray-50 dark:bg-white/5 px-3 py-2">
+    <div className="flex flex-wrap items-center gap-1 rounded-t-lg border border-gray-300 dark:border-white/15 border-b-0 bg-gray-100/80 dark:bg-white/5 px-3 py-2">
       <button
         type="button"
         onClick={() => onFormat("bold")}
-        className="rounded p-1.5 text-gray-500 dark:text-zinc-400 transition-all duration-200 hover:bg-gray-100 dark:hover:bg-gray-100 dark:bg-white/10 hover:text-gray-900 dark:text-white hover:scale-110 active:scale-95"
+        className="rounded p-1.5 text-gray-600 dark:text-zinc-300 transition-all duration-200 hover:bg-gray-200/70 dark:hover:bg-white/10 hover:text-gray-900 dark:hover:text-white hover:scale-110 active:scale-95"
         title="Bold (**text**)"
       >
         <Bold className="h-4 w-4" />
@@ -157,16 +158,16 @@ const RichTextToolbar = ({ onFormat, onImageUpload, onTogglePreview, showPreview
       <button
         type="button"
         onClick={() => onFormat("italic")}
-        className="rounded p-1.5 text-gray-500 dark:text-zinc-400 transition-all duration-200 hover:bg-gray-100 dark:hover:bg-gray-100 dark:bg-white/10 hover:text-gray-900 dark:text-white hover:scale-110 active:scale-95"
+        className="rounded p-1.5 text-gray-600 dark:text-zinc-300 transition-all duration-200 hover:bg-gray-200/70 dark:hover:bg-white/10 hover:text-gray-900 dark:hover:text-white hover:scale-110 active:scale-95"
         title="Italic (*text*)"
       >
         <Italic className="h-4 w-4" />
       </button>
-      <div className="mx-0.5 h-5 w-px bg-gray-100 dark:bg-white/10" />
+      <div className="mx-0.5 h-5 w-px bg-gray-300 dark:bg-white/15" />
       <button
         type="button"
         onClick={() => onFormat("bullet-list")}
-        className="rounded p-1.5 text-gray-500 dark:text-zinc-400 transition-all duration-200 hover:bg-gray-100 dark:hover:bg-gray-100 dark:bg-white/10 hover:text-gray-900 dark:text-white hover:scale-110 active:scale-95"
+        className="rounded p-1.5 text-gray-600 dark:text-zinc-300 transition-all duration-200 hover:bg-gray-200/70 dark:hover:bg-white/10 hover:text-gray-900 dark:hover:text-white hover:scale-110 active:scale-95"
         title="Bullet List (- item)"
       >
         <List className="h-4 w-4" />
@@ -174,7 +175,7 @@ const RichTextToolbar = ({ onFormat, onImageUpload, onTogglePreview, showPreview
       <button
         type="button"
         onClick={() => onFormat("numbered-list")}
-        className="rounded p-1.5 text-gray-500 dark:text-zinc-400 transition-all duration-200 hover:bg-gray-100 dark:hover:bg-gray-100 dark:bg-white/10 hover:text-gray-900 dark:text-white hover:scale-110 active:scale-95"
+        className="rounded p-1.5 text-gray-600 dark:text-zinc-300 transition-all duration-200 hover:bg-gray-200/70 dark:hover:bg-white/10 hover:text-gray-900 dark:hover:text-white hover:scale-110 active:scale-95"
         title="Numbered List (1. item)"
       >
         <div className="flex items-center gap-0.5">
@@ -182,25 +183,25 @@ const RichTextToolbar = ({ onFormat, onImageUpload, onTogglePreview, showPreview
           <List className="h-3 w-3" />
         </div>
       </button>
-      <div className="mx-0.5 h-5 w-px bg-gray-100 dark:bg-white/10" />
+      <div className="mx-0.5 h-5 w-px bg-gray-300 dark:bg-white/15" />
       <div className="relative" ref={linkInputRef}>
         <button
           type="button"
           onClick={() => setShowLinkInput(!showLinkInput)}
-          className="rounded p-1.5 text-gray-500 dark:text-zinc-400 transition-all duration-200 hover:bg-gray-100 dark:hover:bg-gray-100 dark:bg-white/10 hover:text-gray-900 dark:text-white hover:scale-110 active:scale-95"
+          className="rounded p-1.5 text-gray-600 dark:text-zinc-300 transition-all duration-200 hover:bg-gray-200/70 dark:hover:bg-white/10 hover:text-gray-900 dark:hover:text-white hover:scale-110 active:scale-95"
           title="Insert Link [text](url)"
         >
           <LinkIcon className="h-4 w-4" />
         </button>
         {showLinkInput && (
           <div className="absolute left-0 mt-2 z-20 min-w-72 rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface p-3 shadow-xl animate-fade-in">
-            <p className="mb-2 text-xs font-medium text-gray-500 dark:text-zinc-400">Insert Link</p>
+            <p className="mb-2 text-xs font-semibold text-gray-700 dark:text-zinc-200">Insert Link</p>
             <input
               type="text"
               placeholder="Link text (optional)"
               value={linkText}
               onChange={(e) => setLinkText(e.target.value)}
-              className="mb-2 w-full rounded border border-gray-200 dark:border-white/15 bg-gray-50 dark:bg-white/5 px-3 py-1.5 text-sm text-gray-900 dark:text-white placeholder:text-gray-400 dark:text-zinc-500 focus:border-blue-500/50 focus:outline-none focus:ring-1 focus:ring-blue-500/50"
+              className="mb-2 w-full rounded border border-gray-300 dark:border-white/15 bg-white dark:bg-white/5 px-3 py-1.5 text-sm text-gray-900 dark:text-white placeholder:text-gray-500 dark:placeholder:text-zinc-400 focus:border-blue-500/50 focus:outline-none focus:ring-1 focus:ring-blue-500/50"
               autoFocus
             />
             <input
@@ -208,13 +209,13 @@ const RichTextToolbar = ({ onFormat, onImageUpload, onTogglePreview, showPreview
               placeholder="https://example.com"
               value={linkUrl}
               onChange={(e) => setLinkUrl(e.target.value)}
-              className="mb-2 w-full rounded border border-gray-200 dark:border-white/15 bg-gray-50 dark:bg-white/5 px-3 py-1.5 text-sm text-gray-900 dark:text-white placeholder:text-gray-400 dark:text-zinc-500 focus:border-blue-500/50 focus:outline-none focus:ring-1 focus:ring-blue-500/50"
+              className="mb-2 w-full rounded border border-gray-300 dark:border-white/15 bg-white dark:bg-white/5 px-3 py-1.5 text-sm text-gray-900 dark:text-white placeholder:text-gray-500 dark:placeholder:text-zinc-400 focus:border-blue-500/50 focus:outline-none focus:ring-1 focus:ring-blue-500/50"
             />
             <div className="flex gap-2">
-              <button onClick={handleInsertLink} className="flex-1 rounded bg-blue-500 px-3 py-1.5 text-xs font-medium text-gray-900 dark:text-white hover:bg-blue-600">
+              <button onClick={handleInsertLink} className="flex-1 rounded bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700">
                 Insert
               </button>
-              <button onClick={() => setShowLinkInput(false)} className="flex-1 rounded border border-gray-200 dark:border-white/15 px-3 py-1.5 text-xs text-gray-500 dark:text-zinc-400 hover:bg-gray-100 dark:hover:bg-gray-100 dark:bg-white/10">
+              <button onClick={() => setShowLinkInput(false)} className="flex-1 rounded border border-gray-300 dark:border-white/15 px-3 py-1.5 text-xs font-medium text-gray-700 dark:text-zinc-200 hover:bg-gray-100 dark:hover:bg-white/10">
                 Cancel
               </button>
             </div>
@@ -224,16 +225,16 @@ const RichTextToolbar = ({ onFormat, onImageUpload, onTogglePreview, showPreview
       <button
         type="button"
         onClick={() => onFormat("code")}
-        className="rounded p-1.5 text-gray-500 dark:text-zinc-400 transition-all duration-200 hover:bg-gray-100 dark:hover:bg-gray-100 dark:bg-white/10 hover:text-gray-900 dark:text-white hover:scale-110 active:scale-95"
+        className="rounded p-1.5 text-gray-600 dark:text-zinc-300 transition-all duration-200 hover:bg-gray-200/70 dark:hover:bg-white/10 hover:text-gray-900 dark:hover:text-white hover:scale-110 active:scale-95"
         title="Inline Code (`code`)"
       >
         <Code className="h-4 w-4" />
       </button>
-      <div className="mx-0.5 h-5 w-px bg-gray-100 dark:bg-white/10" />
+      <div className="mx-0.5 h-5 w-px bg-gray-300 dark:bg-white/15" />
       <button
         type="button"
         onClick={onImageUpload}
-        className="rounded p-1.5 text-gray-500 dark:text-zinc-400 transition-all duration-200 hover:bg-gray-100 dark:hover:bg-gray-100 dark:bg-white/10 hover:text-gray-900 dark:text-white hover:scale-110 active:scale-95"
+        className="rounded p-1.5 text-gray-600 dark:text-zinc-300 transition-all duration-200 hover:bg-gray-200/70 dark:hover:bg-white/10 hover:text-gray-900 dark:hover:text-white hover:scale-110 active:scale-95"
         title="Upload Image"
       >
         <ImageIcon className="h-4 w-4" />
@@ -242,8 +243,8 @@ const RichTextToolbar = ({ onFormat, onImageUpload, onTogglePreview, showPreview
         <button
           type="button"
           onClick={onTogglePreview}
-          className={`rounded p-1.5 transition-all duration-200 hover:bg-gray-100 dark:hover:bg-gray-100 dark:bg-white/10 hover:text-gray-900 dark:text-white hover:scale-110 active:scale-95 ${
-            showPreview ? "bg-blue-500/20 text-blue-400" : "text-gray-500 dark:text-zinc-400"
+          className={`rounded p-1.5 transition-all duration-200 hover:bg-gray-200/70 dark:hover:bg-white/10 hover:text-gray-900 dark:hover:text-white hover:scale-110 active:scale-95 ${
+            showPreview ? "bg-blue-500/20 text-blue-600 dark:text-blue-400" : "text-gray-600 dark:text-zinc-300"
           }`}
           title={showPreview ? "Edit" : "Preview"}
         >
@@ -776,109 +777,110 @@ const NewDiscussionModal: React.FC<NewDiscussionModalProps> = ({
       <div className="my-auto w-full max-w-4xl rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface shadow-2xl animate-scale-in max-h-[calc(100vh-3rem)] overflow-y-auto">
         {/* Header */}
         <div className="sticky top-0 z-10 flex items-center justify-between border-b border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface/95 backdrop-blur-sm p-4">
-          <div className="flex items-center gap-2">
-            <div className="rounded-full bg-blue-500/20 p-1.5">
-              <PlusCircle className="h-4 w-4 text-blue-400" />
+          <div className="flex items-center gap-2.5">
+            <div className="rounded-full bg-blue-500/15 p-1.5">
+              <PlusCircle className="h-4 w-4 text-blue-600 dark:text-blue-400" />
             </div>
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Create New Discussion</h3>
             {selectedGroup && (
-              <span className="ml-2 rounded-full bg-cyan-500/20 px-2 py-0.5 text-[10px] text-cyan-400">
+              <span className="ml-1 rounded-full border border-cyan-200 dark:border-cyan-500/20 bg-cyan-50 dark:bg-cyan-500/15 px-2.5 py-0.5 text-xs font-medium text-cyan-700 dark:text-cyan-300">
                 {selectedGroup.name}
               </span>
             )}
           </div>
-          <button onClick={handleClose} className="rounded-lg p-1.5 text-gray-500 dark:text-zinc-400 transition hover:bg-gray-100 dark:hover:bg-gray-100 dark:bg-white/10 hover:text-gray-900 dark:text-white">
+          <button onClick={handleClose} className="rounded-lg p-1.5 text-gray-600 dark:text-zinc-300 transition hover:bg-gray-100 dark:hover:bg-white/10 hover:text-gray-900 dark:hover:text-white">
             <X className="h-5 w-5" />
           </button>
         </div>
 
         <div className="p-6">
-          {/* Hidden Group Selection - showing which group is being used */}
-          {loadingGroups ? (
-            <div className="mb-4 flex items-center justify-center gap-2 rounded-lg border border-gray-200 dark:border-white/10 p-3 text-sm text-gray-500 dark:text-zinc-400">
-              <Loader2 className="h-4 w-4 animate-spin" /> Loading joined groups
+          {/* Group & Categories/Tags Row */}
+          <div className="mb-5 grid grid-cols-1 gap-5 md:grid-cols-2 items-start">
+            {/* Group Selection (Left) */}
+            <div>
+              <label className="mb-2 block text-xs font-semibold uppercase tracking-wide text-gray-700 dark:text-zinc-200">Post in *</label>
+              {loadingGroups ? (
+                <div className="flex items-center justify-center gap-2 rounded-lg border border-gray-200 dark:border-white/10 p-3 text-sm font-medium text-gray-600 dark:text-zinc-300">
+                  <Loader2 className="h-4 w-4 animate-spin" /> Loading joined groups
+                </div>
+              ) : groupsError ? (
+                <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-center text-xs font-medium text-red-600 dark:text-red-400">
+                  {groupsError}
+                </div>
+              ) : modalGroups.length === 0 ? (
+                <div className="rounded-lg border border-yellow-500/30 bg-yellow-500/10 p-3 text-center">
+                  <p className="text-xs font-medium text-yellow-700 dark:text-yellow-400">You haven't joined any groups yet. Please join a group first.</p>
+                </div>
+              ) : (
+                <GlideSelect
+                  options={modalGroups.map((item) => ({
+                    value: item.id,
+                    label: item.name,
+                    icon: <Users className="h-4 w-4 text-gray-500 dark:text-zinc-400" />,
+                  }))}
+                  value={selectedGroupId}
+                  onChange={(val) => setSelectedGroupId(val)}
+                  placeholder="Select a group..."
+                  triggerIcon={<Users className="h-4 w-4 text-gray-500 dark:text-zinc-400" />}
+                  fullWidth
+                  size="lg"
+                  maxVisibleItems={5}
+                  ariaLabel="Select group to post in"
+                />
+              )}
             </div>
-          ) : groupsError ? (
-            <div className="mb-4 rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-center text-xs text-red-400">
-              {groupsError}
-            </div>
-          ) : modalGroups.length === 0 ? (
-            <div className="mb-4 rounded-lg border border-yellow-500/30 bg-yellow-500/10 p-3 text-center">
-              <p className="text-xs text-yellow-400">You haven't joined any groups yet. Please join a group first.</p>
-            </div>
-          ) : (
-            <div className="mb-4">
-              <label className="mb-2 block text-xs font-semibold uppercase text-gray-400 dark:text-zinc-500">Post in *</label>
-              <div className="flex flex-wrap gap-2">
-                {modalGroups.map((item) => (
-                  <button
-                    key={item.id}
-                    type="button"
-                    onClick={() => setSelectedGroupId(item.id)}
-                    className={`flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-medium transition-all duration-200 ${
-                      selectedGroupId === item.id
-                        ? "border-blue-500 bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 shadow-sm shadow-blue-500/20"
-                        : "border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface text-gray-600 dark:text-zinc-300 hover:border-gray-300 dark:hover:border-white/20"
-                    }`}
-                  >
-                    <Users className="h-4 w-4" />
-                    {item.name}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
 
-          {/* Categories/Tags Selection - Multi-select Toggle Buttons */}
-          <div className="mb-4">
-            <label className="mb-2 block text-xs font-semibold uppercase text-gray-400 dark:text-zinc-500">
-              Categories / Tags * (Select one or more)
-            </label>
-            {!selectedGroupId ? (
-              <div className="rounded-lg border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/5 p-3 text-sm text-gray-500 dark:text-zinc-400">
-                Please select a group first to see available tags.
-              </div>
-            ) : loadingTags ? (
-              <div className="flex items-center gap-2 rounded-lg border border-gray-200 dark:border-white/10 p-3 text-sm text-gray-500 dark:text-zinc-400">
-                <Loader2 className="h-4 w-4 animate-spin" /> Loading tags...
-              </div>
-            ) : availableTags.length === 0 ? (
-              <div className="rounded-lg border border-yellow-500/30 bg-yellow-500/10 p-3 text-sm text-yellow-600 dark:text-yellow-400">
-                No tags available for this group.
-              </div>
-            ) : (
-              <div className="flex flex-wrap gap-2">
-                {availableTags.map(tag => {
-                  const isSelected = selectedTags.some(t => t.tag_id === tag.tag_id);
-                  return (
-                    <button
-                      key={tag.tag_id}
-                      type="button"
-                      onClick={() => handleTagToggle(tag)}
-                      className={`flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-all duration-200 ${
-                        isSelected
-                          ? "border-blue-500 bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 shadow-sm shadow-blue-500/20"
-                          : "border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface text-gray-600 dark:text-zinc-300 hover:border-gray-300 dark:hover:border-white/20"
-                      }`}
-                    >
-                      <Tag className="h-3 w-3" />
-                      {tag.tag || tag.tag_name}
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-            
-            {tagsError && <p className="mt-2 text-xs text-red-400">{tagsError}</p>}
-            {errors.tags && <p className="mt-1 text-xs text-red-400">{errors.tags}</p>}
-            <p className="mt-1 text-[10px] text-gray-400 dark:text-zinc-500">
-              You can select multiple tags to better categorize your discussion
-            </p>
+            {/* Categories/Tags Selection (Right) */}
+            <div>
+              <label className="mb-2 block text-xs font-semibold uppercase tracking-wide text-gray-700 dark:text-zinc-200">
+                Categories / Tags * (Select one or more)
+              </label>
+              {!selectedGroupId ? (
+                <div className="rounded-lg border border-gray-300 dark:border-white/15 bg-gray-50 dark:bg-white/5 px-3.5 py-2.5 text-sm text-gray-600 dark:text-zinc-300">
+                  Please select a group first to see available tags.
+                </div>
+              ) : loadingTags ? (
+                <div className="flex items-center gap-2 rounded-lg border border-gray-300 dark:border-white/15 px-3.5 py-2.5 text-sm text-gray-600 dark:text-zinc-300">
+                  <Loader2 className="h-4 w-4 animate-spin" /> Loading tags...
+                </div>
+              ) : availableTags.length === 0 ? (
+                <div className="rounded-lg border border-yellow-500/30 bg-yellow-500/10 px-3.5 py-2.5 text-sm font-medium text-yellow-700 dark:text-yellow-400">
+                  No tags available for this group.
+                </div>
+              ) : (
+                <div className="flex flex-wrap gap-2">
+                  {availableTags.map(tag => {
+                    const isSelected = selectedTags.some(t => t.tag_id === tag.tag_id);
+                    return (
+                      <button
+                        key={tag.tag_id}
+                        type="button"
+                        onClick={() => handleTagToggle(tag)}
+                        className={`flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-all duration-200 ${
+                          isSelected
+                            ? "border-blue-500 bg-blue-50 dark:bg-blue-500/15 text-blue-700 dark:text-blue-300 shadow-sm shadow-blue-500/15"
+                            : "border-gray-300 dark:border-white/15 bg-white dark:bg-dark-surface text-gray-700 dark:text-zinc-200 hover:border-gray-400 dark:hover:border-white/25"
+                        }`}
+                      >
+                        <Tag className="h-3 w-3" />
+                        {tag.tag || tag.tag_name}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+
+              {tagsError && <p className="mt-2 text-xs font-medium text-red-600 dark:text-red-400">{tagsError}</p>}
+              {errors.tags && <p className="mt-1 text-xs font-medium text-red-600 dark:text-red-400">{errors.tags}</p>}
+              <p className="mt-1.5 text-xs text-gray-600 dark:text-zinc-400">
+                You can select multiple tags to better categorize your discussion
+              </p>
+            </div>
           </div>
 
           {/* Title Input */}
-          <div className="mb-4">
-            <label className="mb-2 block text-xs font-semibold uppercase text-gray-400 dark:text-zinc-500">Title *</label>
+          <div className="mb-5">
+            <label className="mb-2 block text-xs font-semibold uppercase tracking-wide text-gray-700 dark:text-zinc-200">Title *</label>
             <input
               type="text"
               value={title}
@@ -888,15 +890,15 @@ const NewDiscussionModal: React.FC<NewDiscussionModalProps> = ({
               }}
               placeholder="What's your question or topic?"
               maxLength={200}
-              className={`w-full rounded-lg border ${errors.title ? "border-red-500/50" : "border-gray-200 dark:border-white/15"} bg-gray-50 dark:bg-white/5 px-4 py-2.5 text-sm text-gray-900 dark:text-white placeholder:text-gray-400 dark:text-zinc-500 transition focus:border-blue-500/50 focus:outline-none focus:ring-1 focus:ring-blue-500/50`}
+              className={`w-full rounded-lg border ${errors.title ? "border-red-500/70" : "border-gray-300 dark:border-white/15"} bg-white dark:bg-white/5 px-4 py-2.5 text-sm text-gray-900 dark:text-white placeholder:text-gray-500 dark:placeholder:text-zinc-400 transition focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500`}
             />
-            {errors.title && <p className="mt-1 text-xs text-red-400">{errors.title}</p>}
-            <p className="mt-1 text-right text-[10px] text-gray-400 dark:text-zinc-500">{title.length}/200 characters</p>
+            {errors.title && <p className="mt-1 text-xs font-medium text-red-600 dark:text-red-400">{errors.title}</p>}
+            <p className="mt-1.5 text-right text-xs text-gray-600 dark:text-zinc-400">{title.length}/200 characters</p>
           </div>
 
           {/* Content Editor with Real-time Preview */}
-          <div className="mb-4">
-            <label className="mb-2 block text-xs font-semibold uppercase text-gray-400 dark:text-zinc-500">Content *</label>
+          <div className="mb-5">
+            <label className="mb-2 block text-xs font-semibold uppercase tracking-wide text-gray-700 dark:text-zinc-200">Content *</label>
             
             <RichTextToolbar
               onFormat={applyFormatting}
@@ -925,16 +927,16 @@ Formatting examples:
 
 > quote block`}
                 rows={12}
-                className={`w-full rounded-b-lg border border-t-0 ${errors.content ? "border-red-500/50" : "border-gray-200 dark:border-white/15"} bg-gray-50 dark:bg-white/5 px-4 py-2.5 text-sm text-gray-900 dark:text-white placeholder:text-gray-400 dark:text-zinc-500 transition focus:border-blue-500/50 focus:outline-none focus:ring-1 focus:ring-blue-500/50 resize-none font-mono`}
+                className={`w-full rounded-b-lg border border-t-0 ${errors.content ? "border-red-500/70" : "border-gray-300 dark:border-white/15"} bg-white dark:bg-white/5 px-4 py-3 text-sm text-gray-900 dark:text-white placeholder:text-gray-500 dark:placeholder:text-zinc-400 transition focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-none font-mono`}
               />
             ) : (
-              <div className="min-h-64 rounded-b-lg border border-t-0 border-gray-200 dark:border-white/15 bg-gray-50 dark:bg-white/5 p-4 overflow-y-auto">
+              <div className="min-h-64 rounded-b-lg border border-t-0 border-gray-300 dark:border-white/15 bg-white dark:bg-white/5 p-4 overflow-y-auto">
                 {content.trim() ? (
                   <ReactMarkdown remarkPlugins={[remarkGfm]} components={MarkdownComponents}>
                     {content}
                   </ReactMarkdown>
                 ) : (
-                  <p className="text-sm italic text-gray-400 dark:text-zinc-500">Nothing to preview...</p>
+                  <p className="text-sm italic text-gray-500 dark:text-zinc-400">Nothing to preview...</p>
                 )}
               </div>
             )}
@@ -943,12 +945,13 @@ Formatting examples:
           {/* Image Upload */}
           <div className="mb-4">
             <div className="flex items-center justify-between mb-2">
-              <label className="text-xs font-semibold uppercase text-gray-400 dark:text-zinc-500">Images (Optional)</label>
+              <label className="text-xs font-semibold uppercase tracking-wide text-gray-700 dark:text-zinc-200">Images (Optional)</label>
               <button
+                type="button"
                 onClick={() => fileInputRef.current?.click()}
-                className="flex items-center gap-1.5 rounded-lg border border-gray-200 dark:border-white/15 bg-gray-50 dark:bg-white/5 px-3 py-1.5 text-xs text-gray-500 dark:text-zinc-400 transition hover:bg-gray-100 dark:hover:bg-gray-100 dark:bg-white/10 hover:text-gray-900 dark:text-white"
+                className="flex items-center gap-1.5 rounded-lg border border-gray-300 dark:border-white/15 bg-white dark:bg-white/5 px-3 py-1.5 text-xs font-medium text-gray-700 dark:text-zinc-200 transition hover:bg-gray-100 dark:hover:bg-white/10 hover:text-gray-900 dark:hover:text-white"
               >
-                <Upload className="h-3 w-3" />
+                <Upload className="h-3.5 w-3.5" />
                 Add Image
               </button>
             </div>
@@ -960,14 +963,14 @@ Formatting examples:
               </div>
             )}
             <input ref={fileInputRef} type="file" accept="image/*" multiple className="hidden" onChange={e => handleImageSelect(e.target.files)} />
-            <p className="mt-1 text-[10px] text-gray-400 dark:text-zinc-500">Supported: JPG, PNG, GIF, WebP (max 5MB per image)</p>
+            <p className="mt-1.5 text-xs text-gray-600 dark:text-zinc-400">Supported: JPG, PNG, GIF, WebP (max 5MB per image)</p>
             {images.some(img => img.uploadError) && (
-              <p className="mt-1 text-xs text-red-400">Some images failed to upload. Please remove and try again.</p>
+              <p className="mt-1 text-xs font-medium text-red-600 dark:text-red-400">Some images failed to upload. Please remove and try again.</p>
             )}
           </div>
 
-          {errors.content && <p className="mt-1 text-xs text-red-400">{errors.content}</p>}
-          <p className="mt-1 text-right text-[10px] text-gray-400 dark:text-zinc-500">{content.length} characters (minimum 20)</p>
+          {errors.content && <p className="mt-1 text-xs font-medium text-red-600 dark:text-red-400">{errors.content}</p>}
+          <p className="mt-1 text-right text-xs text-gray-600 dark:text-zinc-400">{content.length} characters (minimum 20)</p>
 
           {forumTimedOut && (
             <div className="mt-6 flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-700 dark:text-amber-300">
@@ -982,7 +985,7 @@ Formatting examples:
               onClick={handleSubmit}
               disabled={forumTimedOut || isCreating || loadingGroups || loadingTags || !selectedGroupId || Boolean(tagsError)}
               title={forumTimedOut ? forumTimeoutMessage : undefined}
-              className="flex-1 rounded-full bg-gradient-to-r from-blue-500 to-blue-600 px-4 py-2.5 text-sm font-medium text-white transition-all hover:scale-105 hover:shadow-lg hover:shadow-blue-500/25 active:scale-95 disabled:opacity-50 disabled:hover:scale-100"
+              className="flex-1 rounded-full bg-blue-600 px-4 py-2.5 text-sm font-medium text-white transition-all hover:bg-blue-700 hover:shadow-md hover:shadow-blue-500/20 active:scale-[0.99] disabled:opacity-50"
             >
               {isCreating ? (
                 <div className="flex items-center justify-center gap-2">
@@ -999,7 +1002,7 @@ Formatting examples:
             <button
               onClick={handleClose}
               disabled={isCreating}
-              className="flex-1 rounded-full border border-gray-200 dark:border-white/15 bg-gray-50 dark:bg-white/5 px-4 py-2.5 text-sm font-medium text-gray-500 dark:text-zinc-400 transition hover:bg-gray-100 dark:hover:bg-gray-100 dark:bg-white/10 hover:text-gray-900 dark:text-white disabled:opacity-50"
+              className="flex-1 rounded-full border border-gray-300 dark:border-white/15 bg-white dark:bg-white/5 px-4 py-2.5 text-sm font-medium text-gray-700 dark:text-zinc-200 transition hover:bg-gray-100 dark:hover:bg-white/10 hover:text-gray-900 dark:hover:text-white disabled:opacity-50"
             >
               Cancel
             </button>

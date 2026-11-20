@@ -277,24 +277,24 @@ const CreateGroupModal: React.FC<CreateGroupModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/80 px-4 py-6 backdrop-blur-sm animate-fade-in-modal sm:items-center sm:py-8">
-      <div className="my-auto w-full max-w-lg rounded-2xl border border-white/10 bg-dark-surface p-6 shadow-2xl animate-scale-in max-h-[calc(100vh-3rem)] overflow-y-auto">
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/60 dark:bg-black/80 px-4 py-6 backdrop-blur-sm animate-fade-in-modal sm:items-center sm:py-8">
+      <div className="my-auto w-full max-w-lg rounded-2xl border border-zinc-200 dark:border-white/10 bg-white dark:bg-dark-surface p-6 shadow-2xl animate-scale-in max-h-[calc(100vh-3rem)] overflow-y-auto">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
-            <Users className="h-5 w-5 text-blue-400" />
-            <h3 className="text-xl font-semibold text-white" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
+            <Users className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+            <h3 className="text-xl font-semibold text-zinc-900 dark:text-white" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
               Create a Group
             </h3>
           </div>
           <button
             onClick={handleClose}
-            className="rounded-lg p-1 text-zinc-400 transition hover:bg-white/10 hover:text-white"
+            className="rounded-lg p-1 text-zinc-500 dark:text-zinc-400 transition hover:bg-zinc-100 dark:hover:bg-white/10 hover:text-zinc-900 dark:hover:text-white cursor-pointer"
           >
             <X className="h-5 w-5" />
           </button>
         </div>
 
-        <p className="text-sm text-zinc-400 mb-4">
+        <p className="text-sm text-zinc-600 dark:text-zinc-400 mb-4">
           Build a community around your interests or projects
         </p>
 
@@ -309,24 +309,24 @@ const CreateGroupModal: React.FC<CreateGroupModalProps> = ({
                 <img
                   src={coverPreview}
                   alt="Cover preview"
-                  className="h-32 w-full rounded-xl object-cover border border-white/10"
+                  className="h-32 w-full rounded-xl object-cover border border-zinc-200 dark:border-white/10"
                 />
                 <button
                   onClick={() => {
                     setCoverImage(null);
                     setCoverPreview(null);
                   }}
-                  className="absolute top-2 right-2 rounded-full bg-black/70 p-1.5 text-white opacity-0 transition-opacity group-hover:opacity-100 hover:bg-red-500"
+                  className="absolute top-2 right-2 rounded-full bg-black/70 p-1.5 text-white opacity-0 transition-opacity group-hover:opacity-100 hover:bg-red-500 cursor-pointer"
                 >
                   <X className="h-4 w-4" />
                 </button>
               </div>
             ) : (
-              <label className="flex h-32 w-full cursor-pointer flex-col items-center justify-center rounded-xl border border-dashed border-white/20 bg-white/5 transition-all hover:border-blue-500/50 hover:bg-white/10">
+              <label className="flex h-32 w-full cursor-pointer flex-col items-center justify-center rounded-xl border border-dashed border-zinc-300 dark:border-white/20 bg-zinc-50 dark:bg-white/5 transition-all hover:border-blue-500/50 hover:bg-zinc-100 dark:hover:bg-white/10">
                 <div className="flex flex-col items-center gap-2">
-                  <ImageIcon className="h-8 w-8 text-zinc-500" />
-                  <p className="text-xs text-zinc-500">Click to upload cover image</p>
-                  <p className="text-[10px] text-zinc-600">JPG, PNG, GIF up to 5MB</p>
+                  <ImageIcon className="h-8 w-8 text-zinc-400 dark:text-zinc-500" />
+                  <p className="text-xs text-zinc-600 dark:text-zinc-400">Click to upload cover image</p>
+                  <p className="text-[10px] text-zinc-500 dark:text-zinc-500">JPG, PNG, GIF up to 5MB</p>
                 </div>
                 <input
                   type="file"
@@ -353,12 +353,12 @@ const CreateGroupModal: React.FC<CreateGroupModalProps> = ({
             }}
             placeholder="e.g., Color Grading Society"
             className={`w-full rounded-lg border ${
-              errors.name ? "border-red-500/50" : "border-white/15"
-            } bg-white/5 px-4 py-2.5 text-sm text-white placeholder:text-zinc-500 focus:border-blue-500/50 focus:outline-none focus:ring-1 focus:ring-blue-500/50 transition-all`}
+              errors.name ? "border-red-500/50" : "border-zinc-200 dark:border-white/15"
+            } bg-zinc-50 dark:bg-white/5 px-4 py-2.5 text-sm text-zinc-900 dark:text-white placeholder:text-zinc-400 dark:placeholder:text-zinc-500 focus:border-blue-500/50 focus:outline-none focus:ring-1 focus:ring-blue-500/50 transition-all`}
             style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
           />
           {errors.name && (
-            <p className="mt-1 text-xs text-red-400 flex items-center gap-1">
+            <p className="mt-1 text-xs text-red-500 dark:text-red-400 flex items-center gap-1">
               <AlertCircle className="h-3 w-3" />
               {errors.name}
             </p>
@@ -379,12 +379,12 @@ const CreateGroupModal: React.FC<CreateGroupModalProps> = ({
             placeholder="Describe what your group is about, its purpose, and who should join..."
             rows={4}
             className={`w-full rounded-lg border ${
-              errors.description ? "border-red-500/50" : "border-white/15"
-            } bg-white/5 px-4 py-2.5 text-sm text-white placeholder:text-zinc-500 focus:border-blue-500/50 focus:outline-none focus:ring-1 focus:ring-blue-500/50 transition-all resize-none`}
+              errors.description ? "border-red-500/50" : "border-zinc-200 dark:border-white/15"
+            } bg-zinc-50 dark:bg-white/5 px-4 py-2.5 text-sm text-zinc-900 dark:text-white placeholder:text-zinc-400 dark:placeholder:text-zinc-500 focus:border-blue-500/50 focus:outline-none focus:ring-1 focus:ring-blue-500/50 transition-all resize-none`}
             style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
           />
           {errors.description && (
-            <p className="mt-1 text-xs text-red-400 flex items-center gap-1">
+            <p className="mt-1 text-xs text-red-500 dark:text-red-400 flex items-center gap-1">
               <AlertCircle className="h-3 w-3" />
               {errors.description}
             </p>
@@ -410,20 +410,20 @@ const CreateGroupModal: React.FC<CreateGroupModalProps> = ({
               onChange={(e) => setCurrentTag(e.target.value)}
               onKeyDown={handleKeyDown}
               placeholder="e.g., Color Theory, DaVinci Resolve, LUTs"
-              className="flex-1 rounded-lg border border-white/15 bg-white/5 px-4 py-2.5 text-sm text-white placeholder:text-zinc-500 focus:border-blue-500/50 focus:outline-none focus:ring-1 focus:ring-blue-500/50 transition-all"
+              className="flex-1 rounded-lg border border-zinc-200 dark:border-white/15 bg-zinc-50 dark:bg-white/5 px-4 py-2.5 text-sm text-zinc-900 dark:text-white placeholder:text-zinc-400 dark:placeholder:text-zinc-500 focus:border-blue-500/50 focus:outline-none focus:ring-1 focus:ring-blue-500/50 transition-all"
               style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
             />
             <button
               type="button"
               onClick={handleAddTag}
-              className="rounded-lg bg-blue-500/20 px-4 py-2.5 text-blue-400 transition hover:bg-blue-500/30 hover:scale-105"
+              className="rounded-lg bg-blue-500/15 dark:bg-blue-500/20 px-4 py-2.5 text-blue-600 dark:text-blue-400 transition hover:bg-blue-500/25 dark:hover:bg-blue-500/30 cursor-pointer"
             >
               <Plus className="h-4 w-4" />
             </button>
           </div>
 
           {errors.tags && (
-            <p className="mt-1 text-xs text-red-400 flex items-center gap-1 mb-2">
+            <p className="mt-1 text-xs text-red-500 dark:text-red-400 flex items-center gap-1 mb-2">
               <AlertCircle className="h-3 w-3" />
               {errors.tags}
             </p>
@@ -435,14 +435,14 @@ const CreateGroupModal: React.FC<CreateGroupModalProps> = ({
               {tags.map((tag) => (
                 <div
                   key={tag}
-                  className="flex items-center gap-1 rounded-full bg-blue-500/20 px-3 py-1.5 text-xs text-blue-400"
+                  className="flex items-center gap-1 rounded-full bg-blue-50 dark:bg-blue-500/20 border border-blue-200 dark:border-transparent px-3 py-1.5 text-xs text-blue-600 dark:text-blue-400"
                 >
                   <Tag className="h-3 w-3" />
                   <span>{tag}</span>
                   <button
                     type="button"
                     onClick={() => handleRemoveTag(tag)}
-                    className="ml-1 rounded-full p-0.5 hover:bg-blue-500/30 transition-colors"
+                    className="ml-1 rounded-full p-0.5 hover:bg-blue-100 dark:hover:bg-blue-500/30 transition-colors cursor-pointer"
                   >
                     <Trash2 className="h-3 w-3" />
                   </button>
@@ -461,7 +461,7 @@ const CreateGroupModal: React.FC<CreateGroupModalProps> = ({
           <button
             onClick={handleSubmit}
             disabled={isCreating}
-            className="flex-1 rounded-full bg-linear-to-r from-blue-500 to-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:scale-105 hover:shadow-lg hover:shadow-blue-500/25 disabled:opacity-50 disabled:hover:scale-100"
+            className="flex-1 rounded-full bg-blue-600 hover:bg-blue-700 px-4 py-2 text-sm font-medium text-white transition disabled:opacity-50 cursor-pointer"
           >
             {isCreating ? (
               <div className="flex items-center justify-center gap-2">
@@ -477,7 +477,7 @@ const CreateGroupModal: React.FC<CreateGroupModalProps> = ({
           </button>
           <button
             onClick={handleClose}
-            className="flex-1 rounded-full border border-white/15 bg-white/5 px-4 py-2 text-sm font-medium text-zinc-400 transition hover:bg-white/10 hover:text-white"
+            className="flex-1 rounded-full border border-zinc-200 dark:border-white/15 bg-zinc-100 dark:bg-white/5 px-4 py-2 text-sm font-medium text-zinc-700 dark:text-zinc-300 transition hover:bg-zinc-200 dark:hover:bg-white/10 hover:text-zinc-900 dark:hover:text-white cursor-pointer"
           >
             Cancel
           </button>

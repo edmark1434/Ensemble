@@ -43,6 +43,7 @@ export interface GlideSelectProps {
   defaultOpen?: boolean;
   triggerLabel?: ReactNode;
   triggerIcon?: ReactNode;
+  hideChevron?: boolean;
   menuHeader?: ReactNode;
   rowHeight?: number;
   chipHeight?: number;
@@ -137,6 +138,7 @@ const GlideSelect: React.FC<GlideSelectProps> = ({
   defaultOpen = false,
   triggerLabel,
   triggerIcon,
+  hideChevron = false,
   menuHeader,
   rowHeight: customRowHeight,
   chipHeight: customChipHeight,
@@ -432,20 +434,24 @@ const GlideSelect: React.FC<GlideSelectProps> = ({
               {selectedItem.icon}
             </span>
           ) : null}
-          <span
-            className="truncate text-left data-[empty]:opacity-50 group-data-[swap]:animate-[gs-swap_160ms_ease]"
-            key={current}
-            data-empty={!triggerLabel && selected < 0 ? '' : undefined}
-          >
-            {triggerLabel !== undefined ? triggerLabel : (selectedItem ? selectedItem.label : placeholder)}
-          </span>
+          {triggerLabel !== null && (
+            <span
+              className="truncate text-left data-[empty]:opacity-50 group-data-[swap]:animate-[gs-swap_160ms_ease]"
+              key={current}
+              data-empty={!triggerLabel && selected < 0 ? '' : undefined}
+            >
+              {triggerLabel !== undefined ? triggerLabel : (selectedItem ? selectedItem.label : placeholder)}
+            </span>
+          )}
         </div>
-        <span
-          className="inline-flex shrink-0 opacity-60 [transition:transform_200ms_cubic-bezier(0.23,1,0.32,1)] group-aria-expanded/trigger:rotate-180"
-          aria-hidden="true"
-        >
-          <HugeiconsIcon icon={ArrowDown01Icon} size={15} strokeWidth={2.4} />
-        </span>
+        {!hideChevron && (
+          <span
+            className="inline-flex shrink-0 opacity-60 [transition:transform_200ms_cubic-bezier(0.23,1,0.32,1)] group-aria-expanded/trigger:rotate-180"
+            aria-hidden="true"
+          >
+            <HugeiconsIcon icon={ArrowDown01Icon} size={15} strokeWidth={2.4} />
+          </span>
+        )}
       </button>
 
       {phase !== 'closed' ? (

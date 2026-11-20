@@ -658,11 +658,14 @@ export function AccountRestrictionHost() {
   const standingKey = `${user?.status || ''}|${standing?.code || ''}|${standing?.suspended ? 1 : 0}`;
   useCaseSummarySync(caseMember, standingKey);
   const caseSummary = useCaseStore((state) => state.summary);
+  const isCaseRoute =
+    location.pathname === '/home' ||
+    location.pathname === '/contracts' ||
+    location.pathname.startsWith('/contracts/');
   const showCaseBar =
     caseMember &&
     Boolean(caseSummary) &&
-    location.pathname !== APPEAL_PATH &&
-    !location.pathname.startsWith(CASES_PATH);
+    isCaseRoute;
 
   return (
     <>
