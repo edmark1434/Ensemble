@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { MilestoneSubmissionForm } from './MilestoneSubmissionForm';
 import { ClientReviewPanel, ClientReviewCardActions } from './ClientReviewPanel';
+import { constructAvatarUrl } from '@/lib/accountAvatars';
 import axios from 'axios';
 import toast from 'react-hot-toast';
 import useChatState from '@/components/ui/chat_bubble/chat_state';
@@ -549,18 +550,8 @@ export const MilestoneActivityFeed: React.FC<Props> = ({
                                             <img
                                                 src={
                                                     isFreelancerMsg
-                                                        ? task.freelancer_avatar
-                                                            ? `${import.meta.env.VITE_CLOUDFRONT_URL}${
-                                                                  task.freelancer_avatar.startsWith('/')
-                                                                      ? ''
-                                                                      : '/'
-                                                              }${task.freelancer_avatar}`
-                                                            : 'https://i.pravatar.cc/150?u=b042581f4e29026704d'
-                                                        : task.client_avatar
-                                                        ? `${import.meta.env.VITE_CLOUDFRONT_URL}${
-                                                              task.client_avatar.startsWith('/') ? '' : '/'
-                                                          }${task.client_avatar}`
-                                                        : 'https://i.pravatar.cc/150?u=a042581f4e29026704d'
+                                                        ? constructAvatarUrl(task.freelancer_avatar, task.freelancer_name || 'Freelancer')
+                                                        : constructAvatarUrl(task.client_avatar, task.client_name || 'Client')
                                                 }
                                                 alt="Avatar"
                                                 className="w-8 h-8 rounded-full object-cover border border-zinc-700"

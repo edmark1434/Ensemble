@@ -8,6 +8,7 @@ import { MilestoneActivityFeed } from './MilestoneActivityFeed';
 import UserHeader from "@/components/nav/user_header";
 import { UnverifiedOverlay } from "@/components/ui/UnverifiedOverlay";
 import { RateReviewModal } from './RateReviewModal';
+import { constructAvatarUrl } from '@/lib/accountAvatars';
 import socket from '@/lib/socket';
 
 export const DashboardTaskDetail = () => {
@@ -193,12 +194,8 @@ export const DashboardTaskDetail = () => {
                                 <div className="flex items-center gap-3 min-w-0">
                                     <img 
                                         src={isFreelancer 
-                                            ? (task.client_avatar 
-                                                ? `${import.meta.env.VITE_CLOUDFRONT_URL}${task.client_avatar.startsWith('/') ? '' : '/'}${task.client_avatar}`
-                                                : "https://i.pravatar.cc/150?u=a042581f4e29026704d") 
-                                            : (task.freelancer_avatar 
-                                                ? `${import.meta.env.VITE_CLOUDFRONT_URL}${task.freelancer_avatar.startsWith('/') ? '' : '/'}${task.freelancer_avatar}`
-                                                : "https://i.pravatar.cc/150?u=b042581f4e29026704d")} 
+                                            ? constructAvatarUrl(task.client_avatar, task.client_name || 'Client')
+                                            : constructAvatarUrl(task.freelancer_avatar, task.freelancer_name || 'Freelancer')} 
                                         alt="User Avatar" 
                                         className="w-10 h-10 rounded-full object-cover border border-gray-200 dark:border-zinc-700 shrink-0"
                                     />
