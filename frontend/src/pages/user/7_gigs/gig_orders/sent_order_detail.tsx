@@ -58,6 +58,7 @@ import { showErrorToast, showSuccessToast } from "@/components/utility/toast";
 import { openMarketplaceConversation } from "@/components/ui/inbox/marketplace_conversation";
 
 import OrderLifecycleTracker, { useAcceptanceCountdown } from "./orders_components/OrderLifecycleTracker";
+import { OrderPricingBreakdown } from "./orders_components/OrderPricingBreakdown";
 
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -1189,57 +1190,31 @@ export const SentOrderDetail = () => {
 
 
                   {/* Financial Grid */}
-
                   <div className="grid grid-cols-2 gap-3 pt-1">
-
                     {/* Selected Tier Box */}
-
                     <div className="p-3 rounded-xl bg-zinc-50 dark:bg-zinc-800/40 border border-zinc-100 dark:border-zinc-800 space-y-0.5">
-
                       <span className="text-[10px] uppercase font-bold text-zinc-400 dark:text-zinc-500 block">
-
                         Selected Tier
-
                       </span>
-
                       <span className="text-xs sm:text-sm font-bold text-zinc-800 dark:text-zinc-200 block truncate">
-
                         {order.tier_title}
-
                       </span>
-
                       <span className="text-[10px] text-zinc-400 block">{order.delivery_days} Days Delivery</span>
-
                     </div>
-
-
 
                     {/* Order Amount Box */}
-
                     <div className="p-3 rounded-xl bg-zinc-50 dark:bg-zinc-800/40 border border-zinc-100 dark:border-zinc-800 space-y-0.5">
-
                       <span className="text-[10px] uppercase font-bold text-zinc-400 dark:text-zinc-500 block">
-
                         Order Amount
-
                       </span>
-
                       <span className="text-xs sm:text-sm font-bold text-zinc-900 dark:text-white flex items-center gap-1 truncate">
-
                         <CreditIcon className="h-3.5 w-3.5 text-amber-500 shrink-0" />
-
                         <span>{order.price?.toLocaleString()} Credits</span>
-
                       </span>
-
                       <span className="text-[10px] text-zinc-500 dark:text-zinc-400 font-medium block truncate">
-
                         Full Milestone Escrow
-
                       </span>
-
                     </div>
-
                   </div>
 
                 </div>
@@ -1251,6 +1226,23 @@ export const SentOrderDetail = () => {
           </div>
 
         </div>
+
+
+
+        {/* =========================================================================
+
+            ORDER PRICING & ADD-ONS BREAKDOWN
+
+           ========================================================================= */}
+
+        <OrderPricingBreakdown
+          tierTitle={order.tier_title}
+          basePrice={order.base_price}
+          baseDeliveryDays={order.base_delivery_days}
+          totalPrice={order.price}
+          totalDeliveryDays={order.delivery_days}
+          addOns={order.addOns}
+        />
 
 
 

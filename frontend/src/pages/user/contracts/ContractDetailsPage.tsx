@@ -905,6 +905,8 @@ export const ContractDetailsPage: React.FC = () => {
           ? `${parseFloat(foundRaw.rate_credits_min).toLocaleString()} ~ ${parseFloat(foundRaw.rate_credits_max).toLocaleString()}`
           : "Fixed Price",
         totalValueCredits: parseFloat(foundRaw.rate_credits) || 0,
+        baseTierPrice: foundRaw.rate_credits_min ? parseFloat(foundRaw.rate_credits_min) : undefined,
+        addOns: Array.isArray(foundRaw.add_ons) ? foundRaw.add_ons : [],
         platformFeePercent: 10,
         jobDescription: foundRaw.job_description || "No description provided.",
         jobHiringType: foundRaw.job_hiring_type || (foundRaw.contract_type === "gig" ? "gig" : "single"),
@@ -1930,10 +1932,27 @@ export const ContractDetailsPage: React.FC = () => {
                   </div>
 
                   <div className="space-y-1 text-[11px] border-t border-zinc-200 dark:border-white/10 pt-2">
-                    <div className="flex justify-between gap-3 text-zinc-600 dark:text-zinc-400">
-                      <span>Client Range:</span>
-                      <span className="font-semibold">{contract.clientRange}</span>
-                    </div>
+                    {contract.contractType === "Gig" && contract.addOns && contract.addOns.length > 0 ? (
+                      <>
+                        <div className="flex justify-between gap-3 text-zinc-600 dark:text-zinc-400">
+                          <span>Tier Price:</span>
+                          <span className="font-semibold">
+                            {(contract.baseTierPrice ?? (contract.totalValueCredits - contract.addOns.reduce((sum, a) => sum + (Number(a.price) || 0), 0))).toLocaleString()} Cr
+                          </span>
+                        </div>
+                        <div className="flex justify-between gap-3 text-zinc-600 dark:text-zinc-400">
+                          <span>Add-ons ({contract.addOns.length}):</span>
+                          <span className="font-semibold text-amber-600 dark:text-amber-400">
+                            +{contract.addOns.reduce((sum, a) => sum + (Number(a.price) || 0), 0).toLocaleString()} Cr
+                          </span>
+                        </div>
+                      </>
+                    ) : (
+                      <div className="flex justify-between gap-3 text-zinc-600 dark:text-zinc-400">
+                        <span>Client Range:</span>
+                        <span className="font-semibold">{contract.clientRange}</span>
+                      </div>
+                    )}
                     <div className="flex justify-between gap-3 text-zinc-600 dark:text-zinc-400">
                       <span>Platform Fee (10%):</span>
                       <span className="text-rose-600 dark:text-rose-400 font-semibold">- {Math.floor(contract.totalValueCredits * 0.1).toLocaleString()}</span>
@@ -2050,9 +2069,17 @@ export const ContractDetailsPage: React.FC = () => {
                   {/* Designated Role Banner (for Team Jobs or Gig Tiers) */}
                   {(contract.targetMilestoneTitle || contract.jobHiringType === "multiple") && (
                     <div className="rounded-xl border border-purple-200 dark:border-purple-500/20 bg-purple-50/70 dark:bg-purple-950/20 p-4 space-y-2">
-                      <div className="flex items-center gap-2 text-purple-800 dark:text-purple-300 text-xs font-bold uppercase tracking-wider">
-                        <Users className="w-4 h-4" />
-                        <span>Assigned Milestone Role</span>
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2 text-purple-800 dark:text-purple-300 text-xs font-bold uppercase tracking-wider">
+                          <Users className="w-4 h-4" />
+                          <span>{contract.contractType === "Gig" ? "Selected Gig Tier" : "Assigned Milestone Role"}</span>
+                        </div>
+                        {contract.contractType === "Gig" && (
+                          <span className="text-xs font-bold text-purple-900 dark:text-purple-200 flex items-center gap-1 shrink-0">
+                            <CreditIcon className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                            {(contract.baseTierPrice ?? (contract.totalValueCredits - (contract.addOns || []).reduce((sum, a) => sum + (Number(a.price) || 0), 0))).toLocaleString()} Credits
+                          </span>
+                        )}
                       </div>
                       <h3 className="text-base font-extrabold text-zinc-900 dark:text-white">
                         {contract.targetMilestoneTitle || "Designated Team Role"}
@@ -2062,6 +2089,50 @@ export const ContractDetailsPage: React.FC = () => {
                           {contract.targetMilestoneDescription}
                         </p>
                       )}
+                    </div>
+                  )}
+
+                  {/* Selected Gig Add-ons (Gig contracts only) */}
+                  {contract.contractType === "Gig" && contract.addOns && contract.addOns.length > 0 && (
+                    <div className="rounded-xl border border-zinc-200 dark:border-white/10 bg-zinc-50/70 dark:bg-white/[0.02] p-4 space-y-2.5">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-xs font-bold uppercase tracking-wider text-zinc-700 dark:text-zinc-300">
+                          Selected Add-ons ({contract.addOns.length})
+                        </span>
+                        <span className="text-xs font-bold text-amber-600 dark:text-amber-400 flex items-center gap-1">
+                          <CreditIcon className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                          +{contract.addOns.reduce((sum, a) => sum + (Number(a.price) || 0), 0).toLocaleString()} Credits
+                        </span>
+                      </div>
+                      <div className="space-y-1.5">
+                        {contract.addOns.map((addon, aIdx) => (
+                          <div
+                            key={addon.id || aIdx}
+                            className="flex items-center justify-between gap-2 text-xs text-zinc-700 dark:text-zinc-200 bg-white dark:bg-zinc-900/50 border border-zinc-200/70 dark:border-zinc-700/60 rounded-lg px-3 py-2"
+                          >
+                            <span className="font-semibold truncate">{addon.title}</span>
+                            <span className="text-xs font-semibold text-amber-600 dark:text-amber-400 shrink-0 flex items-center gap-1">
+                              +{Number(addon.price || 0).toLocaleString()} Cr
+                              {Number(addon.deliveryDays) > 0 && (
+                                <span className="text-zinc-400 font-normal">
+                                  • +{addon.deliveryDays}d
+                                </span>
+                              )}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="pt-2 border-t border-zinc-200 dark:border-white/10 flex flex-wrap items-center justify-between gap-2 text-xs">
+                        <span className="text-zinc-500 dark:text-zinc-400">
+                          Tier: <strong className="text-zinc-800 dark:text-zinc-200">{(contract.baseTierPrice ?? (contract.totalValueCredits - contract.addOns.reduce((sum, a) => sum + (Number(a.price) || 0), 0))).toLocaleString()} Cr</strong>
+                          {" + "}
+                          Add-ons: <strong className="text-amber-600 dark:text-amber-400">{contract.addOns.reduce((sum, a) => sum + (Number(a.price) || 0), 0).toLocaleString()} Cr</strong>
+                        </span>
+                        <span className="font-bold text-zinc-900 dark:text-white flex items-center gap-1">
+                          Total: <CreditIcon className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                          {contract.totalValueCredits.toLocaleString()} Credits
+                        </span>
+                      </div>
                     </div>
                   )}
 
