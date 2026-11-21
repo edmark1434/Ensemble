@@ -87,8 +87,8 @@ export default function MyCasesTab({
   const [identityUser, setIdentityUser] = useState<PlatformUserAccount | null>(null);
   const [identityLoading, setIdentityLoading] = useState(false);
 
-  // Disputes here change from the parties, other desks and the payout job: keep rows current.
-  useStaffCaseEvents(['dispute'], () => onUpdated(), { delayMs: 800 });
+  // Disputes and reports here change from the parties, other desks and the payout job: keep rows current.
+  useStaffCaseEvents(['dispute', 'report'], () => onUpdated(), { delayMs: 800 });
 
   const counts = useMemo(
     () => ({
@@ -350,6 +350,7 @@ export default function MyCasesTab({
       {selected?.source === 'report' && (
         <ReportCaseDetailModal
           reportId={selected.id}
+          forumContentApiBase="/api/admin/moderation/forum"
           onClose={closeDetail}
           onUpdated={onUpdated}
         />

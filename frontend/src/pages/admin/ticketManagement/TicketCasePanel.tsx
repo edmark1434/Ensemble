@@ -19,6 +19,7 @@ import type {
   CaseJobs,
   CaseListing,
   CaseMarketplace,
+  CasePenaltyEvidence,
   CasePosting,
   CaseReportRef,
   CaseTicketRef,
@@ -66,6 +67,40 @@ function Quote({ label, children }: { label: string; children: ReactNode }) {
       <p className="mt-1 whitespace-pre-wrap rounded-lg border-l-2 border-white/15 bg-white/[0.02] px-3 py-2 text-sm text-zinc-200">
         {children}
       </p>
+    </div>
+  );
+}
+
+/**
+ * What the member's item said when staff acted on it from platform view. The live item may
+ * have been edited, hidden or deleted since, so appeals are judged on this copy.
+ */
+function PenaltyEvidence({ evidence }: { evidence?: CasePenaltyEvidence | null }) {
+  if (!evidence) return null;
+  return (
+    <div className="mt-2 rounded-lg border border-white/[0.06] bg-black/20 px-3 py-2">
+      <p className="text-[10px] uppercase tracking-wide text-zinc-500">
+        Evidence saved from platform view{evidence.capturedAt ? ` · ${caseWhen(evidence.capturedAt)}` : ''}
+      </p>
+      <p className="mt-1 text-xs text-zinc-200">
+        {evidence.kind ? <span className="text-zinc-400">{evidence.kind}: </span> : null}
+        {evidence.title}
+        {evidence.stateWhenActed ? <span className="text-zinc-500"> · was {evidence.stateWhenActed.toLowerCase()}</span> : null}
+      </p>
+      {evidence.excerpt ? (
+        <p className="mt-1 whitespace-pre-wrap border-l-2 border-white/15 pl-2 text-xs text-zinc-300">{evidence.excerpt}</p>
+      ) : null}
+      {evidence.pairedAction || evidence.relatedReports || evidence.page ? (
+        <p className="mt-1 text-[11px] text-zinc-500">
+          {[
+            evidence.pairedAction ? `Taken with: ${evidence.pairedAction}` : null,
+            evidence.relatedReports ? `Open reports then: ${evidence.relatedReports}` : null,
+            evidence.page ? `Page: ${evidence.page}` : null,
+          ]
+            .filter(Boolean)
+            .join(' · ')}
+        </p>
+      ) : null}
     </div>
   );
 }
@@ -442,7 +477,14 @@ function AppealCase({ appeal, requester }: { appeal: CaseAppeal; requester: Case
                 key={`w-${item.w.id}`}
                 title={`${item.w.number || 'Warning'} · ${caseLabel(item.w.type)}`}
                 meta={`${item.w.points} pt · by ${item.w.issuedBy} · ${caseWhen(item.w.createdAt)} · expires ${item.w.expiresAt ? caseDay(item.w.expiresAt) : 'never'}`}
-                detail={item.w.reason}
+                detail={
+                  item.w.reason || item.w.evidence ? (
+                    <>
+                      {item.w.reason}
+                      <PenaltyEvidence evidence={item.w.evidence} />
+                    </>
+                  ) : null
+                }
                 right={<Pill className="border-amber-500/30 bg-amber-500/10 text-amber-200">Warning</Pill>}
               />
             )
@@ -469,6 +511,7 @@ function AppealCase({ appeal, requester }: { appeal: CaseAppeal; requester: Case
                   {h.disputeNumber ? <span className="text-zinc-500"> · dispute {h.disputeNumber}</span> : null}
                 </p>
                 {h.reason ? <p className="text-xs text-zinc-400">{h.reason}</p> : null}
+                <PenaltyEvidence evidence={h.evidence} />
                 <p className="text-[11px] text-zinc-500">
                   {h.actor ? `${h.actor.name} · ${h.actor.role}` : 'System'} · {caseWhen(h.createdAt)}
                 </p>
@@ -507,7 +550,14 @@ function AppealCase({ appeal, requester }: { appeal: CaseAppeal; requester: Case
               key={w.id}
               title={`${w.number || 'Warning'} · ${caseLabel(w.type)}`}
               meta={`${w.points} pt · by ${w.issuedBy} · ${caseDay(w.createdAt)}`}
-              detail={w.reason}
+              detail={
+                w.reason || w.evidence ? (
+                  <>
+                    {w.reason}
+                    <PenaltyEvidence evidence={w.evidence} />
+                  </>
+                ) : null
+              }
               right={<StatusPill status={w.status} />}
             />
           )}

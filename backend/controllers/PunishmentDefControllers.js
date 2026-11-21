@@ -16,7 +16,8 @@ function sendError(res, err, fallback) {
 
 async function getPunishmentCatalog(req, res) {
   try {
-    const desk = req.query?.desk || req.query?.variant || 'admin';
+    const { catalogDeskFor } = require('../lib/UserTeamPermissions');
+    const desk = catalogDeskFor(req.session, req.query?.desk || req.query?.variant || 'admin');
     const kind = req.query?.kind || '';
     return res.status(200).json({ success: true, data: await listPunishmentCatalog(desk, kind) });
   } catch (err) {

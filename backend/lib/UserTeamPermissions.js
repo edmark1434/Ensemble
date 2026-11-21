@@ -98,6 +98,28 @@ function assertStatusActionAllowed(session, action) {
   }
 }
 
+/** Desk key a staff session works from (same keys as `warning_defs.desks` / `punishment_defs.desks`). */
+function deskForSession(session) {
+  const role = roleOf(session);
+  if (role === 'Admin') return 'admin';
+  if (role === 'Support Moderator') return 'support';
+  if (isForumModerator(session)) return 'forum';
+  if (isMarketplaceModerator(session)) return 'marketplace';
+  if (isJobsModerator(session)) return 'jobs';
+  return null;
+}
+
+/**
+ * Desk whose catalog rows a session may list. Admin and Support may look at any desk's list;
+ * a specialist always gets their own, whatever `?desk=` says, so pickers never offer rows the
+ * issue path would refuse.
+ */
+function catalogDeskFor(session, requested) {
+  const own = deskForSession(session);
+  if (own === 'admin' || own === 'support') return String(requested || 'admin');
+  return own || 'admin';
+}
+
 function assertFullWrite(session, featureLabel) {
   if (!isAdminOrSupport(session)) {
     const err = new Error(
@@ -121,6 +143,8 @@ module.exports = {
   allowedStatusActions,
   assertStatusActionAllowed,
   assertFullWrite,
+  deskForSession,
+  catalogDeskFor,
   isAdminOrSupport,
   isForumModerator,
   isMarketplaceModerator,

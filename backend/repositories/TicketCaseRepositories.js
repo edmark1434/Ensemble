@@ -293,15 +293,44 @@ async function ticketsReferencing(entityId, excludeTicketId) {
 /* Appeals                                                             */
 /* ------------------------------------------------------------------ */
 
+/**
+ * Evidence saved with a penalty taken from platform view (the item as it read when staff
+ * acted). Null for penalties issued anywhere else, which keep their report snapshot instead.
+ */
+function evidenceFromMetadata(meta) {
+  if (!meta || typeof meta !== 'object' || !meta.evidenceTitle) return null;
+  return {
+    source: meta.source || null,
+    kind: meta.evidenceKind || null,
+    title: meta.evidenceTitle,
+    excerpt: meta.evidenceExcerpt || null,
+    page: meta.evidenceHref || meta.sourcePage || null,
+    stateWhenActed: meta.evidenceStatus || null,
+    capturedAt: meta.evidenceCapturedAt || null,
+    relatedReports: meta.relatedReports || null,
+    pairedAction: meta.pairedAction || null,
+  };
+}
+
 async function punishmentRecord(accountId) {
   const [warnings, restrictions, history] = await Promise.all([
     pool.query(
       `
       SELECT v.violation_id, v.violation_number, v.type, v.reason, v.points, v.status, v.created_at,
-             v.expires_at, (${ACTIVE_WARNING_SQL}) AS is_active, ${STAFF_NAME_SQL('s', 'sa')} AS issued_by
+             v.expires_at, (${ACTIVE_WARNING_SQL}) AS is_active, ${STAFF_NAME_SQL('s', 'sa')} AS issued_by,
+             issued.metadata AS issue_metadata
       FROM violations v
       LEFT JOIN staff s ON s.staff_id = v.staff_id
       LEFT JOIN accounts sa ON sa.account_id = s.account_id
+      LEFT JOIN LATERAL (
+        SELECT aa.metadata
+        FROM account_activity aa
+        WHERE aa.reference_table = 'violations'
+          AND aa.reference_id = v.violation_id::text
+          AND aa.event_code = 'ACCOUNT_WARNED'
+        ORDER BY aa.created_at ASC
+        LIMIT 1
+      ) issued ON TRUE
       WHERE v.account_id = $1 AND v.deleted_at IS NULL
       ORDER BY v.created_at DESC
       LIMIT 30
@@ -355,6 +384,7 @@ async function punishmentRecord(accountId) {
       issuedBy: row.issued_by,
       createdAt: row.created_at,
       expiresAt: row.expires_at || null,
+      evidence: evidenceFromMetadata(row.issue_metadata),
     })),
     restrictions: restrictions.rows.map((row) => ({
       id: row.restriction_id,
@@ -379,6 +409,7 @@ async function punishmentRecord(accountId) {
         disputeNumber: meta.disputeNumber || null,
         actor: row.actor_name ? { name: row.actor_name, role: row.actor_role || 'Staff' } : null,
         createdAt: row.created_at,
+        evidence: evidenceFromMetadata(meta),
       };
     }),
   };
@@ -1395,9 +1426,94 @@ async function getDisputePartyStanding(byAccountId, forAccountId) {
   return { initiator, respondent };
 }
 
+/* ------------------------------------------------------------------ */
+/* Report cases                                                        */
+/* ------------------------------------------------------------------ */
+
+/**
+ * What happened on and to the account lately. Report handling rows (filed, claimed, status
+ * changes) are left out: the case lists the other reports itself.
+ */
+async function recentAccountActivity(accountId, limit = 10) {
+  const { describeEvent } = require('../lib/ActivityCatalog');
+  const result = await pool.query(
+    `
+    SELECT aa.account_activity_id, aa.action, aa.event_code, aa.created_at, aa.actor_account_id,
+           s.staff_id, s.role AS staff_role, ${STAFF_NAME_SQL('s', 'sa')} AS staff_name
+    FROM account_activity aa
+    LEFT JOIN staff s ON s.staff_id = aa.actor_staff_id
+    LEFT JOIN accounts sa ON sa.account_id = s.account_id
+    WHERE aa.account_id = $1
+      AND COALESCE(aa.event_code, '') NOT LIKE '%REPORT%'
+    ORDER BY aa.created_at DESC
+    LIMIT $2
+    `,
+    [accountId, Number(limit)]
+  );
+  return result.rows.map((row) => {
+    const event = describeEvent(row.event_code);
+    return {
+      id: row.account_activity_id,
+      action: row.action,
+      eventCode: event.eventCode,
+      label: event.eventLabel,
+      category: event.categoryLabel,
+      severity: event.severity,
+      actor: row.staff_id
+        ? { kind: 'staff', name: row.staff_name, role: row.staff_role || 'Staff' }
+        : row.actor_account_id && String(row.actor_account_id) === String(accountId)
+          ? { kind: 'self', name: null, role: null }
+          : null,
+      createdAt: row.created_at,
+    };
+  });
+}
+
+async function forumFootprintForAccount(accountId) {
+  const user = await pool.query(`SELECT user_id FROM users WHERE account_id = $1 LIMIT 1`, [accountId]);
+  const userId = user.rows[0]?.user_id;
+  if (!userId) return null;
+  const { getForumMemberFootprint } = require('./ForumModeratorRepositories');
+  return getForumMemberFootprint(userId);
+}
+
+/**
+ * The reported member, as staff need them to decide a report: live standing, the latest
+ * warnings and restrictions, recent account activity, the other reports against them and,
+ * for forum reports, what they posted lately. Each section loads on its own; a failure
+ * leaves it empty and adds a note instead of failing the case.
+ */
+async function getReportedAccountContext(accountId, { excludeReportId = null, includeForum = false } = {}) {
+  if (!accountId || !UUID_RE.test(String(accountId))) return null;
+  const notes = [];
+  const exclude = excludeReportId && UUID_RE.test(String(excludeReportId)) ? String(excludeReportId) : null;
+  const [standing, record, activity, otherReports, forum] = await Promise.all([
+    section(notes, 'Account standing', () => accountSummary(accountId)),
+    section(notes, 'Warnings and restrictions', () => punishmentRecord(accountId)),
+    section(notes, 'Recent activity', () => recentAccountActivity(accountId)),
+    section(notes, 'Other reports', () =>
+      reportsList('r.for_account_id = $1 AND ($2::uuid IS NULL OR r.report_id <> $2::uuid)', [accountId, exclude], 8)
+    ),
+    includeForum
+      ? section(notes, 'Forum activity', () => forumFootprintForAccount(accountId))
+      : Promise.resolve(null),
+  ]);
+  return {
+    standing,
+    warnings: (record?.warnings || []).slice(0, 6),
+    restrictions: (record?.restrictions || []).slice(0, 6),
+    recentActivity: activity || [],
+    otherReports: otherReports || [],
+    forum,
+    notes,
+  };
+}
+
 module.exports = {
+  accountSummary,
   caseKindForType,
   getTicketCaseContext,
   getDisputePartyStanding,
+  getReportedAccountContext,
   ticketsReferencing,
 };

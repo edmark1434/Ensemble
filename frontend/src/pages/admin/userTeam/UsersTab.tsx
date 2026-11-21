@@ -615,6 +615,8 @@ export default function UsersTab({
         <ConfirmStatusModal
           entityName={selected.name}
           action={modal}
+          desk={capabilities.variant}
+          openEndedAllowed={capabilities.canBan}
           onClose={closeModal}
           onConfirm={async (options) => {
             try {

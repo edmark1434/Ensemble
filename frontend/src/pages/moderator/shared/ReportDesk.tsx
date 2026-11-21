@@ -168,6 +168,7 @@ export default function ReportDesk({
   deskLabel,
   preset,
   listingApiBase,
+  forumContentApiBase,
 }: {
   reports: UserReport[];
   onUpdated: () => void;
@@ -179,6 +180,8 @@ export default function ReportDesk({
   preset?: ReportDeskPreset;
   /** Marketplace API root; lets a case open the linked listing to delist or re-review it. */
   listingApiBase?: string;
+  /** Forum moderation API root; lets a case remove the reported discussion or hide the comment. */
+  forumContentApiBase?: string;
 }) {
   const theme = ACCENT[accent];
   const [search, setSearch] = useState(() => preset?.search || '');
@@ -697,6 +700,7 @@ export default function ReportDesk({
           endpointBase={endpointBase}
           accent={accent}
           listingApiBase={listingApiBase}
+          forumContentApiBase={forumContentApiBase}
           onClose={() => setSelectedId(null)}
           onUpdated={onUpdated}
         />

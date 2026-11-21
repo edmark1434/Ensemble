@@ -127,7 +127,7 @@ async function getReports(req, res) {
 
 async function getReport(req, res) {
   try {
-    const data = await getReportDetail(req.params.id, req.session, { assignableQueue: 'forum' });
+    const data = await getReportDetail(req.params.id, req.session, { assignableQueue: 'forum', includeAccountContext: true });
     if (!data) return res.status(404).json({ success: false, message: 'Report not found' });
     if (!isReportTypeInScope(data.report?.targetType, FORUM_REPORT_TYPES)) {
       return res.status(403).json({ success: false, message: 'Report is outside the forum queue' });

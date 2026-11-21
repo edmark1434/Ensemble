@@ -36,10 +36,19 @@ const forumCommentLimiter = createRateLimiter('forumComment', {
 	networkLimit: 120,
 	message: 'You are commenting too fast. Please wait a moment before posting another reply.',
 });
+// Reports already dedupe per item; this stops one account from flooding the forum queue.
+const forumReportLimiter = createRateLimiter('forumReport', {
+	windowMs: 10 * 60 * 1000,
+	accountLimit: 10,
+	anonymousLimit: 3,
+	networkLimit: 60,
+	message: 'You have sent several reports in a short time. Please wait a few minutes before reporting again.',
+});
 const {
 	createGroupReportController,
 	createMemberReportController,
 	createDiscussionReportController,
+	createCommentReportController,
 } = require('../controllers/ForumReportControllers');
 
 router.post('/create-group', [checkSession, requireAuth], createForumGroup);
@@ -65,7 +74,8 @@ router.patch('/groups/:groupId/members/:memberId/ban', [checkSession, requireAut
 router.delete('/groups/:groupId/members/:memberId', [checkSession, requireAuth], removeForumGroupMemberController);
 router.delete('/groups/:groupId', [checkSession, requireAuth], deleteForumGroupController);
 router.delete('/discussions/:discussionId', [checkSession, requireAuth], deleteForumDiscussionController);
-router.post('/reports/groups/:groupId', [checkSession, requireAuth], createGroupReportController);
-router.post('/reports/groups/:groupId/members/:memberId', [checkSession, requireAuth], createMemberReportController);
-router.post('/reports/discussions/:discussionId', [checkSession, requireAuth], createDiscussionReportController);
+router.post('/reports/groups/:groupId', [checkSession, requireAuth, forumReportLimiter], createGroupReportController);
+router.post('/reports/groups/:groupId/members/:memberId', [checkSession, requireAuth, forumReportLimiter], createMemberReportController);
+router.post('/reports/discussions/:discussionId', [checkSession, requireAuth, forumReportLimiter], createDiscussionReportController);
+router.post('/reports/discussions/:discussionId/comments/:commentId', [checkSession, requireAuth, forumReportLimiter], createCommentReportController);
 module.exports = router;

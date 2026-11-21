@@ -334,7 +334,7 @@ async function patchAdminReport(req, res) {
 
 async function getAdminReportDetail(req, res) {
   try {
-    const data = await getReportDetail(req.params.id, req.session);
+    const data = await getReportDetail(req.params.id, req.session, { includeAccountContext: true });
     if (!data) return res.status(404).json({ success: false, message: 'Report not found' });
     res.status(200).json({ success: true, data });
   } catch (err) {

@@ -554,10 +554,13 @@ async function assertFollowUpAllowed(ticket, followUp, staffId) {
       409
     );
   }
-  const { assertCanSanctionTarget } = require('../lib/SuspendGuards');
+  const { assertCanSanctionTarget, staffRoleOf } = require('../lib/SuspendGuards');
   await assertCanSanctionTarget({ actorStaffId: staffId, targetAccountId: ticket.account_id, action: followUp.action });
   const { resolveStandingOptions } = require('./PunishmentDefServices');
-  await resolveStandingOptions(followUp.action, followUpStatusOptions(followUp));
+  // Same role checks `updateAccountStatus` applies later (desk rows, open-ended clocks), so a
+  // follow-up the decider may not issue is refused before the decision is saved.
+  const actorRole = staffId ? await staffRoleOf(staffId) : undefined;
+  await resolveStandingOptions(followUp.action, { ...followUpStatusOptions(followUp), actorRole });
 }
 
 /**

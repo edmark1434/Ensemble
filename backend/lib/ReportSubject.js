@@ -280,6 +280,21 @@ async function lookupMessage(messageId) {
   }
 }
 
+/**
+ * Staff view of a discussion: includes removed discussions and the text of hidden comments.
+ * Required lazily — the forum moderator repository loads ModeratorSharedRepositories, which
+ * loads this file. Null when MongoDB is down or the id is not a discussion.
+ */
+async function staffDiscussion(discussionId) {
+  if (!discussionId) return null;
+  try {
+    const { getModeratorForumDiscussionDetail } = require('../repositories/ForumModeratorRepositories');
+    return await getModeratorForumDiscussionDetail(String(discussionId));
+  } catch {
+    return null;
+  }
+}
+
 async function buildReportSubject(row) {
   const targetType = String(row.target_type || '').trim().toLowerCase();
   const referenceTable = String(row.reference_table || '').trim().toLowerCase();
@@ -293,6 +308,8 @@ async function buildReportSubject(row) {
   let available = false;
   let message = null;
   let marketplace = null;
+  // Forum item staff can act on from the case (remove a discussion, hide a comment, deactivate a group).
+  let forumContent = null;
 
   if (accountId) {
     pushLink(links, 'Open reported account', profileLink(accountId));
@@ -324,6 +341,35 @@ async function buildReportSubject(row) {
           sentAt: message?.sentAt || null,
         };
       }
+    } else if (targetType === 'comment') {
+      // Must come before the discussion branch: comment reports also reference forum_discussions.
+      const discussionId = referenceId || snapshot?.extra?.discussionId || null;
+      const staffView = await staffDiscussion(discussionId);
+      const comment = staffView?.comments?.find((item) => String(item.commentId) === String(targetId)) || null;
+      headline = snapshot?.title || (staffView ? `Comment on “${staffView.title}”` : 'Reported comment');
+      if (staffView) {
+        if (staffView.status === 'active') {
+          pushLink(links, 'Open discussion', `/forums/discussion/${staffView.id}`);
+        }
+        pushLink(links, 'Open forum group', staffView.groupId ? `/forums/group/${staffView.groupId}` : null);
+      }
+      const liveText = comment && !(comment.isDeleted && comment.removedBy === 'author')
+        ? previewText(comment.comment)
+        : '';
+      previewBody = previewBody || liveText || null;
+      available = Boolean(comment && !comment.isDeleted && staffView.status === 'active');
+      forumContent = {
+        kind: 'comment',
+        discussionId: staffView?.id || discussionId,
+        discussionTitle: staffView?.title || snapshot?.extra?.discussionTitle || null,
+        discussionStatus: staffView?.status || null,
+        commentId: targetId ? String(targetId) : null,
+        status: comment ? (comment.isDeleted ? 'removed' : 'active') : 'missing',
+        removedBy: comment?.isDeleted ? comment.removedBy || 'author' : null,
+        removalReason: comment?.isDeleted ? comment.removalReason || null : null,
+        // The author can edit after reporting; staff see both when they differ.
+        currentText: liveText && snapshot?.body && liveText !== snapshot.body ? liveText : null,
+      };
     } else if (targetType === 'group' || (referenceTable === 'forum_groups' && targetType !== 'member')) {
       const group = await getForumGroupById(targetId).catch(() => null);
       if (group) {
@@ -334,6 +380,12 @@ async function buildReportSubject(row) {
       } else if (snapshot?.href) {
         previewBody = previewBody || snapshot.body;
       }
+      forumContent = {
+        kind: 'group',
+        groupId: targetId ? String(targetId) : null,
+        // The member lookup only returns active groups.
+        status: group ? 'active' : 'inactive',
+      };
     } else if (targetType === 'discussion' || targetType === 'post' || referenceTable === 'forum_discussions') {
       const discussion = await getForumDiscussionById(targetId).catch(() => null);
       if (discussion) {
@@ -343,6 +395,20 @@ async function buildReportSubject(row) {
         pushLink(links, 'Open discussion', `/forums/discussion/${targetId}`);
         const groupId = discussion.forum_group_id || discussion.group_id || discussion.groupId;
         pushLink(links, 'Open forum group', groupId ? `/forums/group/${groupId}` : null);
+      }
+      const staffView = await staffDiscussion(targetId);
+      if (staffView) {
+        const liveText = previewText(staffView.content ?? staffView.description);
+        forumContent = {
+          kind: 'discussion',
+          discussionId: staffView.id,
+          discussionTitle: staffView.title,
+          status: staffView.status,
+          removedBy: staffView.removedBy || null,
+          removalReason: staffView.removalReason || null,
+          // The author can edit after reporting; staff see both when they differ.
+          currentText: liveText && snapshot?.body && liveText !== snapshot.body ? liveText : null,
+        };
       }
     } else if (targetType === 'member' && referenceTable === 'forum_groups') {
       const group = await getForumGroupById(referenceId).catch(() => null);
@@ -528,6 +594,7 @@ async function buildReportSubject(row) {
     message,
     links,
     marketplace,
+    forumContent,
     reportedAccount: accountId
       ? {
           accountId: String(accountId),

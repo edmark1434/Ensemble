@@ -122,7 +122,23 @@ async function listPunishmentDefsService() {
   return loadLiveOrSeed();
 }
 
-async function resolveIssuedPunishment({ punishmentId, kind } = {}) {
+/**
+ * The picker lists one desk's rows, but the API takes any slug. Admin and Support may issue
+ * every row; a specialist moderator only rows whose `desks` include their desk (the same rule
+ * warnings already follow). `actorRole` undefined means a system path (dispute ban, appeal
+ * denial by Admin/Support), which keeps working as before.
+ */
+function assertPunishmentIssuableByRole(issued, actorRole) {
+  if (actorRole === undefined) return;
+  const { warningDeskForRole } = require('./WarningDefServices');
+  const desk = warningDeskForRole(actorRole);
+  if (desk === 'admin' || desk === 'support') return;
+  if (!desk || !Array.isArray(issued?.desks) || !issued.desks.includes(desk)) {
+    throw serviceError('Your desk cannot issue this punishment. Pick one from your list.', 403);
+  }
+}
+
+async function resolveIssuedPunishment({ punishmentId, kind, actorRole } = {}) {
   const slug = String(punishmentId || '').trim();
   const wantedKind = String(kind || '').trim().toLowerCase();
   if (!slug) {
@@ -143,20 +159,54 @@ async function resolveIssuedPunishment({ punishmentId, kind } = {}) {
   if (wantedKind && shaped.kind !== wantedKind) {
     throw serviceError(`That row is a ${shaped.kind}, not a ${wantedKind}.`);
   }
-  return {
+  const issued = {
     punishmentId: shaped.slug || shaped.id,
     label: shaped.label,
     kind: shaped.kind,
     category: shaped.category,
     durationDays: shaped.durationDays,
     permanent: shaped.permanent,
+    desks: Array.isArray(shaped.desks) ? shaped.desks : ['admin'],
     note: shaped.note || '',
   };
+  assertPunishmentIssuableByRole(issued, actorRole);
+  return issued;
 }
 
 function hasCustomClock(options = {}) {
   if (options.customDuration === true || options.custom_duration === true) return true;
   return false;
+}
+
+const FULL_CLOCK_ROLES = new Set(['Admin', 'Support Moderator']);
+const MAX_CUSTOM_CLOCK_MS = MAX_DURATION_DAYS * 24 * 60 * 60 * 1000;
+
+/**
+ * A custom clock on a suspension or timeout must stay inside the same 1–365 day window the
+ * catalog and `days` already use. Before this, `endsAt` had no ceiling (a typo could suspend
+ * someone until 2099) and any role could make the suspension open-ended with
+ * `duration: 'permanent'`. Open-ended suspensions and timeouts stay an Admin / Support call;
+ * a specialist who needs an indefinite hold uses Lock, which is built for that.
+ */
+function assertCustomClockAllowed(kind, options, actorRole) {
+  if (kind !== 'suspend' && kind !== 'timeout') return;
+  const word = kind === 'suspend' ? 'suspension' : 'timeout';
+  const duration = String(options.duration || 'temporary').toLowerCase();
+  if (duration !== 'temporary') {
+    if (actorRole !== undefined && !FULL_CLOCK_ROLES.has(String(actorRole || ''))) {
+      throw serviceError(
+        `Only Admin or Support can set a ${word} with no end date. Pick an end date up to ${MAX_DURATION_DAYS} days away, or lock the account.`,
+        403
+      );
+    }
+    return;
+  }
+  if (options.endsAt) {
+    const ends = new Date(options.endsAt);
+    if (!Number.isNaN(ends.getTime()) && ends.getTime() - Date.now() > MAX_CUSTOM_CLOCK_MS) {
+      throw serviceError(`A ${word} can last at most ${MAX_DURATION_DAYS} days. Pick an earlier end date.`);
+    }
+  }
 }
 
 async function resolveStandingOptions(action, options = {}) {
@@ -168,10 +218,14 @@ async function resolveStandingOptions(action, options = {}) {
   let punishmentId = options.punishmentId || options.punishment_id || '';
   if (!punishmentId && options.disputeId) punishmentId = 'ban_dispute_conviction';
 
-  const resolved = await resolveIssuedPunishment({ punishmentId, kind });
+  // The dispute conviction ban has its own guard (`assertDisputeBanAllowed`) and is issued by
+  // whichever desk decides the dispute, so it keeps skipping the desk check.
+  const actorRole = options.disputeId ? undefined : options.actorRole;
+  const resolved = await resolveIssuedPunishment({ punishmentId, kind, actorRole });
   const custom = hasCustomClock(options);
 
   if (custom) {
+    assertCustomClockAllowed(kind, options, actorRole);
     return {
       ...options,
       punishmentId: resolved.punishmentId,

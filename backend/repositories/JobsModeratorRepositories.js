@@ -586,7 +586,7 @@ async function getJobsGigsPostingDetail(type, id) {
  *
  * @param reason {string} optional note shown in the activity log
  */
-async function updateJobsGigsPosting(type, id, { status, reason } = {}, session = null) {
+async function updateJobsGigsPosting(type, id, { status, reason } = {}, session = null, audit = {}) {
   const table = type === 'job' ? 'jobs' : type === 'gig' ? 'gigs' : null;
   if (!table) throw new Error(`Invalid posting type: ${type}`);
 
@@ -621,14 +621,30 @@ async function updateJobsGigsPosting(type, id, { status, reason } = {}, session 
     throw error;
   }
 
+  // Written only from the state read above, so two moderators acting at once get a conflict
+  // instead of the second silently replacing the first (and both being logged as done).
+  let changed;
   if (next === 'archived') {
-    await pool.query(`UPDATE ${table} SET deleted_at = NOW(), updated_at = NOW() WHERE ${idColumn} = $1`, [id]);
+    changed = await pool.query(
+      `UPDATE ${table} SET deleted_at = NOW(), updated_at = NOW()
+       WHERE ${idColumn} = $1 AND deleted_at IS NULL AND status IS NOT DISTINCT FROM $2`,
+      [id, posting.status]
+    );
   } else {
     const dbStatus = dbStatusForWrite(type, next);
-    await pool.query(
-      `UPDATE ${table} SET status = $1, deleted_at = NULL, updated_at = NOW() WHERE ${idColumn} = $2`,
-      [dbStatus, id]
+    changed = await pool.query(
+      `UPDATE ${table} SET status = $1, deleted_at = NULL, updated_at = NOW()
+       WHERE ${idColumn} = $2 AND status IS NOT DISTINCT FROM $3
+         AND (deleted_at IS NULL) = $4::boolean`,
+      // Compared as "archived or not": a timestamp read back through a JS Date loses
+      // its microseconds and would never match.
+      [dbStatus, id, posting.status, !posting.deleted_at]
     );
+  }
+  if (!changed.rowCount) {
+    const error = new Error(`This ${type} changed while you were working on it. Reload and try again.`);
+    error.statusCode = 409;
+    throw error;
   }
 
   if (posting.owner_account_id) {
@@ -649,6 +665,8 @@ async function updateJobsGigsPosting(type, id, { status, reason } = {}, session 
         previousStatus,
         status: next,
         reason: note || null,
+        // Server-side callers only (platform view evidence); never read from the request body.
+        ...(audit && typeof audit === 'object' && !Array.isArray(audit) ? audit : {}),
       },
     });
   }

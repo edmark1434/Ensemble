@@ -111,6 +111,14 @@ async function logForumAction({
   }
 }
 
+/**
+ * Extra audit fields a server-side caller adds (platform view: source page and evidence). Taken
+ * as its own argument, never from the request body, so a desk client cannot forge them.
+ */
+function auditFields(audit) {
+  return audit && typeof audit === 'object' && !Array.isArray(audit) ? audit : {};
+}
+
 async function listForumGroupsForStaff({ search, status } = {}) {
   return getModeratorForumGroups({ search, status });
 }
@@ -119,7 +127,7 @@ async function getForumGroupForStaff(groupId) {
   return getModeratorForumGroupDetail(groupId);
 }
 
-async function setForumGroupVisibility(groupId, body, session) {
+async function setForumGroupVisibility(groupId, body, session, audit = {}) {
   const status = String(body?.status || '').toLowerCase();
   if (status !== 'active' && status !== 'inactive') {
     throw forumError('Set the group to active or inactive');
@@ -165,6 +173,7 @@ async function setForumGroupVisibility(groupId, body, session) {
       memberCount: before.memberCount,
       discussionCount: before.discussionCount,
       reason,
+      ...auditFields(audit),
     },
   });
 
@@ -254,7 +263,7 @@ function discussionChangeEvents(changes) {
   return events;
 }
 
-async function setForumDiscussionState(discussionId, body, session) {
+async function setForumDiscussionState(discussionId, body, session, audit = {}) {
   const requested = {};
   if (body?.status != null) {
     const status = String(body.status).toLowerCase();
@@ -328,6 +337,7 @@ async function setForumDiscussionState(discussionId, body, session) {
         wasPinned: before.isSticky,
         commentCount: before.commentCount,
         reason,
+        ...auditFields(audit),
       },
     });
   }
@@ -339,7 +349,7 @@ async function setForumDiscussionState(discussionId, body, session) {
  * Hides (`hidden: true`) or restores (`hidden: false`) one comment. Hiding keeps
  * the text and attachments; member reads show a placeholder until it is restored.
  */
-async function setForumCommentVisibility(discussionId, commentId, body, session) {
+async function setForumCommentVisibility(discussionId, commentId, body, session, audit = {}) {
   const hidden = optionalBoolean(body, 'hidden');
   if (hidden === undefined) throw forumError('Say whether the comment is hidden');
 
@@ -397,6 +407,7 @@ async function setForumCommentVisibility(discussionId, commentId, body, session)
       replyCount: comment.replyCount,
       postedAt: comment.createdAt || null,
       reason,
+      ...auditFields(audit),
     },
   });
 

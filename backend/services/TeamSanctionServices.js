@@ -113,6 +113,7 @@ async function warnTeamLeader(teamAccount, payload, staffId) {
       type: result.type,
       points: result.points,
       reason: String(payload?.reason || '').trim() || null,
+      ...(payload?.activityContext && typeof payload.activityContext === 'object' ? payload.activityContext : {}),
     },
   });
   return {
@@ -164,7 +165,11 @@ async function changeTeamStanding(teamAccount, key, staffId, options = {}) {
       referencePrefix: 'ACC',
       referenceId: leader.accountId,
       actorStaffId: staffId,
-      metadata: { leaderAccountId: leader.accountId, reason: reason || null },
+      metadata: {
+        leaderAccountId: leader.accountId,
+        reason: reason || null,
+        ...(options.activityContext && typeof options.activityContext === 'object' ? options.activityContext : {}),
+      },
     });
     return {
       ...result,
@@ -414,9 +419,20 @@ async function transferTeamOwnership(teamAccountId, input = {}, staffId = null, 
   };
 }
 
+/**
+ * A team's name and current leader (first active Owner), for staff screens that need to say who
+ * a team penalty also reaches. Null when the team does not exist.
+ */
+async function describeTeamLeader(teamAccountId) {
+  const team = await TeamsRepositories.getTeamStanding(teamAccountId).catch(() => null);
+  if (!team || String(team.account_id) !== String(teamAccountId)) return null;
+  return { teamName: teamNameOf(team), status: team.account_status || null, leader: leaderOf(team) };
+}
+
 module.exports = {
   warnTeamLeader,
   changeTeamStanding,
   transferTeamOwnership,
   teamStandingMessage,
+  describeTeamLeader,
 };

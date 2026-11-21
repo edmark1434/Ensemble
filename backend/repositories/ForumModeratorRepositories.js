@@ -586,6 +586,8 @@ async function getModeratorForumDiscussionDetail(discussionId) {
 
   return {
     ...mapDiscussionSummary(doc, identities, group),
+    // The post body as written (kept on removal), so staff evidence can quote it.
+    content: typeof doc.content === 'string' ? doc.content : null,
     comments: comments
       .map((comment) => ({
         commentId: comment.comment_id,
@@ -1045,6 +1047,236 @@ async function getForumOverview() {
   };
 }
 
+// ─── Member footprint (report cases) ───────────────────────────────────
+
+/** `created_at` is a Date on some documents and an ISO string on others. */
+function toDateExpression(path) {
+  return { $convert: { input: path, to: 'date', onError: null, onNull: null } };
+}
+
+function isSetExpression(path) {
+  return { $ne: [{ $ifNull: [path, null] }, null] };
+}
+
+/** Taken down by moderation (staff, a group moderator, the discussion owner), not by its author. */
+function removedByModerationExpression(deletedPath, removedByPath) {
+  return { $and: [isSetExpression(deletedPath), { $ne: [{ $ifNull: [removedByPath, 'author'] }, 'author'] }] };
+}
+
+function snippet(value, max = 240) {
+  const text = String(value || '')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/[#*_`>~[\]]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return text.length > max ? `${text.slice(0, max - 1)}…` : text;
+}
+
+/**
+ * One member's forum footprint for a staff report case: their latest discussions and
+ * comments (including ones moderation took down), totals, and the groups they belong to,
+ * own, or are banned from. Staff-only — hidden comment text is included for review.
+ * Returns null when MongoDB is not connected or the member has no user id.
+ */
+async function getForumMemberFootprint(userId, { limit = 5 } = {}) {
+  const db = forumDb();
+  if (!db || !userId) return null;
+  const id = String(userId);
+  const take = Math.min(Math.max(Number(limit) || 5, 1), 10);
+  const discussions = db.collection('forum_discussions');
+  const discussionRemoved = {
+    $or: [isSetExpression('$deleted_at'), { $eq: ['$status', 'removed'] }],
+  };
+
+  const [discussionFacet, commentFacet, groupRows] = await Promise.all([
+    discussions
+      .aggregate([
+        { $match: { user_id: id } },
+        { $addFields: { createdAtDate: toDateExpression('$created_at') } },
+        {
+          $facet: {
+            recent: [
+              { $sort: { createdAtDate: -1 } },
+              { $limit: take },
+              {
+                $project: {
+                  title: 1,
+                  forum_group_id: 1,
+                  status: 1,
+                  deleted_at: 1,
+                  removed_by: 1,
+                  created_at: 1,
+                  commentCount: { $size: { $ifNull: ['$comments', []] } },
+                },
+              },
+            ],
+            totals: [
+              {
+                $group: {
+                  _id: null,
+                  total: { $sum: 1 },
+                  removed: { $sum: { $cond: [discussionRemoved, 1, 0] } },
+                  moderated: {
+                    $sum: {
+                      $cond: [
+                        { $and: [discussionRemoved, { $ne: [{ $ifNull: ['$removed_by', 'author'] }, 'author'] }] },
+                        1,
+                        0,
+                      ],
+                    },
+                  },
+                },
+              },
+            ],
+          },
+        },
+      ])
+      .toArray(),
+    discussions
+      .aggregate([
+        { $match: { 'comments.user_id': id } },
+        { $project: { title: 1, forum_group_id: 1, comments: 1 } },
+        { $unwind: '$comments' },
+        { $match: { 'comments.user_id': id } },
+        { $addFields: { createdAtDate: toDateExpression('$comments.created_at') } },
+        {
+          $facet: {
+            recent: [
+              { $sort: { createdAtDate: -1 } },
+              { $limit: take },
+              {
+                $project: {
+                  title: 1,
+                  forum_group_id: 1,
+                  commentId: '$comments.comment_id',
+                  comment: '$comments.comment',
+                  replyTo: '$comments.comment_reference_id',
+                  deletedAt: '$comments.deleted_at',
+                  removedBy: '$comments.removed_by',
+                  createdAt: '$comments.created_at',
+                },
+              },
+            ],
+            totals: [
+              {
+                $group: {
+                  _id: null,
+                  total: { $sum: 1 },
+                  removed: { $sum: { $cond: [isSetExpression('$comments.deleted_at'), 1, 0] } },
+                  moderated: {
+                    $sum: {
+                      $cond: [removedByModerationExpression('$comments.deleted_at', '$comments.removed_by'), 1, 0],
+                    },
+                  },
+                },
+              },
+            ],
+          },
+        },
+      ])
+      .toArray(),
+    db
+      .collection('forum_groups')
+      .aggregate([
+        { $match: { 'members.userId': id } },
+        {
+          $project: {
+            group_name: 1,
+            status: 1,
+            deleted_at: 1,
+            member: {
+              $arrayElemAt: [
+                {
+                  $filter: {
+                    input: { $ifNull: ['$members', []] },
+                    as: 'm',
+                    cond: { $eq: [{ $toString: '$$m.userId' }, id] },
+                  },
+                },
+                0,
+              ],
+            },
+          },
+        },
+      ])
+      .toArray(),
+  ]);
+
+  const recentDiscussions = discussionFacet[0]?.recent || [];
+  const recentComments = commentFacet[0]?.recent || [];
+  const groupIds = [
+    ...new Set(
+      [...recentDiscussions, ...recentComments]
+        .map((row) => String(row.forum_group_id || ''))
+        .filter((value) => ObjectId.isValid(value))
+    ),
+  ];
+  const groupNames = new Map(groupRows.map((group) => [String(group._id), group.group_name || 'Untitled group']));
+  const missing = groupIds.filter((value) => !groupNames.has(value));
+  if (missing.length) {
+    const extra = await db
+      .collection('forum_groups')
+      .find({ _id: { $in: missing.map((value) => new ObjectId(value)) } }, { projection: { group_name: 1 } })
+      .toArray();
+    for (const group of extra) groupNames.set(String(group._id), group.group_name || 'Untitled group');
+  }
+  const groupName = (value) => (value ? groupNames.get(String(value)) || null : null);
+
+  const liveGroups = groupRows.filter(
+    (group) => group.member && !group.deleted_at && (!group.status || group.status === 'active')
+  );
+  const dTotals = discussionFacet[0]?.totals?.[0] || {};
+  const cTotals = commentFacet[0]?.totals?.[0] || {};
+
+  return {
+    available: true,
+    totals: {
+      discussions: Number(dTotals.total || 0),
+      removedDiscussions: Number(dTotals.removed || 0),
+      moderatedDiscussions: Number(dTotals.moderated || 0),
+      comments: Number(cTotals.total || 0),
+      removedComments: Number(cTotals.removed || 0),
+      moderatedComments: Number(cTotals.moderated || 0),
+    },
+    groups: {
+      joined: liveGroups.filter((group) => !group.member.is_banned).length,
+      owned: liveGroups.filter((group) => group.member.role === 'Admin' && !group.member.is_banned).length,
+      bannedFrom: liveGroups.filter((group) => group.member.is_banned).length,
+      list: liveGroups.slice(0, 6).map((group) => ({
+        id: String(group._id),
+        name: group.group_name || 'Untitled group',
+        role: group.member.role || 'Member',
+        banned: Boolean(group.member.is_banned),
+      })),
+    },
+    recentDiscussions: recentDiscussions.map((doc) => {
+      const removed = Boolean(doc.deleted_at) || doc.status === 'removed';
+      return {
+        id: String(doc._id),
+        title: doc.title || 'Untitled discussion',
+        groupId: doc.forum_group_id ? String(doc.forum_group_id) : null,
+        groupName: groupName(doc.forum_group_id),
+        status: removed ? 'removed' : 'active',
+        removedBy: removed ? doc.removed_by || null : null,
+        commentCount: Number(doc.commentCount || 0),
+        createdAt: doc.created_at || null,
+      };
+    }),
+    recentComments: recentComments.map((row) => ({
+      discussionId: String(row._id),
+      discussionTitle: row.title || 'Untitled discussion',
+      groupName: groupName(row.forum_group_id),
+      commentId: row.commentId || null,
+      isReply: Boolean(row.replyTo),
+      // An author's own delete wipes the text; a moderation removal keeps it for review.
+      snippet: snippet(row.comment),
+      removed: Boolean(row.deletedAt),
+      removedBy: row.deletedAt ? row.removedBy || 'author' : null,
+      createdAt: row.createdAt || null,
+    })),
+  };
+}
+
 module.exports = {
   getForumOverview,
   getForumTickets,
@@ -1057,4 +1289,5 @@ module.exports = {
   setForumDiscussionStatus,
   setForumDiscussionCommentHidden,
   getForumModerationStats,
+  getForumMemberFootprint,
 };

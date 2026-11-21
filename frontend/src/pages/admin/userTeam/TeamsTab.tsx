@@ -734,6 +734,8 @@ export default function TeamsTab({
         <ConfirmStatusModal
           entityName={selected.name}
           action={statusModal}
+          desk={capabilities.variant}
+          openEndedAllowed={capabilities.canBan}
           team={{ leader: selected.leader ?? null }}
           onClose={closeModal}
           onConfirm={async (options) => {

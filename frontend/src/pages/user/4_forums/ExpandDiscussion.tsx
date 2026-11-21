@@ -4,6 +4,7 @@ import {
   ArrowLeft,
   Bookmark,
   Edit2,
+  Flag,
   Heart,
   Image as ImageIcon,
   Loader2,
@@ -19,7 +20,7 @@ import remarkGfm from "remark-gfm";
 import UserHeader from "@/components/nav/user_header";
 import EditPostModal from "@/pages/user/4_forums/forum_modals/EditPostModal";
 import DeletePostModal from "@/pages/user/4_forums/forum_modals/DeletePostModal";
-import ReportGroupModal from "@/pages/user/4_forums/forum_modals/ReportGroupModal";
+import ForumReportModal from "@/pages/user/4_forums/forum_modals/ForumReportModal";
 import { showErrorToast, showSuccessToast } from "@/components/utility/toast";
 import api from "@/lib/axios";
 import useGlobalState from "@/lib/global_state";
@@ -188,14 +189,18 @@ const ReplyComposer = ({
 
 const CommentNode = ({
   comment,
+  discussionId,
   currentUserId,
   onReply,
   onEdit,
   onDelete,
   onLike,
+  onReport,
   identities,
 }: {
   comment: ForumComment;
+  /** Only used to tag the comment for staff platform view (`data-moderation-subject`). */
+  discussionId: string;
   currentUserId: UserId;
   onReply: (
     parentId: string,
@@ -205,6 +210,7 @@ const CommentNode = ({
   onEdit: (commentId: string, comment: string) => Promise<void>;
   onDelete: (commentId: string) => Promise<void>;
   onLike: (commentId: string) => Promise<void>;
+  onReport: (comment: ForumComment, authorName: string) => void;
   identities: Record<string, { name: string; avatar: string; accountId?: string | null }>;
 }) => {
   const navigate = useNavigate();
@@ -213,7 +219,7 @@ const CommentNode = ({
   const [editing, setEditing] = useState(false);
   const [editText, setEditText] = useState(comment.comment);
   const [showChildren, setShowChildren] = useState(false);
-  const { locked: forumTimedOut, message: forumTimeoutMessage } = useForumTimeout();
+  const { locked: forumTimedOut, reportLocked, message: forumTimeoutMessage } = useForumTimeout();
   const lockedTitle = forumTimedOut ? forumTimeoutMessage : undefined;
   const lockedClass = forumTimedOut ? FORUM_LOCKED_CLASS : "";
   const isAuthor = sameUser(comment.user_id, currentUserId);
@@ -239,7 +245,11 @@ const CommentNode = ({
 
   return (
     <div className={comment.depth ? "ml-5 border-l border-gray-200 dark:border-white/10 pl-4" : ""}>
-      <div className="mt-3 rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/[0.03] p-4">
+      {/* Inert for members; staff pick this comment in platform view (the server resolves it). */}
+      <div
+        data-moderation-subject={`forum_comment:${discussionId}:${comment.comment_id}`}
+        className="mt-3 rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/[0.03] p-4"
+      >
         <div className="flex items-start justify-between gap-3">
           <div className="flex items-center gap-2">
             {targetAccountId || isAuthor ? (
@@ -349,6 +359,18 @@ const CommentNode = ({
               <Reply className="h-3.5 w-3.5" />
               Reply
             </button>
+            {!isAuthor && (
+              <button
+                type="button"
+                onClick={() => onReport(comment, authorIdentity?.name || "Forum member")}
+                disabled={reportLocked}
+                title={reportLocked ? forumTimeoutMessage : "Report this comment"}
+                className={`flex items-center gap-1 text-xs text-gray-500 hover:text-red-500 dark:text-zinc-500 dark:hover:text-red-400 ${reportLocked ? FORUM_LOCKED_CLASS : ""}`}
+              >
+                <Flag className="h-3.5 w-3.5" />
+                Report
+              </button>
+            )}
             {(comment.children || []).length > 0 && (
               <button onClick={() => setShowChildren((value) => !value)} className="text-xs text-gray-500 dark:text-zinc-500 hover:text-gray-900 dark:text-white">
                 {showChildren ? "Hide" : "View"} {(comment.children || []).length} {(comment.children || []).length === 1 ? "reply" : "replies"}
@@ -374,11 +396,13 @@ const CommentNode = ({
         <CommentNode
           key={child.comment_id}
           comment={child}
+          discussionId={discussionId}
           currentUserId={currentUserId}
           onReply={onReply}
           onEdit={onEdit}
           onDelete={onDelete}
           onLike={onLike}
+          onReport={onReport}
           identities={identities}
         />
       ))}
@@ -399,6 +423,7 @@ const ExpandDiscussion = () => {
   const [editingPost, setEditingPost] = useState(false);
   const [deletingPost, setDeletingPost] = useState(false);
   const [reportingPost, setReportingPost] = useState(false);
+  const [reportingComment, setReportingComment] = useState<{ comment: ForumComment; authorName: string } | null>(null);
   const [identities, setIdentities] = useState<Record<string, { name: string; avatar: string; accountId?: string | null }>>({});
   useForumRealtime((event) => setDiscussion((current) => {
     if (!current) return current;
@@ -661,7 +686,10 @@ const ExpandDiscussion = () => {
           <ArrowLeft className="h-4 w-4" /> Back
         </button>
 
-        <article className="rounded-xl border border-gray-200 dark:border-white/10 bg-white/[0.04] p-6">
+        <article
+          data-moderation-subject={`forum_discussion:${discussion._id}`}
+          className="rounded-xl border border-gray-200 dark:border-white/10 bg-white/[0.04] p-6"
+        >
           <div className="flex items-start justify-between">
             <div>
               <p className="text-xs text-blue-400">{group?.group_name || "Forum"}</p>
@@ -802,6 +830,7 @@ const ExpandDiscussion = () => {
                 <CommentNode
                   key={comment.comment_id}
                   comment={comment}
+                  discussionId={String(discussion._id)}
                   currentUserId={currentUserId}
                   onReply={(parentId, text, attachments) =>
                     addComment(parentId, text, attachments)
@@ -809,6 +838,7 @@ const ExpandDiscussion = () => {
                   onEdit={editComment}
                   onDelete={deleteComment}
                   onLike={likeComment}
+                  onReport={(target, authorName) => setReportingComment({ comment: target, authorName })}
                   identities={identities}
                 />
               ))
@@ -853,15 +883,27 @@ const ExpandDiscussion = () => {
         }}
         postTitle={discussion.title}
       />
-      <ReportGroupModal
+      <ForumReportModal
         isOpen={reportingPost}
+        subject="discussion"
+        subjectName={discussion.title}
         onClose={() => setReportingPost(false)}
-        groupName={discussion.title}
-        subjectLabel="Discussion"
         onSubmit={async (reason, description) => {
           await api.post(`/api/forum/reports/discussions/${discussion._id}`, { reason, description });
-          setReportingPost(false);
-          showSuccessToast("Discussion reported");
+        }}
+      />
+      <ForumReportModal
+        isOpen={Boolean(reportingComment)}
+        subject="comment"
+        subjectName={reportingComment ? `Comment by ${reportingComment.authorName}` : undefined}
+        subjectPreview={reportingComment?.comment.comment}
+        onClose={() => setReportingComment(null)}
+        onSubmit={async (reason, description) => {
+          if (!reportingComment) return;
+          await api.post(
+            `/api/forum/reports/discussions/${discussion._id}/comments/${reportingComment.comment.comment_id}`,
+            { reason, description }
+          );
         }}
       />
     </div>

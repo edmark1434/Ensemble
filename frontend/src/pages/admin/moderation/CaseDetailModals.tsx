@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import { ExternalLink, FileWarning, Hand, History, Loader2, ShieldAlert, ShoppingBag, X } from 'lucide-react';
 import api from '@/lib/axios';
@@ -14,6 +14,13 @@ import ListingDetailModal, {
 import type { ModerationCase } from './moderationTypes';
 import type { DisputePermissions } from '@/pages/admin/ticketManagement/ticketTypes';
 import ReportedItemPreviewOverlay from './ReportedItemPreviewOverlay';
+import {
+  ReportForumContentCard,
+  ReportedMemberPanel,
+  type ReportForumContent,
+  type ReportedAccountContext,
+} from './ReportCasePanels';
+import { useStaffCaseEvents } from '@/lib/staffCaseEvents';
 
 function titleCaseLabel(value: string) {
   return String(value || '')
@@ -46,6 +53,19 @@ const DECIDED_REPORT_STATUSES = ['resolved', 'closed', 'dismissed', 'denied', 'a
 const FINAL_REPORT_STATUSES = ['sanctioned', 'denied'];
 /** Only these roles may ban (backend: UserTeamPermissions). */
 const BAN_ROLES = ['Admin', 'Support Moderator'];
+
+type SanctionType = 'warning' | 'timeout' | 'suspend' | 'lock' | 'ban';
+
+const SANCTION_LABELS: Record<SanctionType, string> = {
+  warning: 'Warning',
+  timeout: 'Forum timeout',
+  suspend: 'Suspend',
+  lock: 'Lock',
+  ban: 'Ban',
+};
+
+/** Sanctions that change account access, held to the same target guard as suspensions. */
+const STANDING_SANCTIONS: SanctionType[] = ['timeout', 'suspend', 'lock', 'ban'];
 /** Default when no named warning is picked; matches the backend default. */
 const DEFAULT_REPORT_WARNING = 'staff_follow_up';
 
@@ -139,15 +159,21 @@ type ReportDetailPayload = {
       path: string;
       staffRole?: string | null;
     } | null;
+    /** Forum discussion, comment or group the report is about, with its live state. */
+    forumContent?: ReportForumContent | null;
   };
   /** Other reports on the same item and against the same account (this one excluded). */
   history?: {
     sameItem: { total: number; open: number };
     againstAccount: { total: number; open: number; sanctioned: number };
   };
+  /** The reported member's standing, record, activity and (forum reports) forum footprint. */
+  reportedContext?: ReportedAccountContext | null;
   permissions?: DisputePermissions;
   /** False when the report only names the reporter (e.g. a technical problem). */
   sanctionable?: boolean;
+  /** Sanctions this viewer may apply from this report (server-side role rules). */
+  sanctionTypes?: SanctionType[];
   assignableStaff: { staffId: string | number; name: string; role: string }[];
 };
 
@@ -158,6 +184,7 @@ export function ReportCaseDetailModal({
   endpointBase = '/api/admin/reports',
   accent = 'rose',
   listingApiBase,
+  forumContentApiBase,
 }: {
   reportId: string | number;
   onClose: () => void;
@@ -166,6 +193,8 @@ export function ReportCaseDetailModal({
   accent?: 'rose' | 'sky' | 'violet' | 'emerald' | 'amber';
   /** Marketplace API root; when set, a report on a listed asset can open its listing review. */
   listingApiBase?: string;
+  /** Forum moderation API root; when set, a forum report can remove the reported post or comment. */
+  forumContentApiBase?: string;
 }) {
   const [detail, setDetail] = useState<ReportDetailPayload | null>(null);
   const [preview, setPreview] = useState<{ path: string; label: string } | null>(null);
@@ -192,10 +221,17 @@ export function ReportCaseDetailModal({
   const allowBan = allowSuspend && BAN_ROLES.includes(String(viewer?.role || ''));
   const warningDesk = warningDeskForRole(viewer?.role);
   const sanctionable = detail?.sanctionable !== false;
-  const selectedSanction =
-    (sanctionType === 'suspend' && !allowSuspend) || (sanctionType === 'ban' && !allowBan)
-      ? 'warning'
-      : sanctionType;
+  // The server lists what this role may apply here; the target guard (no sanctioning yourself,
+  // only Admin acts on staff) still trims account-access sanctions.
+  const sanctionOptions: SanctionType[] = (
+    detail?.sanctionTypes?.length
+      ? detail.sanctionTypes
+      : (['warning', 'suspend', ...(allowBan ? ['ban'] : [])] as SanctionType[])
+  ).filter((type) => (STANDING_SANCTIONS.includes(type) ? allowSuspend : true));
+  const selectedSanction: SanctionType = sanctionOptions.includes(sanctionType as SanctionType)
+    ? (sanctionType as SanctionType)
+    : 'warning';
+  const sanctionNeedsDays = selectedSanction === 'suspend' || selectedSanction === 'timeout';
 
   const accentLabel =
     accent === 'sky'
@@ -228,20 +264,27 @@ export function ReportCaseDetailModal({
             ? 'bg-amber-500/90 hover:bg-amber-500'
             : 'bg-rose-500/90 hover:bg-rose-500';
 
-  const load = async () => {
-    setLoading(true);
+  // Last status/priority read from the server, so a background refresh does not wipe edits.
+  const serverForm = useRef<{ status: string; priority: string } | null>(null);
+
+  const load = async (silent = false) => {
+    if (!silent) setLoading(true);
     try {
       const res = await api.get(`${endpointBase}/${reportId}`);
       if (!res.data?.success) throw new Error(res.data?.message || 'Failed to load report');
       const data = res.data.data as ReportDetailPayload;
+      const nextStatus = toApiToken(data.report.status);
+      const nextPriority = toApiToken(data.report.priority);
+      const previous = serverForm.current;
       setDetail(data);
-      setStatus(toApiToken(data.report.status));
-      setPriority(toApiToken(data.report.priority));
+      setStatus((current) => (!silent || !previous || current === previous.status ? nextStatus : current));
+      setPriority((current) => (!silent || !previous || current === previous.priority ? nextPriority : current));
+      serverForm.current = { status: nextStatus, priority: nextPriority };
       setAssigneeId(data.report.assignee?.staffId?.toString() || '');
     } catch (err) {
-      showErrorToast(err instanceof Error ? err.message : 'Failed to load report');
+      if (!silent) showErrorToast(err instanceof Error ? err.message : 'Failed to load report');
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
 
@@ -249,6 +292,16 @@ export function ReportCaseDetailModal({
     void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [reportId, endpointBase]);
+
+  // Another handler claimed or decided this report: re-read it so the buttons stay truthful.
+  useStaffCaseEvents(
+    ['report'],
+    (change) => {
+      if (saving) return;
+      if (!change || String(change.id) === String(reportId)) void load(true);
+    },
+    { delayMs: 600 }
+  );
 
   const save = async (overrideStatus?: string) => {
     setSaving(true);
@@ -486,6 +539,19 @@ export function ReportCaseDetailModal({
               </div>
             ) : null}
 
+            {detail.subject?.forumContent && forumContentApiBase ? (
+              <ReportForumContentCard
+                key={`${detail.subject.forumContent.kind}:${detail.subject.forumContent.status}`}
+                content={detail.subject.forumContent}
+                apiBase={forumContentApiBase}
+                defaultReason={`${report.number ? `${report.number}: ` : ''}${titleCaseLabel(report.type)}`}
+                onChanged={() => {
+                  void load(true);
+                  onUpdated();
+                }}
+              />
+            ) : null}
+
             {detail.history ? (
               <div className="rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3">
                 <p className="inline-flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
@@ -520,6 +586,13 @@ export function ReportCaseDetailModal({
                   ) : null}
                 </div>
               </div>
+            ) : null}
+
+            {detail.reportedContext ? (
+              <ReportedMemberPanel
+                context={detail.reportedContext}
+                onOpen={(path, label) => setPreview({ path, label })}
+              />
             ) : null}
 
             <div className="rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3">
@@ -664,9 +737,11 @@ export function ReportCaseDetailModal({
                         onChange={(e) => setSanctionType(e.target.value)}
                         className="rounded-lg border border-white/10 bg-[#14151c] px-3 py-2 text-sm text-white"
                       >
-                        <option value="warning">Warning</option>
-                        {allowSuspend ? <option value="suspend">Suspend</option> : null}
-                        {allowBan ? <option value="ban">Ban</option> : null}
+                        {sanctionOptions.map((type) => (
+                          <option key={type} value={type}>
+                            {SANCTION_LABELS[type]}
+                          </option>
+                        ))}
                       </select>
                     </label>
                     {selectedSanction === 'warning' && (
@@ -684,9 +759,9 @@ export function ReportCaseDetailModal({
                         </p>
                       </>
                     )}
-                    {selectedSanction === 'suspend' && (
+                    {(sanctionNeedsDays || selectedSanction === 'lock') && (
                       <label className="flex flex-col gap-1 text-xs text-zinc-500">
-                        Days
+                        {selectedSanction === 'lock' ? 'Days (leave empty to lock until staff unlock it)' : 'Days'}
                         <input
                           type="number"
                           min={1}
@@ -695,6 +770,11 @@ export function ReportCaseDetailModal({
                           onChange={(e) => setSanctionDays(e.target.value)}
                           className="rounded-lg border border-white/10 bg-[#14151c] px-3 py-2 text-sm text-white"
                         />
+                        {selectedSanction === 'timeout' && (
+                          <span className="text-[11px] text-zinc-500">
+                            The member can still read the forums but cannot post, comment, react or report.
+                          </span>
+                        )}
                       </label>
                     )}
                     {selectedSanction !== 'warning' && (
@@ -729,11 +809,17 @@ export function ReportCaseDetailModal({
                           showErrorToast('Pick the warning that fits this report.');
                           return;
                         }
+                        const days = Number(sanctionDays);
+                        const hasDays = String(sanctionDays).trim() !== '';
+                        if ((sanctionNeedsDays || (selectedSanction === 'lock' && hasDays)) && (!Number.isInteger(days) || days < 1 || days > 365)) {
+                          showErrorToast('Choose between 1 and 365 days.');
+                          return;
+                        }
                         void decide('sanction', {
                           sanctionType: selectedSanction,
                           reason: sanctionReason.trim(),
                           warningId: selectedSanction === 'warning' ? sanctionWarningId : undefined,
-                          days: selectedSanction === 'suspend' ? Number(sanctionDays) : undefined,
+                          days: sanctionNeedsDays || (selectedSanction === 'lock' && hasDays) ? days : undefined,
                         });
                       }}
                       className="inline-flex items-center gap-1.5 rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-2 text-sm font-medium text-rose-200 hover:bg-rose-500/20 disabled:opacity-50"

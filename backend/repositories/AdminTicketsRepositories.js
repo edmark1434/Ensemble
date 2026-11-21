@@ -23,7 +23,7 @@ const {
 const { createNotificationServices } = require('../services/NotificationServices');
 const { listOwnedUploadKeysRepository } = require('./FileRepositories');
 const { buildReportSubject, snapshotTitle } = require('../lib/ReportSubject');
-const { CLOSED_REPORT_STATUSES } = require('../lib/ReportEnums');
+const { CLOSED_REPORT_STATUSES, FORUM_REPORT_TYPES, isReportTypeInScope } = require('../lib/ReportEnums');
 const {
   isMongoReady,
   getDisputeChatId,
@@ -5533,6 +5533,40 @@ function reportCanBeSanctioned(row) {
   return String(row.for_account_id) !== String(row.by_account_id || '');
 }
 
+function isForumReport(row) {
+  return isReportTypeInScope(row?.target_type, FORUM_REPORT_TYPES);
+}
+
+const REPORT_SANCTION_ALIASES = {
+  warn: 'warning',
+  timeout: 'timeout',
+  forum_timeout: 'timeout',
+  suspended: 'suspend',
+  locked: 'lock',
+  banned: 'ban',
+};
+
+function reportSanctionKey(value) {
+  const key = reportStatusToken(value || 'warning');
+  return REPORT_SANCTION_ALIASES[key] || key;
+}
+
+/**
+ * Sanctions this staff role may apply from this report — the same role rules as the Users
+ * desk (UserTeamPermissions). A forum timeout only fits a forum report.
+ */
+function reportSanctionTypes(row, staffRole) {
+  if (!reportCanBeSanctioned(row)) return [];
+  const { allowedStatusActions } = require('../lib/UserTeamPermissions');
+  const actions = new Set(allowedStatusActions({ role: staffRole }));
+  const types = ['warning'];
+  if (actions.has('timeout') && isForumReport(row)) types.push('timeout');
+  if (actions.has('suspend')) types.push('suspend');
+  if (actions.has('lock')) types.push('lock');
+  if (actions.has('ban')) types.push('ban');
+  return types;
+}
+
 function reportDecisionError(message, statusCode = 400) {
   const error = new Error(message);
   error.statusCode = statusCode;
@@ -5564,24 +5598,39 @@ async function applyReportSanction(row, patch, staffId, staffRole = null) {
   if (!accountId) throw reportDecisionError('This report is not tied to an account');
   const reason = String(patch?.reason || '').trim();
   if (!reason) throw reportDecisionError('A sanction reason is required');
-  const sanctionType = String(patch?.sanctionType || patch?.sanction_type || 'warning').toLowerCase();
+  const sanctionType = reportSanctionKey(patch?.sanctionType || patch?.sanction_type);
   const days = patch?.days;
+  const hasDays = days != null && days !== '';
   const { warnAccount, updateAccountStatus } = require('./AdminUserTeamRepositories');
-  // A report decision is held to the same role rules as the Users desk: specialist
-  // moderators may warn and suspend, and only Admin or Support may ban.
-  if (['suspend', 'suspended', 'ban', 'banned'].includes(sanctionType)) {
+  // A report decision is held to the same role rules as the Users desk: specialist moderators
+  // may warn, suspend and lock, Forum Moderators may also time out, and only Admin or Support
+  // may ban.
+  if (['timeout', 'suspend', 'lock', 'ban'].includes(sanctionType)) {
     const { assertStatusActionAllowed } = require('../lib/UserTeamPermissions');
-    assertStatusActionAllowed({ role: staffRole }, sanctionType.startsWith('ban') ? 'ban' : 'suspend');
+    assertStatusActionAllowed({ role: staffRole }, sanctionType);
+  }
+  if (hasDays && (!Number.isInteger(Number(days)) || Number(days) < 1 || Number(days) > 365)) {
+    throw reportDecisionError('Choose between 1 and 365 days');
   }
 
-  if (sanctionType === 'warning' || sanctionType === 'warn') {
+  if (sanctionType === 'warning') {
     // Staff pick the named warning that fits (checked against their desk in warnAccount);
     // Staff follow-up stays the default when none is chosen.
     const warningId = String(patch?.warningId || patch?.warning_id || '').trim() || 'staff_follow_up';
     return warnAccount(accountId, { warningId, reason }, staffId);
   }
-  if (sanctionType === 'suspend' || sanctionType === 'suspended') {
-    if (days == null || days === '') throw reportDecisionError('Choose how many days the suspension lasts');
+  if (sanctionType === 'timeout') {
+    if (!isForumReport(row)) throw reportDecisionError('A forum timeout only fits a forum report');
+    if (!hasDays) throw reportDecisionError('Choose how many days the timeout lasts');
+    return updateAccountStatus(accountId, 'timeout', staffId, {
+      reason,
+      duration: 'temporary',
+      days,
+      skipPunishmentCatalog: true,
+    });
+  }
+  if (sanctionType === 'suspend') {
+    if (!hasDays) throw reportDecisionError('Choose how many days the suspension lasts');
     return updateAccountStatus(accountId, 'suspend', staffId, {
       reason,
       duration: 'temporary',
@@ -5589,14 +5638,23 @@ async function applyReportSanction(row, patch, staffId, staffRole = null) {
       skipPunishmentCatalog: true,
     });
   }
-  if (sanctionType === 'ban' || sanctionType === 'banned') {
+  if (sanctionType === 'lock') {
+    // No days locks the account until staff unlock it, as on the Users desk.
+    return updateAccountStatus(accountId, 'lock', staffId, {
+      reason,
+      duration: hasDays ? 'temporary' : 'permanent',
+      days: hasDays ? days : undefined,
+      skipPunishmentCatalog: true,
+    });
+  }
+  if (sanctionType === 'ban') {
     return updateAccountStatus(accountId, 'ban', staffId, {
       reason,
       duration: 'permanent',
       skipPunishmentCatalog: true,
     });
   }
-  throw reportDecisionError('Choose a warning, suspension, or ban');
+  throw reportDecisionError('Choose a warning, timeout, suspension, lock, or ban');
 }
 
 async function decideReport(reportId, action, patch, staffSession) {
@@ -5675,7 +5733,8 @@ async function decideReport(reportId, action, patch, staffSession) {
       type: row.type,
       previousStatus: row.status,
       status: nextStatus,
-      sanctionType: action === 'sanction' ? patch?.sanctionType || 'warning' : null,
+      sanctionType:
+        action === 'sanction' ? reportSanctionKey(patch?.sanctionType || patch?.sanction_type) : null,
     },
   });
 
@@ -5690,7 +5749,24 @@ async function decideReport(reportId, action, patch, staffSession) {
   return getReportDetail(reportId, staffSession);
 }
 
+/**
+ * Claim, release, hand-edit or decide a report. Every report desk calls this; once the change
+ * is saved, open desks are told to re-read (`staffCaseChanged`, kind `report`).
+ */
 async function updateReport(reportId, patch, staffSession = null) {
+  const detail = await applyReportUpdate(reportId, patch, staffSession);
+  if (detail) {
+    const action = String(patch?.action || '').toLowerCase().trim();
+    require('../lib/WebSocket').emitStaffCaseChange({
+      kind: 'report',
+      id: reportId,
+      reason: action || 'updated',
+    });
+  }
+  return detail;
+}
+
+async function applyReportUpdate(reportId, patch, staffSession = null) {
   const action = String(patch?.action || '').toLowerCase().trim();
   if (REPORT_DECISIONS.has(action)) {
     return decideReport(reportId, action, patch, staffSession);
@@ -6000,10 +6076,24 @@ async function getReportDetail(reportId, staffSession = null, options = {}) {
     includeStaffId: row.assigned_staff_id,
   });
 
-  const [subject, history] = await Promise.all([
+  const sanctionable = reportCanBeSanctioned(row);
+  const [subject, history, reportedContext] = await Promise.all([
     buildReportSubject(row),
     getReportHistory(row),
+    // Only the case view needs the reported member's record; PATCH pre-checks skip it.
+    options.includeAccountContext && sanctionable
+      ? require('./TicketCaseRepositories')
+          .getReportedAccountContext(row.for_account_id, {
+            excludeReportId: row.report_id,
+            includeForum: isForumReport(row),
+          })
+          .catch((error) => {
+            console.warn('Reported account context skipped:', error.message);
+            return null;
+          })
+      : Promise.resolve(null),
   ]);
+  const staffRole = staff?.role || staffSession?.role || null;
   return {
     history,
     report: mapReportRow({
@@ -6013,9 +6103,12 @@ async function getReportDetail(reportId, staffSession = null, options = {}) {
       assignee_name: row.assignee_name,
     }),
     subject,
+    reportedContext,
     permissions: buildReportPermissions(row, staff, staffSession),
     // False for technical-problem reports and anything that only names the reporter.
-    sanctionable: reportCanBeSanctioned(row),
+    sanctionable,
+    // What this viewer may apply from the decision panel (role rules of the Users desk).
+    sanctionTypes: reportSanctionTypes(row, staffRole),
     assignableQueue: normalizeQueueKey(queueKey),
     assignableStaff,
   };

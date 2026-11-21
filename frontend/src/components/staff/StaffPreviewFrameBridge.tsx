@@ -1,7 +1,7 @@
-import { useEffect } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import useGlobalState from "@/lib/global_state";
-import { STAFF_PREVIEW_HIDE_CSS, useStaffPlatformGuard } from "@/components/staff/StaffPlatformView";
+import { STAFF_PREVIEW_HIDE_CSS, useStaffPickMode, useStaffPlatformGuard } from "@/components/staff/StaffPlatformView";
 import {
   isStaffConsolePath,
   isStaffPreviewFrame,
@@ -11,6 +11,8 @@ import {
   staffPreviewViewFallback,
   STAFF_PREVIEW_LOCATION_MESSAGE,
   STAFF_PREVIEW_NAV_MESSAGE,
+  STAFF_PREVIEW_PICK_MESSAGE,
+  STAFF_PREVIEW_PICKED_MESSAGE,
 } from "@/lib/staffPlatformView";
 
 /** Position of this frame in its own history (React Router keeps it in `history.state.idx`). */
@@ -37,14 +39,32 @@ export default function StaffPreviewFrameBridge() {
   const isStaff = useGlobalState((state) => state.user?.type === "Staff");
   const current = `${location.pathname}${location.search}${location.hash}`;
   const guarded = inFrame && isStaff;
+  const [picking, setPicking] = useState(false);
+  const pickingRef = useRef(false);
+  pickingRef.current = picking;
 
   useStaffPlatformGuard(guarded, navigate);
+
+  const finishPick = useCallback((subject: string | null) => {
+    setPicking(false);
+    postToStaffPreviewParent({ type: STAFF_PREVIEW_PICKED_MESSAGE, subject });
+  }, []);
+  useStaffPickMode(guarded && picking, finishPick);
+
+  // A pick belongs to the page it started on; moving away ends it.
+  useEffect(() => {
+    if (pickingRef.current) finishPick(null);
+  }, [location.pathname, finishPick]);
 
   useEffect(() => {
     if (!inFrame) return;
     const onMessage = (event: MessageEvent) => {
       if (event.origin !== window.location.origin || event.source !== window.parent) return;
-      const data = event.data as { type?: unknown; path?: unknown; action?: unknown } | null;
+      const data = event.data as { type?: unknown; path?: unknown; action?: unknown; active?: unknown } | null;
+      if (data?.type === STAFF_PREVIEW_PICK_MESSAGE) {
+        setPicking(data.active === true);
+        return;
+      }
       if (!data || data.type !== STAFF_PREVIEW_NAV_MESSAGE) return;
       if (data.action === "back") {
         // Index 0 is the frame's first page; going back from there would move the console instead.

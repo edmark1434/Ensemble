@@ -119,4 +119,18 @@ async function staffRoleOf(staffId) {
   return staff?.role || null;
 }
 
-module.exports = { assertCanSuspendTarget, assertCanSanctionTarget, staffRoleOf };
+/**
+ * Role of whoever is acting. Moderator sessions can carry only an account id, so the staff
+ * row is found from either. `undefined` means no actor at all (a system path such as the
+ * dispute conviction ban); `null` means an actor that is not a staff member.
+ */
+async function actorRoleOf({ staffId = null, actorAccountId = null } = {}) {
+  if (staffId) return staffRoleOf(staffId);
+  if (actorAccountId) {
+    const staff = await loadStaffByAccount(actorAccountId);
+    return staff?.role || null;
+  }
+  return undefined;
+}
+
+module.exports = { assertCanSuspendTarget, assertCanSanctionTarget, staffRoleOf, actorRoleOf };

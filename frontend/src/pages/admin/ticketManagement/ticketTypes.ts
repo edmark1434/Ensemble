@@ -550,6 +550,19 @@ export type TicketDetail = {
 
 export type CaseKind = 'appeal' | 'marketplace' | 'jobs' | 'forum' | 'billing' | 'account' | 'editor' | 'safety' | 'general';
 
+/** The member's item as it read when staff acted on it from platform view. */
+export type CasePenaltyEvidence = {
+  source: string | null;
+  kind: string | null;
+  title: string;
+  excerpt: string | null;
+  page: string | null;
+  stateWhenActed: string | null;
+  capturedAt: string | null;
+  relatedReports: string | null;
+  pairedAction: string | null;
+};
+
 export type CaseAccountSummary = {
   accountId: string;
   name: string;
@@ -677,6 +690,8 @@ export type CaseAppeal = {
       issuedBy: string;
       createdAt: string;
       expiresAt: string | null;
+      /** Saved when the warning was issued from platform view. */
+      evidence?: CasePenaltyEvidence | null;
     }[];
     restrictions: {
       id: string;
@@ -699,6 +714,8 @@ export type CaseAppeal = {
       disputeNumber: string | null;
       actor: { name: string; role: string } | null;
       createdAt: string;
+      /** Saved when the change was made from platform view. */
+      evidence?: CasePenaltyEvidence | null;
     }[];
   } | null;
   appeals: {
