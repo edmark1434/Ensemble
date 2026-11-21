@@ -540,6 +540,12 @@ async function createReport({
   } catch (err) {
     console.error('Report automations skipped:', err.message);
   }
+  // Open report desks re-read their queue, so a new report shows up without a refresh.
+  require('../lib/WebSocket').emitStaffCaseChange({
+    kind: 'report',
+    id: row.report_id,
+    reason: 'created',
+  });
   return mapReportRow({ ...row, priority: enriched?.priority || row.priority });
 }
 

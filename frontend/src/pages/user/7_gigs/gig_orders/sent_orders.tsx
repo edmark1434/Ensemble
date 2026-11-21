@@ -555,15 +555,27 @@ export const SentOrders: React.FC = () => {
                         <CreditIcon className="h-4 w-4 shrink-0" />
                         {order.price?.toLocaleString()}
                       </span>
+                      {Array.isArray(order.addOns) && order.addOns.length > 0 && order.base_price != null && (
+                        <span className="text-[10px] text-gray-500 dark:text-zinc-400 block mt-0.5">
+                          {Number(order.base_price).toLocaleString()} Tier +{" "}
+                          {order.addOns.reduce((sum: number, a: any) => sum + (Number(a.price) || 0), 0).toLocaleString()} Add-ons
+                        </span>
+                      )}
                     </div>
                   </div>
 
                   {/* Delivery Timeline Pill */}
-                  <div className="flex items-center gap-2 text-xs font-medium text-gray-600 dark:text-zinc-400">
+                  <div className="flex flex-wrap items-center gap-2 text-xs font-medium text-gray-600 dark:text-zinc-400">
                     <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-gray-100 dark:bg-white/5 border border-gray-200 dark:border-white/10 text-[11px] font-semibold text-gray-700 dark:text-zinc-300">
                       <Clock className="h-3 w-3 text-gray-400" />
                       {order.delivery_days} Days Delivery Timeline
                     </span>
+                    {Array.isArray(order.addOns) && order.addOns.length > 0 && (
+                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/25 text-[11px] font-semibold text-amber-700 dark:text-amber-300">
+                        +{order.addOns.length} {order.addOns.length === 1 ? "Add-on" : "Add-ons"} (+
+                        {order.addOns.reduce((sum: number, a: any) => sum + (Number(a.price) || 0), 0).toLocaleString()} Cr)
+                      </span>
+                    )}
                   </div>
                 </div>
 

@@ -111,7 +111,7 @@
 
 ## Support ticket answers
 
-- `tickets.form_answers` is a JSON array of the questions that ticket type asked: `{ key, label, value, id? }`. `id` is set when the member picked one of their own projects, listings, orders, contracts, or jobs. The label is the wording shown at submit time.
+- `tickets.form_answers` is a JSON array of the questions that ticket type asked: `{ key, label, value, id? }`. `id` is set when the member picked one of their own projects, listings, orders, contracts, or jobs, a team, or an asset, job or gig from the search pickers (asset answers store `market_assets.market_asset_id`; listing answers `marketplace_listings.listing_id`). The label is the wording shown at submit time. Older tickets keep the keys their form had (`listing_or_seller`, `review_link`, `link_or_username`); staff case views read both.
 - `tickets.submission_context` is a JSON object recorded with the ticket: `accountId`, `username`, `email`, `plan`, `submittedAt`, `browser`, `device`, `page`. It is a snapshot, so later account changes do not rewrite it.
 - Migration `1827600000000_ticket-form-answers-json` copies `ticket_form_values` into those columns and drops the table. Do not edit `1822800000000_ticket-form-values`.
 

@@ -10,6 +10,7 @@ export default function ForumReports() {
       roleLabel="Forum Moderator"
       subtitle="Forum-only reports (discussions, comments, groups, and members). Search, filter, assign, and resolve from the same case detail the admin console uses."
       endpointBase="/api/moderator/forum/reports"
+      forumContentApiBase="/api/moderator/forum"
       accent="violet"
       deskLabel="Forum"
     />

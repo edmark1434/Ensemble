@@ -2,25 +2,12 @@
 
 ## Objective
 
-Fix 9 production and editor issues across `video-editor`, `backend`, and `ensemble-render-server`:
-1. Licensed GIFs failing Remotion Lambda export with S3 CORS errors.
-2. Unlicensed GIF proxies not syncing to the editor playhead and playing too fast in exports.
-3. Slow media reloading when navigating into and back out of scenes.
-4. Clunky scene duration sync and neighboring timeline item movement.
-5. Non-draggable assets inside market asset bundle details (and single-asset collection cards).
-6. Missing local preview on timeline items while uploads are still in progress.
-7. Large videos failing to load timeline filmstrip thumbnails.
-8. In-editor template preview links redirecting to `localhost:4002` in production.
-9. Project invitation email links pointing to `localhost` in production.
+Every Marketplace and Jobs & Gigs ticket about a specific item lets the member pick that item (asset, listing, job, gig, contract or gig order), and staff see the picked item on the case. Staff dispute details show a gig order's package and add-ons beside its milestones. See docs/api.md "Support tickets".
 
 ## Acceptance Criteria
 
-- `ensemble-render-server` prepares GIFs for video, image-sequence, still image, and thumbnail renders, resolves bundled/env/PATH `ffmpeg`/`ffprobe`, handles missing/N/A/zero packet durations cleanly, and matches `response-content-type=image/gif` signed URLs.
-- `backend` generates animated watermarked proxies as real `.gif` files (`assets/proxies/v2-anim-gif/*.gif`) and backfills prior animated-WebP GIF proxies so unlicensed GIFs render via `<Gif>` in the editor and `PreparedGifVideo` in exports.
-- Prepared market image blobs, market license lookups, upload availability queries, audio PCM buffers, and timeline image/video thumbnails persist across scene enter/exit instead of being evicted or refetched.
-- Scene duration sync uses trailing debounce, `onFirstSync`, true item max duration, collision-only ripple pushing on growth (preserving gaps and leaving neighbors put on shrink), accurate project duration recalculation, and transition reconciliation.
-- Ready assets in `MarketAssetDetails` (bundles) and single-asset cards in `MarketAssetListings` are wrapped in `<Draggable>` with normalized payloads matching the main lists.
-- Timeline `Image`, `Video`, and `Audio` items render immediately from `local-media-cache` during `pending-upload:` and keep their rendered preview seamlessly when upload finishes.
-- `videoFilmstrip` uses `preload="metadata"`, captures frame 0 on `loadeddata` as an immediate fallback, isolates per-seek failures with bounded retries, and allows 2 concurrent extractors so big videos still load previews reliably.
-- Editor redirects (`/api/market-templates/[id]/preview` and `proxy.ts`) resolve public origin from `x-forwarded-host`/`host` + `x-forwarded-proto` rather than internal `request.url`.
-- Project invite emails never fall back to `localhost` when `FRONTEND_URL` is a non-local origin.
+- **Pickers on every item type.** Listing review, purchase, file, refund and contract types keep their own-record pickers. Report a listing or seller and Report a listing or user ask what is being reported, then search any visible asset or job/gig (`GET /api/users/ticket-search`), leaving out the member's own. Asset reviews searches the asset; Gig reviews picks the contract; the marketplace and jobs appeal types may name a listing, job or gig. The member can still type a name or paste a link when the item is not found.
+- **Server checks.** A picked id must be an item the member can see or own (400 otherwise); a report cannot name the member's own item (400). Typed links that name a visible item are matched to it.
+- **Team-owned items.** Listing, contract and job pickers include items held by teams the member owns, labelled so two similar items can be told apart (other party, status, team). Staff case context treats those teams as the requester.
+- **Staff case context.** Marketplace and jobs cases read the new keys and older ones, show the reported seller or user, the picked posting (including a pasted job/gig link on a contract field) and the appeal's picked item. Related tickets match a listing by listing id or asset id.
+- **Dispute add-ons.** Dispute case file contracts and the ticket case contract carry `gigOrder` (package, add-ons with price and extra days, totals); the staff panels show it and flag when package + add-ons differ from the contract rate.

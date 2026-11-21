@@ -1722,7 +1722,22 @@ async function getIncomingOrdersRepository(accountIds) {
 
             (SELECT f.path FROM files f WHERE f.file_id = a.avatar_file_id LIMIT 1) as client_avatar,
 
-            gt.title as tier_title, gt.rate_credits as price, gt.delivery_days,
+            gt.title as tier_title,
+            gt.rate_credits as base_price,
+            gt.delivery_days as base_delivery_days,
+            (gt.rate_credits + COALESCE((SELECT SUM(ga.price_credits)::int FROM gig_request_addons gra JOIN gig_addons ga ON gra.gig_addon_id = ga.gig_addon_id WHERE gra.gig_request_id = r.gig_request_id), 0))::int as price,
+            (gt.delivery_days + COALESCE((SELECT SUM(ga.additional_days)::int FROM gig_request_addons gra JOIN gig_addons ga ON gra.gig_addon_id = ga.gig_addon_id WHERE gra.gig_request_id = r.gig_request_id), 0))::int as delivery_days,
+            COALESCE((
+                SELECT json_agg(json_build_object(
+                    'id', ga.gig_addon_id,
+                    'title', ga.name,
+                    'price', ga.price_credits,
+                    'deliveryDays', ga.additional_days
+                ) ORDER BY ga.name ASC)
+                FROM gig_request_addons gra
+                JOIN gig_addons ga ON gra.gig_addon_id = ga.gig_addon_id
+                WHERE gra.gig_request_id = r.gig_request_id
+            ), '[]'::json) as "addOns",
 
             (SELECT json_agg(json_build_object('question_id', grp.gig_requirement_id, 'response', grp.response, 'question', req.question, 'type', req.type)) FROM gig_responses grp JOIN gig_requirements req ON grp.gig_requirement_id = req.gig_requirement_id WHERE grp.gig_request_id = r.gig_request_id) as responses,
 
@@ -1784,7 +1799,22 @@ async function getMyOrdersRepository(accountIds) {
 
             (SELECT f.path FROM files f WHERE f.file_id = a.avatar_file_id LIMIT 1) as freelancer_avatar,
 
-            gt.title as tier_title, gt.rate_credits as price, gt.delivery_days,
+            gt.title as tier_title,
+            gt.rate_credits as base_price,
+            gt.delivery_days as base_delivery_days,
+            (gt.rate_credits + COALESCE((SELECT SUM(ga.price_credits)::int FROM gig_request_addons gra JOIN gig_addons ga ON gra.gig_addon_id = ga.gig_addon_id WHERE gra.gig_request_id = r.gig_request_id), 0))::int as price,
+            (gt.delivery_days + COALESCE((SELECT SUM(ga.additional_days)::int FROM gig_request_addons gra JOIN gig_addons ga ON gra.gig_addon_id = ga.gig_addon_id WHERE gra.gig_request_id = r.gig_request_id), 0))::int as delivery_days,
+            COALESCE((
+                SELECT json_agg(json_build_object(
+                    'id', ga.gig_addon_id,
+                    'title', ga.name,
+                    'price', ga.price_credits,
+                    'deliveryDays', ga.additional_days
+                ) ORDER BY ga.name ASC)
+                FROM gig_request_addons gra
+                JOIN gig_addons ga ON gra.gig_addon_id = ga.gig_addon_id
+                WHERE gra.gig_request_id = r.gig_request_id
+            ), '[]'::json) as "addOns",
 
             (SELECT json_agg(json_build_object('question_id', grp.gig_requirement_id, 'response', grp.response, 'question', req.question, 'type', req.type)) FROM gig_responses grp JOIN gig_requirements req ON grp.gig_requirement_id = req.gig_requirement_id WHERE grp.gig_request_id = r.gig_request_id) as responses,
 
@@ -1854,7 +1884,22 @@ async function getOrderByIdRepository(orderId, accountIds) {
 
             (SELECT f2.path FROM files f2 WHERE f2.file_id = f.avatar_file_id LIMIT 1) as freelancer_avatar,
 
-            gt.title as tier_title, gt.rate_credits as price, gt.delivery_days,
+            gt.title as tier_title,
+            gt.rate_credits as base_price,
+            gt.delivery_days as base_delivery_days,
+            (gt.rate_credits + COALESCE((SELECT SUM(ga.price_credits)::int FROM gig_request_addons gra JOIN gig_addons ga ON gra.gig_addon_id = ga.gig_addon_id WHERE gra.gig_request_id = r.gig_request_id), 0))::int as price,
+            (gt.delivery_days + COALESCE((SELECT SUM(ga.additional_days)::int FROM gig_request_addons gra JOIN gig_addons ga ON gra.gig_addon_id = ga.gig_addon_id WHERE gra.gig_request_id = r.gig_request_id), 0))::int as delivery_days,
+            COALESCE((
+                SELECT json_agg(json_build_object(
+                    'id', ga.gig_addon_id,
+                    'title', ga.name,
+                    'price', ga.price_credits,
+                    'deliveryDays', ga.additional_days
+                ) ORDER BY ga.name ASC)
+                FROM gig_request_addons gra
+                JOIN gig_addons ga ON gra.gig_addon_id = ga.gig_addon_id
+                WHERE gra.gig_request_id = r.gig_request_id
+            ), '[]'::json) as "addOns",
 
             (SELECT json_agg(json_build_object('question_id', grp.gig_requirement_id, 'response', grp.response, 'question', req.question, 'type', req.type)) FROM gig_responses grp JOIN gig_requirements req ON grp.gig_requirement_id = req.gig_requirement_id WHERE grp.gig_request_id = r.gig_request_id) as responses,
 
@@ -2660,6 +2705,22 @@ async function deleteGigRepository(gigId, accountIds) {
 
 
 
+async function getOrderAddonsTotals(client, orderId) {
+    const res = await client.query(
+        `SELECT
+            COALESCE(SUM(ga.price_credits), 0)::int AS addons_price,
+            COALESCE(SUM(ga.additional_days), 0)::int AS addons_days
+         FROM gig_request_addons gra
+         JOIN gig_addons ga ON gra.gig_addon_id = ga.gig_addon_id
+         WHERE gra.gig_request_id = $1`,
+        [orderId]
+    );
+    return {
+        addonsPrice: Number(res.rows[0]?.addons_price || 0),
+        addonsDays: Number(res.rows[0]?.addons_days || 0),
+    };
+}
+
 async function acceptGigOrderRepository(orderId, freelancerAccountIds) {
 
     const client = await pool.connect();
@@ -2761,10 +2822,11 @@ async function acceptGigOrderRepository(orderId, freelancerAccountIds) {
 
 
         // 3. Create or update contract in 'Waiting' status (Awaiting client escrow funding)
-        const deliveryDays = Number(delivery_days) || 3;
+        const { addonsPrice, addonsDays } = await getOrderAddonsTotals(client, orderId);
+        const deliveryDays = (Number(delivery_days) || 3) + addonsDays;
         const totalGigHours = deliveryDays * 24;
         const gigContractDeadlineAt = new Date(Date.now() + totalGigHours * 3600 * 1000);
-        const orderCredits = Number(rate_credits);
+        const orderCredits = Number(rate_credits) + addonsPrice;
 
         let contractId;
         const existingContract = await client.query(
@@ -2935,9 +2997,9 @@ async function confirmGigOrderContractRepository(orderId, clientAccountIds) {
 
         const { rate_credits, delivery_days, no_of_revisions_max, gig_id, client_account_id, freelancer_account_id: freelancerAccountId, gig_title, linked_project_id: linkedProjectId } = orderRow;
 
+        const { addonsPrice, addonsDays } = await getOrderAddonsTotals(client, orderId);
 
-
-        const orderCredits = Number(rate_credits);
+        const orderCredits = Number(rate_credits) + addonsPrice;
 
         if (!Number.isSafeInteger(orderCredits) || orderCredits <= 0) {
 
@@ -3071,7 +3133,7 @@ async function confirmGigOrderContractRepository(orderId, clientAccountIds) {
 
 
 
-        const deliveryDays = Number(delivery_days) || 3;
+        const deliveryDays = (Number(delivery_days) || 3) + addonsDays;
 
         const totalGigHours = deliveryDays * 24;
 

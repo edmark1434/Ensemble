@@ -3,18 +3,18 @@ import socket from "@/lib/socket";
 
 /**
  * `staffCaseChanged` socket payload. Every staff socket gets it (room `staff:cases`) after a
- * ticket or dispute is opened, answered, moved or decided. It carries ids only: desks read the
- * case back over HTTP, which applies each desk's own access rules.
+ * ticket, dispute or report is opened, answered, claimed, moved or decided. It carries ids
+ * only: desks read the case back over HTTP, which applies each desk's own access rules.
  */
 export type StaffCaseChange = {
-  kind: "ticket" | "dispute";
+  kind: "ticket" | "dispute" | "report";
   id: string;
   reason?: string | null;
   at?: string;
 };
 
 /**
- * Re-read a staff view when a ticket or dispute changes elsewhere (a member, another staff
+ * Re-read a staff view when a case changes elsewhere (a member, another staff
  * member, a background job). Bursts are folded into one call after `delayMs`, and a reconnect
  * calls it once, so anything missed while offline is read back.
  * @param kinds which case kinds this view lists

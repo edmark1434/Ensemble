@@ -776,7 +776,8 @@ async function getSellerMarketplaceListings(accountId) {
 async function reviewMarketplaceListing(
   listingId,
   { status, rejectionReason, moderationNote, reason },
-  staffSession
+  staffSession,
+  audit = {}
 ) {
   const allowed = ['approved', 'rejected', 'delisted', 'pending'];
   if (!allowed.includes(status)) {
@@ -803,13 +804,23 @@ async function reviewMarketplaceListing(
     ? rawStaffId
     : null;
   const before = await pool.query(
-    `SELECT listing_id, listing_number, title, submitted_by_account_id, market_asset_id
+    `SELECT listing_id, listing_number, title, submitted_by_account_id, market_asset_id, status
      FROM marketplace_listings WHERE listing_id = $1`,
     [listingId]
   );
   if (!before.rows.length) throw new Error('Listing not found');
+  const previousStatus = String(before.rows[0].status || '').toLowerCase();
+  // Re-applying the current status used to re-stamp the review and send the seller the same
+  // notice again (a double click on Delist did both).
+  if (previousStatus === status) {
+    const err = new Error(`This listing is already ${status === 'pending' ? 'waiting for review' : status}.`);
+    err.statusCode = 409;
+    throw err;
+  }
 
-  await pool.query(
+  // Only from the status read above: when two moderators act at once, the second gets a
+  // conflict instead of silently overwriting the first decision and its note.
+  const updated = await pool.query(
     `UPDATE marketplace_listings
      SET status = $1,
          rejection_reason = $2,
@@ -817,9 +828,14 @@ async function reviewMarketplaceListing(
          reviewed_by_staff_id = $4,
          reviewed_at = NOW(),
          updated_at = NOW()
-     WHERE listing_id = $5`,
-    [status, rejectReason, note, staffId, listingId]
+     WHERE listing_id = $5 AND status IS NOT DISTINCT FROM $6`,
+    [status, rejectReason, note, staffId, listingId, before.rows[0].status]
   );
+  if (!updated.rowCount) {
+    const err = new Error('This listing changed while you were reviewing it. Reload and try again.');
+    err.statusCode = 409;
+    throw err;
+  }
 
   const row = before.rows[0];
   if (row.market_asset_id) {
@@ -869,9 +885,12 @@ async function reviewMarketplaceListing(
     actorStaffId: staffId,
     metadata: {
       status,
+      previousStatus,
       title: row.title,
       rejectionReason: rejectReason,
       moderationNote: note,
+      // Server-side callers only (platform view evidence); never read from the request body.
+      ...(audit && typeof audit === 'object' && !Array.isArray(audit) ? audit : {}),
     },
   });
 

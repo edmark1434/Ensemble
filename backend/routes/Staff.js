@@ -14,6 +14,27 @@ const {
   requireTicketInStaffQueue,
 } = require('../controllers/AdminTicketsControllers');
 const { getStaffAppealOptions } = require('../controllers/PenaltyAppealControllers');
+const requireStaffRole = require('../middleware/RequireStaffRole');
+const { createRateLimiter } = require('../middleware/RateLimiter');
+const PlatformViewModeration = require('../controllers/PlatformViewModerationControllers');
+
+/** Every role with User & Team access may moderate from platform view; the service applies each role's limits. */
+const requirePlatformViewModeration = requireStaffRole([
+  'Admin',
+  'Support Moderator',
+  'Forum Moderator',
+  'Marketplace Moderator',
+  'Jobs N Gigs Moderator',
+]);
+// Quick actions are one click away, so a stolen or careless staff session cannot fire a
+// burst of penalties: 20 a minute is far above a real moderator's pace.
+const platformViewActionLimiter = createRateLimiter('platformViewAction', {
+  windowMs: 60 * 1000,
+  accountLimit: 20,
+  anonymousLimit: 5,
+  networkLimit: 120,
+  message: 'Too many quick actions in a minute. Wait a moment, then review the page again.',
+});
 
 function requireAnyStaff(req, res, next) {
   if (!req.session) {
@@ -40,5 +61,13 @@ router.post('/tickets/:id/schedule-close', ticketInQueue, postTicketScheduleClos
 router.post('/tickets/:id/appeal-decision', ticketInQueue, postTicketAppealDecision);
 router.delete('/tickets/:id/schedule-close', ticketInQueue, deleteTicketScheduleClose);
 router.delete('/tickets/:id/participants/:accountId', ticketInQueue, deleteTicketParticipant);
+
+// Platform view moderation: the console asks what the framed member page is about, then acts.
+router.get('/platform-view/context', [checkSession, requirePlatformViewModeration], PlatformViewModeration.getContext);
+router.post(
+  '/platform-view/actions',
+  [checkSession, requirePlatformViewModeration, platformViewActionLimiter],
+  PlatformViewModeration.postAction
+);
 
 module.exports = router;

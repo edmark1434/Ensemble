@@ -58,13 +58,16 @@ function formatWhen(date: Date) {
 export function SanctionScheduleFields({
   defaultDuration = 'temporary',
   defaultDays = 7,
+  allowPermanent = true,
   onChange,
 }: {
   defaultDuration?: 'temporary' | 'permanent';
   defaultDays?: number;
+  /** False hides "Permanent": open-ended suspensions and timeouts are an Admin / Support call. */
+  allowPermanent?: boolean;
   onChange: (timing: SanctionTiming) => void;
 }) {
-  const [duration, setDuration] = useState<'temporary' | 'permanent'>(defaultDuration);
+  const [duration, setDuration] = useState<'temporary' | 'permanent'>(allowPermanent ? defaultDuration : 'temporary');
   const [timedMode, setTimedMode] = useState<TimedMode>('length');
   const [amount, setAmount] = useState(String(defaultDays > 0 ? defaultDays : 7));
   const [unit, setUnit] = useState<Unit>('days');
@@ -116,8 +119,8 @@ export function SanctionScheduleFields({
 
   return (
     <div className="mt-4 space-y-3">
-      <div className="grid grid-cols-2 gap-2">
-        {(['temporary', 'permanent'] as const).map((choice) => (
+      <div className={`grid gap-2 ${allowPermanent ? 'grid-cols-2' : 'grid-cols-1'}`}>
+        {(allowPermanent ? (['temporary', 'permanent'] as const) : (['temporary'] as const)).map((choice) => (
           <button
             key={choice}
             type="button"

@@ -50,6 +50,28 @@ export const STAFF_PREVIEW_NAV_MESSAGE = "ensemble-staff-preview-nav";
 export const STAFF_PREVIEW_LOCATION_MESSAGE = "ensemble-staff-preview-location";
 /** Frame → console: the staff session could not be refreshed. */
 export const STAFF_PREVIEW_SESSION_MESSAGE = "ensemble-staff-preview-session";
+/** Console → frame: `{ active: boolean }` turns "pick an item on the page" on or off. */
+export const STAFF_PREVIEW_PICK_MESSAGE = "ensemble-staff-preview-pick";
+/**
+ * Frame → console: `{ subject: string }` after a pick, `{ subject: null }` when pick mode ended
+ * without one (Escape, or the page changed).
+ */
+export const STAFF_PREVIEW_PICKED_MESSAGE = "ensemble-staff-preview-picked";
+
+/**
+ * Attribute member markup puts on items staff can pick in platform view, e.g.
+ * `forum_comment:<discussionId>:<commentId>`, `forum_discussion:<id>`, `forum_group:<id>`.
+ * It is inert for members; the server resolves the item again from this key.
+ */
+export const MODERATION_SUBJECT_ATTR = "data-moderation-subject";
+
+const MODERATION_SUBJECT_PATTERN = /^(?:forum_comment:[A-Za-z0-9_-]{1,64}:[A-Za-z0-9_-]{1,64}|(?:forum_discussion|forum_group|account):[A-Za-z0-9_-]{1,64})$/;
+
+/** A well-formed item key from member markup, or null. */
+export function moderationSubjectKey(value: string | null | undefined): string | null {
+  const key = String(value || "").trim();
+  return MODERATION_SUBJECT_PATTERN.test(key) ? key : null;
+}
 
 /** Member-site path that may be shown inside platform view. Staff console paths stay out. */
 export function memberPreviewPath(value: string | null | undefined): string | null {

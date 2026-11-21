@@ -28,6 +28,7 @@ import {
   List,
   Code,
   Compass,
+  Flag,
 } from "lucide-react";
 import { useEffect, useMemo, useState, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
@@ -39,7 +40,7 @@ import GlideSelect from "@/components/ui/GlideSelect";
 import JobRichText from "@/pages/user/6_job_market/job_components/JobRichText";
 import { GuestLoginModal } from "@/components/ui/GuestLoginModal";
 import NewDiscussionModal from "@/pages/user/4_forums/forum_modals/NewDiscussionModal.tsx";
-import ReportGroupModal from "@/pages/user/4_forums/forum_modals/ReportGroupModal";
+import ForumReportModal from "@/pages/user/4_forums/forum_modals/ForumReportModal";
 import CreateGroupModal from "@/pages/user/4_forums/forum_modals/CreateGroupModal.tsx";
 import EditPostModal from "@/pages/user/4_forums/forum_modals/EditPostModal.tsx";
 import DeletePostModal from "@/pages/user/4_forums/forum_modals/DeletePostModal.tsx";
@@ -651,8 +652,9 @@ const CommentItem = ({
   currentUserAvatar,
   isLastInThread = false,
   isCollapsed = false,
-  onToggleCollapse
-}: { 
+  onToggleCollapse,
+  onReportComment,
+}: {
   comment: Comment;
   postId: string;
   membersDetails: Record<number | string, { name: string; avatar: string; accountId?: string | null }>;
@@ -660,6 +662,7 @@ const CommentItem = ({
   onReply: (postId: string, commentId: string, authorName: string, authorId: number) => void;
   onEditComment: (postId: string, commentId: string, newText: string) => void;
   onDeleteComment: (postId: string, commentId: string) => void;
+  onReportComment?: (postId: string, comment: Comment, authorName: string) => void;
   replyingTo: { commentId: string; authorName: string; authorId: number } | null;
   setReplyingTo: (value: { commentId: string; authorName: string; authorId: number } | null) => void;
   replyText: string;
@@ -678,7 +681,7 @@ const CommentItem = ({
 }) => {
   const navigate = useNavigate();
   const user = useGlobalState((state) => state.user);
-  const { locked: forumTimedOut, message: forumTimeoutMessage } = useForumTimeout();
+  const { locked: forumTimedOut, reportLocked, message: forumTimeoutMessage } = useForumTimeout();
   // Initialize showChildren based on isCollapsed - collapsed by default
   const [showChildren, setShowChildren] = useState(!isCollapsed);
   const [isEditing, setIsEditing] = useState(false);
@@ -769,7 +772,8 @@ const CommentItem = ({
 
   return (
     <div className={`${depthClass} mt-2 ${!isLastInThread ? "border-l-2 border-gray-200 dark:border-white/10 ml-2 pl-2" : ""}`}>
-      <div className="flex items-start gap-3 py-2">
+      {/* Inert for members; staff pick this comment in platform view (the server resolves it). */}
+      <div className="flex items-start gap-3 py-2" data-moderation-subject={`forum_comment:${postId}:${comment.comment_id}`}>
         {targetAccountId ? (
           <button
             type="button"
@@ -958,6 +962,18 @@ const CommentItem = ({
                   <span>{childCount} {childCount === 1 ? 'reply' : 'replies'}</span>
                 </button>
               )}
+              {!isAuthor && onReportComment && (
+                <button
+                  type="button"
+                  onClick={() => onReportComment(postId, comment, commentAuthor.name)}
+                  disabled={reportLocked}
+                  title={reportLocked ? forumTimeoutMessage : "Report this comment"}
+                  className={`inline-flex items-center gap-1 text-xs text-gray-500 transition hover:text-red-500 dark:text-zinc-500 dark:hover:text-red-400 ${reportLocked ? FORUM_LOCKED_CLASS : ""}`}
+                >
+                  <Flag className="h-3 w-3" />
+                  <span>Report</span>
+                </button>
+              )}
             </div>
           )}
 
@@ -1027,6 +1043,7 @@ const CommentItem = ({
                   isLastInThread={index === comment.children!.length - 1}
                   isCollapsed={isCollapsed}
                   onToggleCollapse={onToggleCollapse}
+                  onReportComment={onReportComment}
                 />
               ))}
             </div>
@@ -1338,6 +1355,9 @@ const Forums = () => {
   const [editingPost, setEditingPost] = useState<Post | null>(null);
   const [deletingPost, setDeletingPost] = useState<Post | null>(null);
   const [reportingPost, setReportingPost] = useState<Post | null>(null);
+  const [reportingComment, setReportingComment] = useState<
+    { postId: string; comment: Comment; authorName: string } | null
+  >(null);
   const [replyImages, setReplyImages] = useState<{ [key: string]: ImageAttachment[] }>({});
   const [replyUploading, setReplyUploading] = useState<{ [key: string]: boolean }>({});
   const [replyingTo, setReplyingTo] = useState<{ commentId: string; authorName: string; authorId: number } | null>(null);
@@ -2336,7 +2356,7 @@ const Forums = () => {
     const isSaved = post.isSaved;
 
     return (
-      <div key={post.id} className="rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface p-4 shadow-sm dark:shadow-none transition hover:border-gray-300 dark:hover:border-white/20">
+      <div key={post.id} data-moderation-subject={`forum_discussion:${post.id}`} className="rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface p-4 shadow-sm dark:shadow-none transition hover:border-gray-300 dark:hover:border-white/20">
         <div className="flex gap-3">
           {post.authorAccountId ? (
             <button
@@ -2535,6 +2555,9 @@ const Forums = () => {
                         currentUserName={currentUserName}
                         currentUserAvatar={currentUserAvatar}
                         isLastInThread={commentIndex === post.commentTree.length - 1}
+                        onReportComment={(postId, target, authorName) =>
+                          setReportingComment({ postId, comment: target, authorName })
+                        }
                       />
                     ))
                   ) : (
@@ -2574,6 +2597,7 @@ const Forums = () => {
         return (
         <div
           key={group.id}
+          data-moderation-subject={`forum_group:${group.id}`}
           onClick={() => navigate(`/forums/group/${group.id}`)}
           className="group relative cursor-pointer overflow-hidden rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 transition-all duration-300 hover:scale-[1.02] hover:border-gray-300 dark:hover:border-white/20 hover:bg-gray-50 dark:hover:bg-white/10 shadow-sm dark:shadow-none"
         >
@@ -3038,16 +3062,29 @@ const Forums = () => {
         onConfirm={handleDeletePost}
         postTitle={deletingPost?.title || ""}
       />
-      <ReportGroupModal
+      <ForumReportModal
         isOpen={Boolean(reportingPost)}
+        subject="discussion"
+        subjectName={reportingPost?.title || "Discussion"}
         onClose={() => setReportingPost(null)}
-        groupName={reportingPost?.title || "Discussion"}
-        subjectLabel="Discussion"
         onSubmit={async (reason, description) => {
-          if (!reportingPost?._id) return;
-          await api.post(`/api/forum/reports/discussions/${reportingPost._id}`, { reason, description });
-          setReportingPost(null);
-          showSuccessToast("Discussion reported");
+          const discussionId = reportingPost?._id;
+          if (!discussionId) throw new Error("Choose a discussion to report");
+          await api.post(`/api/forum/reports/discussions/${discussionId}`, { reason, description });
+        }}
+      />
+      <ForumReportModal
+        isOpen={Boolean(reportingComment)}
+        subject="comment"
+        subjectName={reportingComment ? `Comment by ${reportingComment.authorName}` : undefined}
+        subjectPreview={reportingComment?.comment.comment}
+        onClose={() => setReportingComment(null)}
+        onSubmit={async (reason, description) => {
+          if (!reportingComment) throw new Error("Choose a comment to report");
+          await api.post(
+            `/api/forum/reports/discussions/${reportingComment.postId}/comments/${reportingComment.comment.comment_id}`,
+            { reason, description }
+          );
         }}
       />
 

@@ -12,6 +12,7 @@ const {
   cancelScheduledTicketClose,
   getTicketPickers,
   searchTicketTeams,
+  searchTicketItems,
   getTicketCatalog,
   updateTicket,
   addTicketMessage,
@@ -334,7 +335,7 @@ async function patchAdminReport(req, res) {
 
 async function getAdminReportDetail(req, res) {
   try {
-    const data = await getReportDetail(req.params.id, req.session);
+    const data = await getReportDetail(req.params.id, req.session, { includeAccountContext: true });
     if (!data) return res.status(404).json({ success: false, message: 'Report not found' });
     res.status(200).json({ success: true, data });
   } catch (err) {
@@ -372,6 +373,25 @@ async function getTicketTeamSearch(req, res) {
     res.status(status).json({
       success: false,
       message: status < 500 ? err.message : 'Failed to search teams',
+    });
+  }
+}
+
+/** Asset and job-or-gig suggestions for the member ticket form (`?kind=asset|posting&q=&scope=`). */
+async function getTicketItemSearch(req, res) {
+  try {
+    const accountId = req.session?.account_id || req.session?.accountId;
+    if (!accountId) {
+      return res.status(401).json({ success: false, message: 'Authentication required' });
+    }
+    const data = await searchTicketItems(accountId, req.query?.kind, req.query?.q, req.query?.scope);
+    res.status(200).json({ success: true, data });
+  } catch (err) {
+    const status = err.statusCode && err.statusCode < 500 ? err.statusCode : 500;
+    if (status >= 500) console.error('Error searching ticket items:', err);
+    res.status(status).json({
+      success: false,
+      message: status < 500 ? err.message : 'Search is unavailable right now',
     });
   }
 }
@@ -815,6 +835,7 @@ module.exports = {
   getPublicTicketCatalog,
   getTicketContext,
   getTicketTeamSearch,
+  getTicketItemSearch,
   createPublicTicket,
   listMyTickets,
   listMyDisputes,

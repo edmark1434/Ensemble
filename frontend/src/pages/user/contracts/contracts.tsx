@@ -117,6 +117,8 @@ export interface DetailedContract {
   // Financial breakdown
   clientRange: string;
   totalValueCredits: number;
+  baseTierPrice?: number;
+  addOns?: { id?: string; title: string; price: number; deliveryDays?: number }[];
   platformFeePercent: number;
 
   // Scope & TOS

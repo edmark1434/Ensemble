@@ -29,6 +29,7 @@ import {
   Projector,
   RotateCw,
   Search,
+  ShieldAlert,
   Smartphone,
   Tablet,
   Users,
@@ -43,8 +44,12 @@ import {
   staffPreviewViewFallback,
   STAFF_PREVIEW_LOCATION_MESSAGE,
   STAFF_PREVIEW_NAV_MESSAGE,
+  STAFF_PREVIEW_PICK_MESSAGE,
+  STAFF_PREVIEW_PICKED_MESSAGE,
   STAFF_PREVIEW_SESSION_MESSAGE,
+  moderationSubjectKey,
 } from "@/lib/staffPlatformView";
+import PlatformModerationPanel from "@/components/staff/platformView/PlatformModerationPanel";
 
 type IconType = ComponentType<{ className?: string }>;
 
@@ -146,6 +151,7 @@ const DEVICES: { id: Device; label: string; width: number | null; icon: IconType
 
 const DEVICE_KEY = "ensemble:platform-view:device";
 const FOCUS_KEY = "ensemble:platform-view:focus";
+const MODERATE_KEY = "ensemble:platform-view:moderate";
 /** After this long without the member site answering, offer a retry. */
 const SLOW_LOAD_MS = 12_000;
 
@@ -259,6 +265,10 @@ export default function StaffPlatformPreviewPage() {
     return stored === "tablet" || stored === "phone" ? stored : "desktop";
   });
   const [focusMode, setFocusMode] = useState(() => readStored(FOCUS_KEY) === "1");
+  const [moderateOpen, setModerateOpen] = useState(() => readStored(MODERATE_KEY) === "1");
+  /** Item picked on the page (`data-moderation-subject`); cleared when the frame changes page. */
+  const [pick, setPick] = useState<string | null>(null);
+  const [picking, setPicking] = useState(false);
   /** The frame's app is listening (it has reported a page). Messages sent before that are lost. */
   const frameReady = useRef(false);
   const pendingPath = useRef<string | null>(null);
@@ -298,10 +308,20 @@ export default function StaffPlatformPreviewPage() {
     const onMessage = (event: MessageEvent) => {
       if (event.origin !== window.location.origin) return;
       if (!frameRef.current || event.source !== frameRef.current.contentWindow) return;
-      const data = event.data as { type?: unknown; path?: unknown; canGoBack?: unknown } | null;
+      const data = event.data as { type?: unknown; path?: unknown; canGoBack?: unknown; subject?: unknown } | null;
       if (!data) return;
       if (data.type === STAFF_PREVIEW_SESSION_MESSAGE) {
         setSessionEnded(true);
+        return;
+      }
+      if (data.type === STAFF_PREVIEW_PICKED_MESSAGE) {
+        setPicking(false);
+        // Only a well-formed key is kept; the server resolves what it points at.
+        const key = moderationSubjectKey(typeof data.subject === "string" ? data.subject : null);
+        if (key) {
+          setPick(key);
+          setModerateOpen(true);
+        }
         return;
       }
       if (data.type !== STAFF_PREVIEW_LOCATION_MESSAGE || typeof data.path !== "string") return;
@@ -341,6 +361,26 @@ export default function StaffPlatformPreviewPage() {
     return () => window.removeEventListener("message", onMessage);
   }, [sendToFrame, setSearchParams]);
 
+  // A picked item belongs to the page it was picked on; any page change (a link in the frame,
+  // the address bar, Back) drops it, and the frame ends a pick still in progress itself.
+  const shownPathname = pathnameOf(shownPath);
+  useEffect(() => {
+    setPick(null);
+    setPicking(false);
+  }, [shownPathname]);
+
+  const setPickMode = useCallback((active: boolean) => {
+    setPicking(active);
+    sendToFrame({ type: STAFF_PREVIEW_PICK_MESSAGE, active });
+  }, [sendToFrame]);
+
+  const toggleModerate = () => {
+    const next = !moderateOpen;
+    setModerateOpen(next);
+    writeStored(MODERATE_KEY, next ? "1" : "0");
+    if (!next && picking) setPickMode(false);
+  };
+
   useEffect(() => {
     if (!copied) return;
     const timer = window.setTimeout(() => setCopied(false), 1600);
@@ -359,6 +399,10 @@ export default function StaffPlatformPreviewPage() {
   // "/" jumps to the address bar (when the console, not the frame, has focus).
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && picking) {
+        setPickMode(false);
+        return;
+      }
       if (event.key !== "/" || event.metaKey || event.ctrlKey || event.altKey) return;
       const target = event.target as HTMLElement | null;
       if (target && (target.isContentEditable || /^(?:INPUT|TEXTAREA|SELECT)$/.test(target.tagName))) return;
@@ -367,11 +411,13 @@ export default function StaffPlatformPreviewPage() {
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, []);
+  }, [picking, setPickMode]);
 
   const reloadFrame = () => {
     frameReady.current = false;
     setLoaded(false);
+    // A reload starts the frame fresh, so pick mode there is gone.
+    setPicking(false);
     try {
       frameRef.current?.contentWindow?.location.reload();
     } catch {
@@ -439,7 +485,7 @@ export default function StaffPlatformPreviewPage() {
               <h1 className="text-xl font-bold text-white">Platform view</h1>
               <p className="mt-1 hidden max-w-3xl text-xs text-zinc-500 sm:block">
                 See the member site exactly as members do, without leaving the console. Search people from the
-                address bar. Posting, buying, messaging and other member actions are off for staff accounts.
+                address bar. Member actions stay off; use Moderate to act on the page you are looking at.
               </p>
             </div>
             <span
@@ -602,6 +648,18 @@ export default function StaffPlatformPreviewPage() {
               })}
             </div>
 
+            <button
+              type="button"
+              onClick={toggleModerate}
+              aria-pressed={moderateOpen}
+              title={moderateOpen ? "Hide the moderation panel" : "Moderate this page (only staff see this)"}
+              className={`inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg px-2 text-xs font-medium transition focus-visible:outline-none focus-visible:ring-1 ${accent.focusRing} ${
+                moderateOpen ? "bg-rose-400/15 text-rose-100" : "text-zinc-300 hover:bg-white/[0.06] hover:text-white"
+              }`}
+            >
+              <ShieldAlert className="h-4 w-4" />
+              <span className="hidden sm:inline">Moderate</span>
+            </button>
             <a
               href={newTabHref}
               target="_blank"
@@ -654,7 +712,8 @@ export default function StaffPlatformPreviewPage() {
             </div>
           )}
 
-          <div className={`relative min-h-0 flex-1 ${deviceWidth ? "bg-black/30 p-3" : ""}`}>
+          <div className="relative flex min-h-0 flex-1">
+          <div className={`relative min-h-0 min-w-0 flex-1 ${deviceWidth ? "bg-black/30 p-3" : ""}`}>
             <div
               className={deviceWidth ? "mx-auto h-full w-full overflow-hidden rounded-xl border border-white/10 shadow-xl" : "h-full"}
               style={deviceWidth ? { maxWidth: deviceWidth } : undefined}
@@ -699,6 +758,20 @@ export default function StaffPlatformPreviewPage() {
                 )}
               </div>
             )}
+          </div>
+          {moderateOpen && (
+            <PlatformModerationPanel
+              consolePath={consolePath}
+              path={shownPath}
+              pick={pick}
+              picking={picking}
+              onStartPick={() => setPickMode(true)}
+              onCancelPick={() => setPickMode(false)}
+              onClearPick={() => setPick(null)}
+              onOpenPage={(memberPath) => goTo(memberPath)}
+              onClose={toggleModerate}
+            />
+          )}
           </div>
         </div>
       </div>

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Loader2, RefreshCw } from 'lucide-react';
 import { peekStaffGet, staffGet } from '@/lib/staffCache';
+import { useStaffCaseEvents } from '@/lib/staffCaseEvents';
 import ReportDesk, { type ReportDeskPreset } from './ReportDesk';
 import type { UserReport } from './moderatorTypes';
 
@@ -51,6 +52,7 @@ export default function ModeratorReportsPage({
   deskLabel,
   scopeOptions,
   listingApiBase,
+  forumContentApiBase,
 }: {
   roleLabel: string;
   subtitle: string;
@@ -61,6 +63,8 @@ export default function ModeratorReportsPage({
   scopeOptions?: ReportScopeOption[];
   /** Marketplace API root, so a report case can open the linked listing review. */
   listingApiBase?: string;
+  /** Forum moderation API root, so a report case can remove the reported post or comment. */
+  forumContentApiBase?: string;
 }) {
   const [searchParams] = useSearchParams();
   // Dashboard cards deep-link here with ?q= / ?status= / ?priority= / ?assignee=.
@@ -127,6 +131,9 @@ export default function ModeratorReportsPage({
     void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [endpointBase]);
+
+  // New reports, claims and decisions from members and other staff show up without a refresh.
+  useStaffCaseEvents(['report'], () => void load(), { delayMs: 800 });
 
   const switchScope = (next: string) => {
     if (next === scope) return;
@@ -206,6 +213,7 @@ export default function ModeratorReportsPage({
           deskLabel={activeScope ? activeScope.label : deskLabel}
           preset={preset}
           listingApiBase={listingApiBase}
+          forumContentApiBase={forumContentApiBase}
         />
       </div>
     </main>

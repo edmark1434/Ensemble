@@ -387,6 +387,12 @@ const METADATA_LABELS = {
   disputeNumber: 'Dispute number',
   durationDays: 'Duration (days)',
   endsAt: 'Ends',
+  evidenceCapturedAt: 'Evidence captured',
+  evidenceExcerpt: 'Evidence text',
+  evidenceHref: 'Evidence page',
+  evidenceKind: 'Evidence type',
+  evidenceStatus: 'Evidence state when acted on',
+  evidenceTitle: 'Evidence',
   expiresAt: 'Expires',
   frozenCredits: 'Frozen credits',
   groupId: 'Group ID',
@@ -400,6 +406,7 @@ const METADATA_LABELS = {
   note: 'Note',
   originalAction: 'Original action',
   originalEventCode: 'Original event code',
+  pairedAction: 'Taken together with',
   points: 'Warning points',
   postingTitle: 'Posting',
   postingType: 'Posting type',
@@ -407,10 +414,14 @@ const METADATA_LABELS = {
   projectId: 'Project ID',
   projectName: 'Project',
   reason: 'Reason',
+  relatedReports: 'Open reports on the item',
   reportId: 'Report ID',
   reportNumber: 'Report number',
   restrictionId: 'Restriction ID',
+  source: 'Taken from',
+  sourcePage: 'Member page',
   startsAt: 'Starts',
+  subjectKey: 'Item key',
   status: 'New status',
   suspensionEndsAt: 'Suspension ends',
   type: 'Type',
@@ -423,6 +434,12 @@ const METADATA_LABELS = {
 const METADATA_PRIORITY = [
   'reason',
   'note',
+  'source',
+  'evidenceKind',
+  'evidenceTitle',
+  'evidenceExcerpt',
+  'evidenceStatus',
+  'pairedAction',
   'type',
   'decision',
   'status',
@@ -554,7 +571,7 @@ function detailType(key, value) {
   if (typeof value === 'string' && ISO_DATE_RE.test(value)) return 'date';
   if (value instanceof Date) return 'date';
   if (/(^|[a-z])Id$/.test(key) || key === 'accountId') return 'id';
-  if (key === 'reason' || key === 'note') return 'text';
+  if (key === 'reason' || key === 'note' || key === 'evidenceExcerpt') return 'text';
   return 'string';
 }
 

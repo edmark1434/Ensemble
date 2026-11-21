@@ -1,10 +1,14 @@
 import { useMemo, useState } from 'react';
-import { Hand, Loader2, Search, ShieldAlert } from 'lucide-react';
+import { Building2, Hand, Loader2, Search, ShieldAlert, UserRound } from 'lucide-react';
 import api from '@/lib/axios';
 import { showErrorToast, showSuccessToast } from '@/components/utility/toast.ts';
 import { VerificationModal } from '../userTeam/components/AccountModals';
-import type { PlatformUserAccount } from '../userTeam/userTeamTypes';
 import type { ModerationCase } from './moderationTypes';
+import {
+  isBusinessVerification,
+  loadVerificationSubject,
+  type VerificationSubject,
+} from './verificationCase';
 
 function formatDateTime(value: string | null | undefined) {
   if (!value) return '—';
@@ -31,7 +35,9 @@ function statusClass(status: string) {
   if (s === 'pending' || s === 'pending review' || s === 'open') {
     return 'bg-rose-500/15 text-rose-200 border-rose-500/25';
   }
-  if (s === 'unverified') return 'bg-amber-500/15 text-amber-200 border-amber-500/25';
+  if (s === 'unverified' || s === 'resubmission requested') {
+    return 'bg-amber-500/15 text-amber-200 border-amber-500/25';
+  }
   if (s === 'verified' || s === 'approved') {
     return 'bg-emerald-500/15 text-emerald-300 border-emerald-500/25';
   }
@@ -46,10 +52,22 @@ function priorityClass(priority: string) {
   return 'bg-sky-500/15 text-sky-300 border-sky-500/25';
 }
 
-type StatusFilter = 'all' | 'open_queue' | 'unassigned' | 'assigned' | 'pending' | 'unverified';
+type StatusFilter = 'all' | 'open_queue' | 'unassigned' | 'assigned' | 'pending' | 'awaiting';
+type KindFilter = 'all' | 'identity' | 'business';
 
 function verificationOf(c: ModerationCase) {
   return String(c.verificationStatus || c.status || '').toLowerCase();
+}
+
+function isPendingReview(c: ModerationCase) {
+  const v = verificationOf(c);
+  return v === 'pending' || v === 'pending review';
+}
+
+/** Waiting on the applicant: never submitted, or staff asked a team for changes. */
+function isAwaitingApplicant(c: ModerationCase) {
+  const v = verificationOf(c);
+  return v === 'unverified' || v === 'resubmission requested';
 }
 
 export default function IdentityVerificationTab({
@@ -62,38 +80,51 @@ export default function IdentityVerificationTab({
   onUpdated: () => void;
 }) {
   const [search, setSearch] = useState('');
+  const [kindFilter, setKindFilter] = useState<KindFilter>('all');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('open_queue');
   const [busyId, setBusyId] = useState<string | null>(null);
-  const [identityUser, setIdentityUser] = useState<PlatformUserAccount | null>(null);
-  const [identityLoading, setIdentityLoading] = useState(false);
+  const [subject, setSubject] = useState<VerificationSubject | null>(null);
+  const [subjectLoading, setSubjectLoading] = useState(false);
 
   const myStaffId =
     currentStaffId != null && currentStaffId !== '' ? String(currentStaffId) : null;
 
-  const counts = useMemo(() => {
-    const openQueue = cases.length;
-    const unassigned = cases.filter((c) => !c.assignedStaffId).length;
-    const assigned = cases.filter((c) => Boolean(c.assignedStaffId)).length;
-    const pending = cases.filter((c) => {
-      const v = verificationOf(c);
-      return v === 'pending' || v === 'pending review';
-    }).length;
-    const unverified = cases.filter((c) => verificationOf(c) === 'unverified').length;
-    return { openQueue, unassigned, assigned, pending, unverified, total: cases.length };
+  const kindCounts = useMemo(() => {
+    const business = cases.filter(isBusinessVerification).length;
+    return { all: cases.length, business, identity: cases.length - business };
   }, [cases]);
+
+  const kindCases = useMemo(() => {
+    if (kindFilter === 'all') return cases;
+    const wantBusiness = kindFilter === 'business';
+    return cases.filter((c) => isBusinessVerification(c) === wantBusiness);
+  }, [cases, kindFilter]);
+
+  const counts = useMemo(
+    () => ({
+      openQueue: kindCases.length,
+      unassigned: kindCases.filter((c) => !c.assignedStaffId).length,
+      assigned: kindCases.filter((c) => Boolean(c.assignedStaffId)).length,
+      pending: kindCases.filter(isPendingReview).length,
+      awaiting: kindCases.filter(isAwaitingApplicant).length,
+      total: kindCases.length,
+    }),
+    [kindCases]
+  );
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return cases.filter((c) => {
-      const v = verificationOf(c);
+    return kindCases.filter((c) => {
       if (statusFilter === 'unassigned' && c.assignedStaffId) return false;
       if (statusFilter === 'assigned' && !c.assignedStaffId) return false;
-      if (statusFilter === 'pending' && v !== 'pending' && v !== 'pending review') return false;
-      if (statusFilter === 'unverified' && v !== 'unverified') return false;
+      if (statusFilter === 'pending' && !isPendingReview(c)) return false;
+      if (statusFilter === 'awaiting' && !isAwaitingApplicant(c)) return false;
       if (!q) return true;
       const hay = [
         c.target,
         c.targetHandle,
+        c.businessName,
+        c.type,
         c.reason,
         c.verificationStatus,
         c.assignedStaffName,
@@ -106,12 +137,18 @@ export default function IdentityVerificationTab({
         .toLowerCase();
       return hay.includes(q);
     });
-  }, [cases, search, statusFilter]);
+  }, [kindCases, search, statusFilter]);
+
+  const kinds: { id: KindFilter; label: string; count: number; icon?: typeof UserRound }[] = [
+    { id: 'all', label: 'All types', count: kindCounts.all },
+    { id: 'identity', label: 'Personal identity', count: kindCounts.identity, icon: UserRound },
+    { id: 'business', label: 'Business', count: kindCounts.business, icon: Building2 },
+  ];
 
   const filters: { id: StatusFilter; label: string; count?: number }[] = [
     { id: 'open_queue', label: 'Open queue', count: counts.openQueue },
     { id: 'pending', label: 'Pending review', count: counts.pending },
-    { id: 'unverified', label: 'Unverified', count: counts.unverified },
+    { id: 'awaiting', label: 'Awaiting applicant', count: counts.awaiting },
     { id: 'unassigned', label: 'Unassigned', count: counts.unassigned },
     { id: 'assigned', label: 'Assigned', count: counts.assigned },
     { id: 'all', label: 'All', count: counts.total },
@@ -121,27 +158,17 @@ export default function IdentityVerificationTab({
     myStaffId != null && c.assignedStaffId != null && String(c.assignedStaffId) === myStaffId;
 
   const openVerification = async (c: ModerationCase) => {
-    if (!c.accountId) {
-      showErrorToast('This identity case has no linked account');
-      return;
-    }
-    setIdentityLoading(true);
-    setIdentityUser(null);
+    setSubjectLoading(true);
+    setSubject(null);
     try {
-      const res = await api.get('/api/admin/users-management');
-      if (!res.data?.success) throw new Error(res.data?.message || 'Failed to load user');
-      const user = (res.data.data.users as PlatformUserAccount[]).find(
-        (u) => String(u.accountId) === String(c.accountId)
-      );
-      if (!user) throw new Error('User not found for this verification case');
-      setIdentityUser(user);
+      setSubject(await loadVerificationSubject(c));
     } catch (err: unknown) {
       const message =
         (err as { response?: { data?: { message?: string } } })?.response?.data?.message ||
         (err instanceof Error ? err.message : 'Failed to open verification');
       showErrorToast(message);
     } finally {
-      setIdentityLoading(false);
+      setSubjectLoading(false);
     }
   };
 
@@ -165,12 +192,23 @@ export default function IdentityVerificationTab({
     }
   };
 
+  const queueLabel =
+    kindFilter === 'business'
+      ? 'Business verification queue'
+      : kindFilter === 'identity'
+        ? 'Personal identity queue'
+        : `Identity ${kindCounts.identity} · Business ${kindCounts.business}`;
+
   return (
     <div className="space-y-5">
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <SummaryCard label="Open reviews" value={counts.openQueue} sub="Identity queue awaiting action" />
+        <SummaryCard label="Open reviews" value={counts.openQueue} sub={queueLabel} />
         <SummaryCard label="Pending review" value={counts.pending} sub="Submitted and awaiting decision" />
-        <SummaryCard label="Unverified" value={counts.unverified} sub="Not yet submitted or incomplete" />
+        <SummaryCard
+          label="Awaiting applicant"
+          value={counts.awaiting}
+          sub="Not submitted yet, or changes requested"
+        />
         <SummaryCard label="Unassigned" value={counts.unassigned} sub="Need a designated handler" />
       </div>
 
@@ -179,10 +217,11 @@ export default function IdentityVerificationTab({
           <div>
             <div className="flex items-center gap-2">
               <ShieldAlert className="h-4 w-4 text-rose-300" />
-              <h2 className="text-sm font-semibold text-white">Identity desk</h2>
+              <h2 className="text-sm font-semibold text-white">Verification desk</h2>
             </div>
             <p className="mt-1 text-xs text-zinc-500">
-              Review member identity submissions, assign handlers, and approve or reject verification.
+              Review member identity and team business submissions, assign handlers, and approve or
+              reject verification.
             </p>
           </div>
           <div className="relative w-full max-w-sm">
@@ -190,37 +229,58 @@ export default function IdentityVerificationTab({
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search name, username, status…"
+              placeholder="Search name, username, business, status…"
               className="w-full rounded-xl border border-white/[0.08] bg-[#14151c] py-2.5 pl-9 pr-3 text-sm text-white outline-none placeholder:text-zinc-600 focus:border-rose-500/40"
             />
           </div>
         </div>
 
-        <div className="flex gap-1 overflow-x-auto border-b border-white/[0.06] px-3 py-2">
-          {filters.map((f) => (
-            <button
-              key={f.id}
-              type="button"
-              onClick={() => setStatusFilter(f.id)}
-              className={`shrink-0 rounded-lg px-3 py-1.5 text-xs font-medium transition ${
-                statusFilter === f.id
-                  ? 'bg-rose-500/15 text-rose-100'
-                  : 'text-zinc-500 hover:bg-white/[0.04] hover:text-zinc-300'
-              }`}
-            >
-              {f.label}
-              {typeof f.count === 'number' && (
-                <span className="ml-1.5 text-[10px] opacity-70">{f.count}</span>
-              )}
-            </button>
-          ))}
+        <div className="flex flex-col gap-2 border-b border-white/[0.06] px-3 py-2 lg:flex-row lg:items-center lg:justify-between">
+          <div className="inline-flex shrink-0 gap-1 rounded-xl border border-white/[0.06] bg-[#14151c] p-1">
+            {kinds.map(({ id, label, count, icon: Icon }) => (
+              <button
+                key={id}
+                type="button"
+                onClick={() => setKindFilter(id)}
+                className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition ${
+                  kindFilter === id
+                    ? 'bg-rose-500/15 text-rose-100'
+                    : 'text-zinc-500 hover:bg-white/[0.04] hover:text-zinc-300'
+                }`}
+              >
+                {Icon && <Icon className="h-3.5 w-3.5" />}
+                {label}
+                <span className="text-[10px] opacity-70">{count}</span>
+              </button>
+            ))}
+          </div>
+          <div className="flex gap-1 overflow-x-auto">
+            {filters.map((f) => (
+              <button
+                key={f.id}
+                type="button"
+                onClick={() => setStatusFilter(f.id)}
+                className={`shrink-0 rounded-lg px-3 py-1.5 text-xs font-medium transition ${
+                  statusFilter === f.id
+                    ? 'bg-rose-500/15 text-rose-100'
+                    : 'text-zinc-500 hover:bg-white/[0.04] hover:text-zinc-300'
+                }`}
+              >
+                {f.label}
+                {typeof f.count === 'number' && (
+                  <span className="ml-1.5 text-[10px] opacity-70">{f.count}</span>
+                )}
+              </button>
+            ))}
+          </div>
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[960px] text-left text-sm">
+          <table className="w-full min-w-[1060px] text-left text-sm">
             <thead>
               <tr className="border-b border-white/[0.06] text-[11px] uppercase tracking-wide text-zinc-500">
                 <th className="px-5 py-3 font-medium">Applicant</th>
+                <th className="px-4 py-3 font-medium">Type</th>
                 <th className="px-4 py-3 font-medium">Verification</th>
                 <th className="px-4 py-3 font-medium">Priority</th>
                 <th className="px-4 py-3 font-medium">Queue status</th>
@@ -232,6 +292,7 @@ export default function IdentityVerificationTab({
             <tbody>
               {filtered.map((c) => {
                 const verification = c.verificationStatus || c.status;
+                const business = isBusinessVerification(c);
                 return (
                   <tr
                     key={c.id}
@@ -240,7 +301,26 @@ export default function IdentityVerificationTab({
                   >
                     <td className="px-5 py-3.5">
                       <p className="font-medium text-white">{c.target}</p>
-                      <p className="mt-0.5 text-xs text-zinc-500">@{c.targetHandle || '—'}</p>
+                      <p className="mt-0.5 text-xs text-zinc-500">
+                        @{c.targetHandle || '—'}
+                        {business && c.businessName ? ` · ${c.businessName}` : ''}
+                      </p>
+                    </td>
+                    <td className="px-4 py-3.5">
+                      <span
+                        className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] ${
+                          business
+                            ? 'border-violet-500/25 bg-violet-500/15 text-violet-200'
+                            : 'border-sky-500/25 bg-sky-500/15 text-sky-200'
+                        }`}
+                      >
+                        {business ? (
+                          <Building2 className="h-3 w-3" />
+                        ) : (
+                          <UserRound className="h-3 w-3" />
+                        )}
+                        {business ? 'Business' : 'Identity'}
+                      </span>
                     </td>
                     <td className="px-4 py-3.5">
                       <span
@@ -301,8 +381,8 @@ export default function IdentityVerificationTab({
               })}
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="px-5 py-16 text-center text-sm text-zinc-500">
-                    No identity reviews match this filter.
+                  <td colSpan={8} className="px-5 py-16 text-center text-sm text-zinc-500">
+                    No verification reviews match this filter.
                   </td>
                 </tr>
               )}
@@ -311,21 +391,21 @@ export default function IdentityVerificationTab({
         </div>
       </section>
 
-      {identityLoading && (
+      {subjectLoading && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 md:pl-[260px]">
           <Loader2 className="h-8 w-8 animate-spin text-rose-400" />
         </div>
       )}
 
-      {identityUser && (
+      {subject && (
         <VerificationModal
-          entityName={identityUser.name}
-          accountId={identityUser.accountId}
-          verification={identityUser.verification}
+          entityName={subject.name}
+          accountId={subject.accountId}
+          verification={subject.verification}
           loadDiditDetails
-          onClose={() => setIdentityUser(null)}
+          onClose={() => setSubject(null)}
           onChanged={() => {
-            setIdentityUser(null);
+            setSubject(null);
             onUpdated();
           }}
         />

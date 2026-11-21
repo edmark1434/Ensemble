@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import useGlobalState from '@/lib/global_state';
 import { peekStaffGet, staffGet } from '@/lib/staffCache';
+import { useStaffCaseEvents } from '@/lib/staffCaseEvents';
 import {
   ChartCard,
   DonutChart,
@@ -161,6 +162,9 @@ export default function ForumModeratorDashboard() {
     void load();
   }, [load]);
 
+  // Counts, alerts and the flagged list follow new reports and tickets without a refresh.
+  useStaffCaseEvents(['ticket', 'report'], () => void load(true), { delayMs: 800 });
+
   const handleAlertClick = (alert: Alert) => {
     const tab = alert.action?.tab;
     if (!tab) return;
@@ -215,6 +219,7 @@ export default function ForumModeratorDashboard() {
         <ReportCaseDetailModal
           reportId={selectedReportId}
           endpointBase="/api/moderator/forum/reports"
+          forumContentApiBase="/api/moderator/forum"
           accent="violet"
           onClose={() => setSelectedReportId(null)}
           onUpdated={() => void load(true)}

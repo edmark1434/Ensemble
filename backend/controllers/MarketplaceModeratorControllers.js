@@ -244,7 +244,7 @@ async function getReports(req, res) {
 
 async function getReport(req, res) {
   try {
-    const data = await getReportDetail(req.params.id, req.session, { assignableQueue: 'marketplace' });
+    const data = await getReportDetail(req.params.id, req.session, { assignableQueue: 'marketplace', includeAccountContext: true });
     if (!data) return res.status(404).json({ success: false, message: 'Report not found' });
     if (!isReportTypeInScope(data.report?.targetType, MARKETPLACE_REPORT_TYPES)) {
       return res.status(403).json({ success: false, message: 'Report is outside the marketplace queue' });

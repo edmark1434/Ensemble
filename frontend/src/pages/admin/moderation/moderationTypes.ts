@@ -11,6 +11,11 @@ export type ModerationCase = {
   referenceNumber?: string | null;
   accountId?: string | null;
   verificationStatus?: string | null;
+  /** Identity cases only: a member's personal identity check or a team's business verification. */
+  verificationKind?: 'identity' | 'business';
+  /** Business verification cases: the registered business name the team submitted. */
+  businessName?: string | null;
+  teamId?: string | null;
   assignedRole?: string | null;
   assignedStaffId?: string | number | null;
   assignedStaffName?: string | null;

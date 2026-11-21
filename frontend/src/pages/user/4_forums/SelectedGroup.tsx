@@ -48,11 +48,10 @@ import JobRichText from "@/pages/user/6_job_market/job_components/JobRichText";
 import { GuestLoginModal } from "@/components/ui/GuestLoginModal";
 import NewDiscussionModal from "@/pages/user/4_forums/forum_modals/NewDiscussionModal";
 import EditGroupModal from "@/pages/user/4_forums/forum_modals/EditGroupModal";
-import ReportGroupModal from "@/pages/user/4_forums/forum_modals/ReportGroupModal.tsx";
+import ForumReportModal from "@/pages/user/4_forums/forum_modals/ForumReportModal";
 import LeaveGroupModal from "@/pages/user/4_forums/forum_modals/LeaveGroupModal.tsx";
 import DeleteGroupModal from "@/pages/user/4_forums/forum_modals/DeleteGroupModal.tsx";
 import EditGroupPermissionsModal from "@/pages/user/4_forums/forum_modals/EditGroupPermissionsModal.tsx";
-import ReportMemberModal from "@/pages/user/4_forums/forum_modals/ReportMemberModal.tsx";
 import RemoveMemberModal from "@/pages/user/4_forums/forum_modals/RemoveMemberModal.tsx";
 import EditPostModal from "@/pages/user/4_forums/forum_modals/EditPostModal.tsx";
 import DeletePostModal from "@/pages/user/4_forums/forum_modals/DeletePostModal.tsx";
@@ -652,8 +651,9 @@ const CommentItem = ({
   isUploading,
   currentUserId,
   currentUserAvatar,
-  isLastInThread = false
-}: { 
+  isLastInThread = false,
+  onReportComment,
+}: {
   comment: Comment;
   postId: string;
   membersDetails: Record<string, { name: string; avatar: string; accountId?: string | null }>;
@@ -673,10 +673,11 @@ const CommentItem = ({
   currentUserId: number;
   currentUserAvatar: string;
   isLastInThread?: boolean;
+  onReportComment?: (postId: string, comment: Comment, authorName: string) => void;
 }) => {
   const navigate = useNavigate();
   const user = useGlobalState((state) => state.user);
-  const { locked: forumTimedOut, message: forumTimeoutMessage } = useForumTimeout();
+  const { locked: forumTimedOut, reportLocked, message: forumTimeoutMessage } = useForumTimeout();
   const [showChildren, setShowChildren] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editText, setEditText] = useState(comment.comment);
@@ -726,7 +727,8 @@ const CommentItem = ({
 
   return (
     <div className={`${depthClass} mt-2 ${!isLastInThread ? "border-l-2 border-gray-200 dark:border-white/10 ml-2 pl-2" : ""}`}>
-      <div className="flex items-start gap-3 py-2">
+      {/* Inert for members; staff pick this comment in platform view (the server resolves it). */}
+      <div className="flex items-start gap-3 py-2" data-moderation-subject={`forum_comment:${postId}:${comment.comment_id}`}>
         {targetAccountId ? (
           <button
             type="button"
@@ -891,6 +893,18 @@ const CommentItem = ({
                   <span>{showChildren ? "Hide" : "View"} {childCount} {childCount === 1 ? "reply" : "replies"}</span>
                 </button>
               )}
+              {!isAuthor && onReportComment && (
+                <button
+                  type="button"
+                  onClick={() => onReportComment(postId, comment, commentAuthor.name)}
+                  disabled={reportLocked}
+                  title={reportLocked ? forumTimeoutMessage : "Report this comment"}
+                  className={`inline-flex items-center gap-1 text-xs text-gray-500 transition hover:text-red-500 dark:text-zinc-500 dark:hover:text-red-400 ${reportLocked ? FORUM_LOCKED_CLASS : ""}`}
+                >
+                  <Flag className="h-3 w-3" />
+                  <span>Report</span>
+                </button>
+              )}
             </div>
           )}
 
@@ -943,6 +957,7 @@ const CommentItem = ({
                   currentUserId={currentUserId}
                   currentUserAvatar={currentUserAvatar}
                   isLastInThread={index === comment.children!.length - 1}
+                  onReportComment={onReportComment}
                 />
               ))}
             </div>
@@ -1002,6 +1017,9 @@ const SelectedGroup = () => {
   const [editingPost, setEditingPost] = useState<Post | null>(null);
   const [deletingPost, setDeletingPost] = useState<Post | null>(null);
   const [reportingPost, setReportingPost] = useState<Post | null>(null);
+  const [reportingComment, setReportingComment] = useState<
+    { postId: string; comment: Comment; authorName: string } | null
+  >(null);
 
   const [replyImages, setReplyImages] = useState<{ [key: string]: ImageAttachment[] }>({});
   const [replyUploading, setReplyUploading] = useState<{ [key: string]: boolean }>({});
@@ -1940,14 +1958,9 @@ const SelectedGroup = () => {
     }
   };
 
+  // The report modal shows the server's refusal inline and its own confirmation.
   const handleReportGroup = async (reason: string, description: string) => {
-    try {
-      await api.post(`api/forum/reports/groups/${group._id}`, { reason, description });
-      showSuccessToast("Group reported successfully. Our team will review it.");
-    } catch (error) {
-      // ReportGroupModal shows the server's reason inline.
-      throw error;
-    }
+    await api.post(`/api/forum/reports/groups/${group._id}`, { reason, description });
   };
 
   const handleLeaveGroup = async () => {
@@ -1978,22 +1991,11 @@ const SelectedGroup = () => {
   };
 
   const handleReportMember = async (reason: string, description: string) => {
-    if (!selectedMember) {
-      showErrorToast("Select a member to report.");
-      throw new Error("No member selected");
-    }
-
-    try {
-      await api.post(
-        `api/forum/reports/groups/${group._id}/members/${selectedMember.userId}`,
-        { reason, description }
-      );
-      showSuccessToast(`Report submitted for ${selectedMember.name}`);
-      setSelectedMember(null);
-    } catch (error) {
-      // ReportGroupModal shows the server's reason inline.
-      throw error;
-    }
+    if (!selectedMember) throw new Error("Select a member to report.");
+    await api.post(
+      `/api/forum/reports/groups/${group._id}/members/${selectedMember.userId}`,
+      { reason, description }
+    );
   };
 
   const handleRemoveMember = async () => {
@@ -2398,7 +2400,7 @@ const SelectedGroup = () => {
                     const isAuthor = post.user_id === currentUserId;
 
                     return (
-                      <div key={post.id} className="rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface p-4 shadow-sm dark:shadow-none transition hover:border-gray-300 dark:hover:border-white/20">
+                      <div key={post.id} data-moderation-subject={`forum_discussion:${post.id}`} className="rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface p-4 shadow-sm dark:shadow-none transition hover:border-gray-300 dark:hover:border-white/20">
                         <div className="flex gap-3">
                           {post.authorAccountId ? (
                             <button
@@ -2589,6 +2591,9 @@ const SelectedGroup = () => {
                                         currentUserId={currentUserId}
                                         currentUserAvatar={currentUserAvatar}
                                         isLastInThread={commentIndex === post.commentTree.length - 1}
+                                        onReportComment={(postId, target, authorName) =>
+                                          setReportingComment({ postId, comment: target, authorName })
+                                        }
                                       />
                                     ))
                                   ) : (
@@ -2883,10 +2888,11 @@ const SelectedGroup = () => {
         onSave={handleEditPermissions}
       />
 
-      <ReportGroupModal
+      <ForumReportModal
         isOpen={showReportGroupModal}
+        subject="group"
+        subjectName={group.group_name}
         onClose={() => setShowReportGroupModal(false)}
-        groupName={group.group_name}
         onSubmit={handleReportGroup}
       />
 
@@ -2904,13 +2910,14 @@ const SelectedGroup = () => {
         onConfirm={handleDeleteGroup}
       />
 
-      <ReportMemberModal
+      <ForumReportModal
         isOpen={showReportMemberModal}
+        subject="member"
+        subjectName={selectedMember?.name || ""}
         onClose={() => {
           setShowReportMemberModal(false);
           setSelectedMember(null);
         }}
-        memberName={selectedMember?.name || ""}
         onSubmit={handleReportMember}
       />
 
@@ -2949,16 +2956,29 @@ const SelectedGroup = () => {
         onConfirm={handleDeletePost}
         postTitle={deletingPost?.title || ""}
       />
-      <ReportGroupModal
+      <ForumReportModal
         isOpen={Boolean(reportingPost)}
+        subject="discussion"
+        subjectName={reportingPost?.title || "Discussion"}
         onClose={() => setReportingPost(null)}
-        groupName={reportingPost?.title || "Discussion"}
-        subjectLabel="Discussion"
         onSubmit={async (reason, description) => {
-          if (!reportingPost?._id) return;
-          await api.post(`/api/forum/reports/discussions/${reportingPost._id}`, { reason, description });
-          setReportingPost(null);
-          showSuccessToast("Discussion reported");
+          const discussionId = reportingPost?._id;
+          if (!discussionId) throw new Error("Choose a discussion to report");
+          await api.post(`/api/forum/reports/discussions/${discussionId}`, { reason, description });
+        }}
+      />
+      <ForumReportModal
+        isOpen={Boolean(reportingComment)}
+        subject="comment"
+        subjectName={reportingComment ? `Comment by ${reportingComment.authorName}` : undefined}
+        subjectPreview={reportingComment?.comment.comment}
+        onClose={() => setReportingComment(null)}
+        onSubmit={async (reason, description) => {
+          if (!reportingComment) throw new Error("Choose a comment to report");
+          await api.post(
+            `/api/forum/reports/discussions/${reportingComment.postId}/comments/${reportingComment.comment.comment_id}`,
+            { reason, description }
+          );
         }}
       />
       <GuestLoginModal

@@ -52,6 +52,7 @@ const {
     getPublicTicketCatalog,
     getTicketContext,
     getTicketTeamSearch,
+    getTicketItemSearch,
     createMyTechnicalReport,
 } = require('../controllers/AdminTicketsControllers');
 const { getMyAppealOptions } = require('../controllers/PenaltyAppealControllers');
@@ -84,6 +85,7 @@ router.post('/update-personal-details', [checkSession, requireAuth],updatePerson
 router.get('/ticket-catalog', getPublicTicketCatalog);
 router.get('/ticket-context', [checkSession, requireAuth], getTicketContext);
 router.get('/ticket-teams', [checkSession, requireAuth], getTicketTeamSearch);
+router.get('/ticket-search', [checkSession, requireAuth], getTicketItemSearch);
 router.post('/tickets', [checkSession, requireAuth, ticketCreateLimiter], createPublicTicket);
 router.get('/tickets', [checkSession, requireAuth], listMyTickets);
 router.get('/tickets/:id', [checkSession, requireAuth], getMyTicket);

@@ -1082,7 +1082,11 @@ function teamAttention({ teamType, leader, wallet, history, verificationStatus, 
   return flags;
 }
 
-async function fetchTeamsFromDatabase({ enrich = true } = {}) {
+/**
+ * Contract workspaces (`team_type = 'contractual'`) are job/gig scaffolding, not team accounts,
+ * so the Team accounts list leaves them out unless a caller asks for them (wallet look-ups).
+ */
+async function fetchTeamsFromDatabase({ enrich = true, includeContractual = false } = {}) {
   const teamsResult = await pool.query(`
     SELECT
       t.team_id,
@@ -1136,8 +1140,9 @@ async function fetchTeamsFromDatabase({ enrich = true } = {}) {
     ) w ON TRUE
     WHERE a.deleted_at IS NULL
       AND t.deleted_at IS NULL
+      AND ($1::boolean OR COALESCE(t.team_type, 'standard') <> 'contractual')
     ORDER BY a.created_at DESC
-  `);
+  `, [Boolean(includeContractual)]);
 
   if (!teamsResult.rows.length) return [];
 
@@ -1379,9 +1384,9 @@ function computeUserStats(users) {
   };
 }
 
-async function getTeamsManagement() {
+async function getTeamsManagement({ includeContractual = false } = {}) {
   await markExpiredVerificationsForReverification();
-  const teams = await fetchTeamsFromDatabase();
+  const teams = await fetchTeamsFromDatabase({ includeContractual });
   return {
     stats: computeTeamStats(teams),
     teams,
@@ -1664,7 +1669,11 @@ async function updateAccountStatus(accountId, actionOrStatus, staffId = null, op
   const viaTeamMeta = options.viaTeamAccountId
     ? { viaTeamAccountId: String(options.viaTeamAccountId), viaTeamName: options.viaTeamName || null }
     : {};
-  const { assertCanSanctionTarget, staffRoleOf } = require('../lib/SuspendGuards');
+  const { assertCanSanctionTarget, actorRoleOf } = require('../lib/SuspendGuards');
+  // Extra metadata a caller wants on the audit rows (platform view: source page, evidence).
+  const activityContext = options.activityContext && typeof options.activityContext === 'object'
+    ? options.activityContext
+    : {};
   const guardAction = ['ban', 'banned'].includes(key)
     ? 'ban'
     : ['lock', 'locked'].includes(key)
@@ -1683,15 +1692,19 @@ async function updateAccountStatus(accountId, actionOrStatus, staffId = null, op
       action: guardAction,
     });
   }
+  // The acting staff member's role. A moderator session can carry only an account id; it used
+  // to fall back to 'Admin' here, which let a specialist suspend or lock (and so lift) a ban.
+  // `undefined` is kept for system paths with no actor (dispute conviction ban).
+  const actorRole = await actorRoleOf({ staffId, actorAccountId: options.actorAccountId || null });
   if (!['timeout', 'forum_timeout', 'clear_timeout', 'clear-timeout'].includes(key)) {
     assertStatusTransition({
       key,
       currentStatus: account.status,
-      actorRole: staffId ? await staffRoleOf(staffId) : 'Admin',
+      actorRole: actorRole === undefined ? 'Admin' : actorRole,
     });
   }
   const { resolveStandingOptions } = require('../services/PunishmentDefServices');
-  const resolvedOptions = await resolveStandingOptions(key, options);
+  const resolvedOptions = await resolveStandingOptions(key, { ...options, actorRole });
   const reason = sanctionReason(resolvedOptions);
   const {
     sanctionEndsAt,
@@ -1720,7 +1733,7 @@ async function updateAccountStatus(accountId, actionOrStatus, staffId = null, op
       referencePrefix: 'RST',
       referenceId: accountId,
       actorStaffId: staffId,
-      metadata: { endsAt, days: resolvedOptions.days ?? null, reason, ...punishmentMeta, ...viaTeamMeta },
+      metadata: { endsAt, days: resolvedOptions.days ?? null, reason, ...punishmentMeta, ...viaTeamMeta, ...activityContext },
     });
     let restriction = null;
     try {
@@ -1763,7 +1776,7 @@ async function updateAccountStatus(accountId, actionOrStatus, staffId = null, op
       referencePrefix: 'RST',
       referenceId: accountId,
       actorStaffId: staffId,
-      metadata: { reason, ...viaTeamMeta },
+      metadata: { reason, ...viaTeamMeta, ...activityContext },
     });
     let restriction = null;
     try {
@@ -1841,6 +1854,7 @@ async function updateAccountStatus(accountId, actionOrStatus, staffId = null, op
       ...viaTeamMeta,
       ...(resolvedOptions.disputeId ? { disputeId: String(resolvedOptions.disputeId) } : {}),
       ...(resolvedOptions.disputeNumber ? { disputeNumber: String(resolvedOptions.disputeNumber) } : {}),
+      ...activityContext,
     },
   });
 
@@ -2269,6 +2283,8 @@ async function warnAccount(accountId, payload = {}, staffId) {
       warningId: issued.warningId,
       expiresAt: expiry,
       ...(viaTeam?.accountId ? { viaTeamAccountId: String(viaTeam.accountId), viaTeamName: viaTeam.name || null } : {}),
+      // Extra audit fields from the caller (platform view: source page and evidence).
+      ...(payload?.activityContext && typeof payload.activityContext === 'object' ? payload.activityContext : {}),
     },
   });
 

@@ -126,8 +126,33 @@ async function scanForumContent() {
   }
 }
 
+/**
+ * Business verification submissions still waiting on a decision (Pending) or on the team
+ * (Resubmitted after staff asked for changes). Contract workspaces never verify.
+ */
+const OPEN_BUSINESS_VERIFICATION_FROM = `
+  FROM teams t
+  INNER JOIN accounts a ON a.account_id = t.account_id
+  INNER JOIN verifications v ON v.account_id = a.account_id
+  INNER JOIN verification_sessions avs ON avs.verification_session_id = v.verification_session_id
+  INNER JOIN business_verification_details bvd ON bvd.verification_id = v.verification_id
+`;
+const OPEN_BUSINESS_VERIFICATION_WHERE = `
+  WHERE a.deleted_at IS NULL
+    AND t.deleted_at IS NULL
+    AND COALESCE(t.team_type, 'standard') <> 'contractual'
+    AND COALESCE(v.is_verified, FALSE) = FALSE
+    AND LOWER(COALESCE(avs.verification_status, '')) IN ('pending', 'pending review', 'resubmitted')
+`;
+
+function businessVerificationLabel(status) {
+  const s = String(status || '').toLowerCase();
+  if (s === 'resubmitted') return 'Resubmission requested';
+  return 'Pending review';
+}
+
 async function fetchPendingCasesFromDb() {
-  const [reports, listings, identity] = await Promise.all([
+  const [reports, listings, identity, business] = await Promise.all([
     pool.query(`
       SELECT
         r.report_id,
@@ -216,6 +241,30 @@ async function fetchPendingCasesFromDb() {
       ORDER BY a.created_at DESC
       LIMIT 40
     `),
+    pool.query(`
+      SELECT
+        t.team_id,
+        t.account_id,
+        a.handle,
+        a.display_name,
+        avs.verification_status,
+        bvd.registered_business_name,
+        bvd.submission_version,
+        COALESCE(bvd.updated_at, avs.updated_at, a.created_at) AS submitted_at,
+        st.staff_id AS verified_by_staff_id,
+        st.role AS assigned_role,
+        COALESCE(
+          NULLIF(TRIM(COALESCE(sta.display_name, '')), ''),
+          NULLIF(TRIM(CONCAT_WS(' ', st.first_name, st.last_name)), ''),
+          sta.handle
+        ) AS assigned_staff_name
+      ${OPEN_BUSINESS_VERIFICATION_FROM}
+      LEFT JOIN accounts sta ON sta.account_id = avs.verified_by_account_id
+      LEFT JOIN staff st ON st.account_id = sta.account_id
+      ${OPEN_BUSINESS_VERIFICATION_WHERE}
+      ORDER BY submitted_at DESC
+      LIMIT 40
+    `),
   ]);
 
   const cases = [];
@@ -288,6 +337,39 @@ async function fetchPendingCasesFromDb() {
       assignedStaffName: u.assigned_staff_name || null,
       openedAt: u.created_at,
       status: 'Open',
+      verificationKind: 'identity',
+      canAssignMyself: true,
+      canEdit: true,
+      canDelete: false,
+    });
+  }
+
+  for (const t of business.rows) {
+    const verificationStatus = businessVerificationLabel(t.verification_status);
+    const teamName = t.display_name || t.handle || 'Unnamed team';
+    cases.push({
+      id: `verify-business-${t.account_id}`,
+      source: 'identity',
+      type: 'Business verification',
+      priority: 'Low',
+      target: teamName,
+      targetHandle: t.handle,
+      targetType: 'Team',
+      reason: `Business verification: ${verificationStatus}`,
+      description: t.registered_business_name
+        ? `${t.registered_business_name} (submission ${t.submission_version || 1})`
+        : `Business verification is ${verificationStatus}.`,
+      businessName: t.registered_business_name || null,
+      referenceNumber: null,
+      accountId: t.account_id,
+      teamId: t.team_id,
+      verificationStatus,
+      verificationKind: 'business',
+      assignedRole: t.assigned_role || null,
+      assignedStaffId: t.verified_by_staff_id || null,
+      assignedStaffName: t.assigned_staff_name || null,
+      openedAt: t.submitted_at,
+      status: 'Open',
       canAssignMyself: true,
       canEdit: true,
       canDelete: false,
@@ -298,17 +380,24 @@ async function fetchPendingCasesFromDb() {
 }
 
 async function countOpenIdentityReviews() {
-  const result = await pool.query(`
-    SELECT COUNT(*)::int AS count
-    FROM users u
-    INNER JOIN accounts a ON a.account_id = u.account_id
-    LEFT JOIN verifications v ON v.account_id = a.account_id
-    LEFT JOIN verification_sessions avs ON avs.verification_session_id = v.verification_session_id
-    WHERE a.deleted_at IS NULL
-      AND (COALESCE(v.is_verified, FALSE) = FALSE)
-      AND LOWER(COALESCE(avs.verification_status, 'unverified')) IN ('unverified', 'pending', 'pending review')
-  `);
-  return Number(result.rows[0]?.count || 0);
+  const [personal, business] = await Promise.all([
+    pool.query(`
+      SELECT COUNT(*)::int AS count
+      FROM users u
+      INNER JOIN accounts a ON a.account_id = u.account_id
+      LEFT JOIN verifications v ON v.account_id = a.account_id
+      LEFT JOIN verification_sessions avs ON avs.verification_session_id = v.verification_session_id
+      WHERE a.deleted_at IS NULL
+        AND (COALESCE(v.is_verified, FALSE) = FALSE)
+        AND LOWER(COALESCE(avs.verification_status, 'unverified')) IN ('unverified', 'pending', 'pending review')
+    `),
+    pool.query(`
+      SELECT COUNT(*)::int AS count
+      ${OPEN_BUSINESS_VERIFICATION_FROM}
+      ${OPEN_BUSINESS_VERIFICATION_WHERE}
+    `),
+  ]);
+  return Number(personal.rows[0]?.count || 0) + Number(business.rows[0]?.count || 0);
 }
 
 /** Short, readable label for the record an activity row points at. */
@@ -1011,8 +1100,11 @@ function normalizeWritableStatus(status) {
 function resolveCaseRef(caseId, sourceHint) {
   const id = String(caseId || '');
   const source = String(sourceHint || '').toLowerCase();
+  if (id.startsWith('verify-business-')) {
+    return { source: 'identity', kind: 'business', id: id.slice('verify-business-'.length) };
+  }
   if (source === 'identity' || id.startsWith('verify-')) {
-    return { source: 'identity', id: id.replace(/^verify-/, '') };
+    return { source: 'identity', kind: 'personal', id: id.replace(/^verify-/, '') };
   }
   if (['report', 'dispute', 'listing'].includes(source)) {
     return { source, id };
@@ -1243,7 +1335,7 @@ async function broadcastDisputeChange(disputeId, reason = null) {
 }
 
 async function assignMyselfToPendingCase(caseId, body, session) {
-  const { source, id } = resolveCaseRef(caseId, body?.source);
+  const { source, kind, id } = resolveCaseRef(caseId, body?.source);
   const staffId = await resolveSessionStaffId(session);
   if (!staffId) {
     throw new Error(
@@ -1297,6 +1389,27 @@ async function assignMyselfToPendingCase(caseId, body, session) {
     );
     if (!result.rows.length) throw new Error('Pending listing not found');
     return { id, source, assignedStaffId: staffId, status: 'Open' };
+  }
+
+  if (source === 'identity' && kind === 'business') {
+    // The team's submission already owns a session; assigning only names the handler.
+    const result = await pool.query(
+      `UPDATE verification_sessions avs
+       SET verified_by_account_id = (SELECT account_id FROM staff WHERE staff_id = $1 LIMIT 1),
+           updated_at = NOW()
+       FROM teams t
+       INNER JOIN verifications v ON v.account_id = t.account_id
+       WHERE t.account_id::text = $2
+         AND t.deleted_at IS NULL
+         AND COALESCE(t.team_type, 'standard') <> 'contractual'
+         AND avs.verification_session_id = v.verification_session_id
+         AND COALESCE(v.is_verified, FALSE) = FALSE
+         AND LOWER(COALESCE(avs.verification_status, '')) IN ('pending', 'pending review', 'resubmitted')
+       RETURNING t.account_id`,
+      [staffId, id]
+    );
+    if (!result.rows.length) throw new Error('No open business verification found for this team');
+    return { id: caseId, source, assignedStaffId: staffId, accountId: result.rows[0].account_id, status: 'Open' };
   }
 
   if (source === 'identity') {

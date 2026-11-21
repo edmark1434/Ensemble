@@ -24,7 +24,8 @@ async function reporterAccountId(session) {
 function validateReport(reason, description) {
   const type = String(reason || '').trim();
   const details = String(description || '').trim();
-  if (!type || type.length > 100) throw reportError('A valid report type is required');
+  // `reports.type` is varchar(50): a longer reason would fail the insert with a 500.
+  if (!type || type.length > 50) throw reportError('Choose a reason for this report');
   if (details.length < 20) throw reportError('Report details must contain at least 20 characters');
   if (details.length > 2000) throw reportError('Report details must not exceed 2,000 characters');
   return { type, details };

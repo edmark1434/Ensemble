@@ -462,6 +462,14 @@ Merit drops to 55 / 50 ──► system ──► Mute 1 / 2 days
 
 Frozen access and Mute are timed automatic punishments, not standings. They are on this map so staff do not confuse them with a ban. Every desk lists the running ones next to merit; Admin / Support can Unfreeze.
 
+**On the spot (platform view → Moderate).** Staff who see something while browsing can act without a report, from the console, never the member page:
+- **Same ladder, same catalog.** Named warning or punishment, case notes of 10+ characters, and the desk rules of §4.8. The punishment row must be on the issuer's desk, and specialists cannot make a suspension or timeout open-ended.
+- **Area.** Admin and Support act anywhere. A specialist acts on their own product's items and on profiles and teams; on another desk's item they can review but not act (User & Team stays open to them as before). Dispute pages are read-only: the dispute decision owns those penalties.
+- **Evidence.** The item's text, state and page are saved with the penalty before anything changes, and the appeal case shows them to the reviewer.
+- **No double hits.** A standing action on the same account in the last 10 minutes, or on the same item that day, asks for "Act anyway". One quick action per account runs at a time. Open reports on the item are listed before and after, so the report desk closes them instead of penalising again.
+- **No downgrades.** A suspension or lock never replaces a ban or lock from here; an existing suspension or timeout is changed in User & Team.
+- **Content first.** Hiding, removing, delisting or pausing runs before the account action. A failed content action stops everything; a failed account action after it is reported as partial.
+
 ---
 
 ## 11. Visibility
@@ -546,7 +554,7 @@ Implementation rules (enforced in code):
 - Status changes must match the current standing: unsuspend only lifts a suspension, unlock a lock, unban a ban. A banned account can only be changed by Admin or Support, so a specialist moderator cannot lift a ban through unsuspend/unlock or a suspension.
 - The automatic suspension never writes Suspended over a ban or lock, and never shortens a suspension already running.
 - Every ban (Users desk, dispute conviction, report sanction) runs `closeBannedAccountListings` (`backend/services/BanCleanupServices.js`) after the ban is saved: see §9 for what closes. Each item is its own transaction; failures are reported in the staff response and the `ACCOUNT_BAN_CLEANUP` activity row and never undo the ban. Lifting the ban does not reopen anything — the member reposts, or reopens a closed gig. Locks and suspensions do not run it.
-- Report decisions follow the same role rules: specialist moderators may warn or suspend from a report, only Admin/Support may ban. A report is claimed for its decision before the sanction runs, so a double submit cannot sanction twice.
+- Report decisions follow the same role rules: specialist moderators may warn, suspend or lock from a report, Forum Moderators (and Admin/Support) may also time out from a forum report, and only Admin/Support may ban. A report is claimed for its decision before the sanction runs, so a double submit cannot sanction twice. The case shows the reported member's standing, recent warnings, restrictions, activity, other reports and (forum reports) forum footprint, and the forum desks can take the reported discussion, comment or group down from the case; that does not decide the report.
 - A report warning uses the named warning staff pick (desk-checked like any warning); **Staff follow-up warning** is only the default. A report that names no other account (technical problems, whose account columns point at the reporter) cannot be sanctioned — close or deny it.
 - Sanctioned and Denied are final: a hand edit cannot set them, change them, or reopen the report for a second sanction. Other statuses (open, in progress, closed, …) can still be changed by the handler. Claiming a report is guarded in SQL; a second claimer gets 409 (Admin may still take over).
 - A member holds at most one open report per item (409 `REPORT_ALREADY_OPEN`); technical-problem reports are exempt. Team member reports must name an account with a membership on that team.

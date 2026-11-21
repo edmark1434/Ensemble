@@ -906,10 +906,10 @@ function emitForumEvent(type, payload = {}) {
 }
 
 /**
- * Tell every staff desk that a ticket or dispute changed. Call after the change is saved.
- * The payload carries no case content: each desk re-reads its queue, which applies its own
- * access rules. Never throws.
- * @param {{ kind: 'ticket'|'dispute', id: string, reason?: string|null }} change
+ * Tell every staff desk that a ticket, dispute or report changed. Call after the change is
+ * saved. The payload carries no case content: each desk re-reads its queue, which applies its
+ * own access rules. Never throws.
+ * @param {{ kind: 'ticket'|'dispute'|'report', id: string, reason?: string|null }} change
  */
 function emitStaffCaseChange({ kind, id, reason = null } = {}) {
   if (!kind || !id || !io) return;

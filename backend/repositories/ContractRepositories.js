@@ -820,7 +820,8 @@ async function getContractsByUserId(accountIds) {
             COALESCE(
                 (SELECT json_agg(json_build_object('id', cm.contract_milestone_id, 'index', cm.index, 'name', cm.name, 'status', cm.status, 'revisions', cm.no_of_revisions_max, 'deadline', cm.deadline, 'deadline_at', cm.deadline_at, 'started_at', cm.started_at, 'credits', cm.credits) ORDER BY cm.index ASC, cm.contract_milestone_id ASC) FROM contract_milestones cm WHERE cm.contract_id = c.contract_id),
                 (SELECT json_agg(json_build_object('id', m.proposal_milestone_id, 'index', m.index, 'name', m.name, 'description', m.description, 'hours', m.duration_hrs, 'revisions', m.no_of_revisions_max, 'status', 'Locked') ORDER BY m.index ASC, m.proposal_milestone_id ASC) FROM proposal_milestones m WHERE m.proposal_id = p.proposal_id)
-            ) as milestones
+            ) as milestones,
+            '[]'::json as add_ons
         FROM contracts c
         JOIN job_contracts jc ON c.contract_id = jc.contract_id
         JOIN proposals p ON jc.proposal_id = p.proposal_id
@@ -940,7 +941,19 @@ async function getContractsByUserId(accountIds) {
             COALESCE(
                 (SELECT json_agg(json_build_object('id', cm.contract_milestone_id, 'index', cm.index, 'name', cm.name, 'status', cm.status, 'revisions', cm.no_of_revisions_max, 'deadline', cm.deadline, 'deadline_at', cm.deadline_at, 'started_at', cm.started_at, 'credits', cm.credits) ORDER BY cm.index ASC, cm.contract_milestone_id ASC) FROM contract_milestones cm WHERE cm.contract_id = c.contract_id),
                 '[]'::json
-            ) as milestones
+            ) as milestones,
+            COALESCE(
+                (SELECT json_agg(json_build_object(
+                    'id', ga.gig_addon_id,
+                    'title', ga.name,
+                    'price', ga.price_credits,
+                    'deliveryDays', ga.additional_days
+                ) ORDER BY ga.name ASC)
+                FROM gig_request_addons gra
+                JOIN gig_addons ga ON gra.gig_addon_id = ga.gig_addon_id
+                WHERE gra.gig_request_id = gr.gig_request_id),
+                '[]'::json
+            ) as add_ons
         FROM contracts c
         JOIN gig_contracts gc ON c.contract_id = gc.contract_id
         JOIN gig_requests gr ON gc.gig_request_id = gr.gig_request_id

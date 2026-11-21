@@ -4489,6 +4489,17 @@ async function loadDisputeCaseFile(row) {
     )
     : { rows: [] };
 
+  // Gig orders: the package and add-ons the client ordered, shown beside the milestones.
+  let gigOrdersByContract = new Map();
+  if (contractIds.length) {
+    try {
+      const { gigOrdersForContracts } = require('./TicketCaseRepositories');
+      gigOrdersByContract = await gigOrdersForContracts(contractIds);
+    } catch (err) {
+      console.warn('Dispute case file gig orders skipped:', err.message);
+    }
+  }
+
   const milestonesByContract = new Map();
   for (const milestone of milestoneResult.rows) {
     const list = milestonesByContract.get(milestone.contract_id) || [];
@@ -4587,6 +4598,8 @@ async function loadDisputeCaseFile(row) {
       freelancerName: contract.freelancer_name,
       freelancerHandle: contract.freelancer_handle || '—',
       milestones: milestonesByContract.get(contract.contract_id) || [],
+      // Null for job contracts.
+      gigOrder: gigOrdersByContract.get(String(contract.contract_id)) || null,
     })),
     transactions: transactionResult.rows.map((tx) => {
       const status = String(tx.status || '');
@@ -5533,6 +5546,40 @@ function reportCanBeSanctioned(row) {
   return String(row.for_account_id) !== String(row.by_account_id || '');
 }
 
+function isForumReport(row) {
+  return isReportTypeInScope(row?.target_type, FORUM_REPORT_TYPES);
+}
+
+const REPORT_SANCTION_ALIASES = {
+  warn: 'warning',
+  timeout: 'timeout',
+  forum_timeout: 'timeout',
+  suspended: 'suspend',
+  locked: 'lock',
+  banned: 'ban',
+};
+
+function reportSanctionKey(value) {
+  const key = reportStatusToken(value || 'warning');
+  return REPORT_SANCTION_ALIASES[key] || key;
+}
+
+/**
+ * Sanctions this staff role may apply from this report — the same role rules as the Users
+ * desk (UserTeamPermissions). A forum timeout only fits a forum report.
+ */
+function reportSanctionTypes(row, staffRole) {
+  if (!reportCanBeSanctioned(row)) return [];
+  const { allowedStatusActions } = require('../lib/UserTeamPermissions');
+  const actions = new Set(allowedStatusActions({ role: staffRole }));
+  const types = ['warning'];
+  if (actions.has('timeout') && isForumReport(row)) types.push('timeout');
+  if (actions.has('suspend')) types.push('suspend');
+  if (actions.has('lock')) types.push('lock');
+  if (actions.has('ban')) types.push('ban');
+  return types;
+}
+
 function reportDecisionError(message, statusCode = 400) {
   const error = new Error(message);
   error.statusCode = statusCode;
@@ -5564,24 +5611,39 @@ async function applyReportSanction(row, patch, staffId, staffRole = null) {
   if (!accountId) throw reportDecisionError('This report is not tied to an account');
   const reason = String(patch?.reason || '').trim();
   if (!reason) throw reportDecisionError('A sanction reason is required');
-  const sanctionType = String(patch?.sanctionType || patch?.sanction_type || 'warning').toLowerCase();
+  const sanctionType = reportSanctionKey(patch?.sanctionType || patch?.sanction_type);
   const days = patch?.days;
+  const hasDays = days != null && days !== '';
   const { warnAccount, updateAccountStatus } = require('./AdminUserTeamRepositories');
-  // A report decision is held to the same role rules as the Users desk: specialist
-  // moderators may warn and suspend, and only Admin or Support may ban.
-  if (['suspend', 'suspended', 'ban', 'banned'].includes(sanctionType)) {
+  // A report decision is held to the same role rules as the Users desk: specialist moderators
+  // may warn, suspend and lock, Forum Moderators may also time out, and only Admin or Support
+  // may ban.
+  if (['timeout', 'suspend', 'lock', 'ban'].includes(sanctionType)) {
     const { assertStatusActionAllowed } = require('../lib/UserTeamPermissions');
-    assertStatusActionAllowed({ role: staffRole }, sanctionType.startsWith('ban') ? 'ban' : 'suspend');
+    assertStatusActionAllowed({ role: staffRole }, sanctionType);
+  }
+  if (hasDays && (!Number.isInteger(Number(days)) || Number(days) < 1 || Number(days) > 365)) {
+    throw reportDecisionError('Choose between 1 and 365 days');
   }
 
-  if (sanctionType === 'warning' || sanctionType === 'warn') {
+  if (sanctionType === 'warning') {
     // Staff pick the named warning that fits (checked against their desk in warnAccount);
     // Staff follow-up stays the default when none is chosen.
     const warningId = String(patch?.warningId || patch?.warning_id || '').trim() || 'staff_follow_up';
     return warnAccount(accountId, { warningId, reason }, staffId);
   }
-  if (sanctionType === 'suspend' || sanctionType === 'suspended') {
-    if (days == null || days === '') throw reportDecisionError('Choose how many days the suspension lasts');
+  if (sanctionType === 'timeout') {
+    if (!isForumReport(row)) throw reportDecisionError('A forum timeout only fits a forum report');
+    if (!hasDays) throw reportDecisionError('Choose how many days the timeout lasts');
+    return updateAccountStatus(accountId, 'timeout', staffId, {
+      reason,
+      duration: 'temporary',
+      days,
+      skipPunishmentCatalog: true,
+    });
+  }
+  if (sanctionType === 'suspend') {
+    if (!hasDays) throw reportDecisionError('Choose how many days the suspension lasts');
     return updateAccountStatus(accountId, 'suspend', staffId, {
       reason,
       duration: 'temporary',
@@ -5589,14 +5651,23 @@ async function applyReportSanction(row, patch, staffId, staffRole = null) {
       skipPunishmentCatalog: true,
     });
   }
-  if (sanctionType === 'ban' || sanctionType === 'banned') {
+  if (sanctionType === 'lock') {
+    // No days locks the account until staff unlock it, as on the Users desk.
+    return updateAccountStatus(accountId, 'lock', staffId, {
+      reason,
+      duration: hasDays ? 'temporary' : 'permanent',
+      days: hasDays ? days : undefined,
+      skipPunishmentCatalog: true,
+    });
+  }
+  if (sanctionType === 'ban') {
     return updateAccountStatus(accountId, 'ban', staffId, {
       reason,
       duration: 'permanent',
       skipPunishmentCatalog: true,
     });
   }
-  throw reportDecisionError('Choose a warning, suspension, or ban');
+  throw reportDecisionError('Choose a warning, timeout, suspension, lock, or ban');
 }
 
 async function decideReport(reportId, action, patch, staffSession) {
@@ -5675,7 +5746,8 @@ async function decideReport(reportId, action, patch, staffSession) {
       type: row.type,
       previousStatus: row.status,
       status: nextStatus,
-      sanctionType: action === 'sanction' ? patch?.sanctionType || 'warning' : null,
+      sanctionType:
+        action === 'sanction' ? reportSanctionKey(patch?.sanctionType || patch?.sanction_type) : null,
     },
   });
 
@@ -5690,7 +5762,24 @@ async function decideReport(reportId, action, patch, staffSession) {
   return getReportDetail(reportId, staffSession);
 }
 
+/**
+ * Claim, release, hand-edit or decide a report. Every report desk calls this; once the change
+ * is saved, open desks are told to re-read (`staffCaseChanged`, kind `report`).
+ */
 async function updateReport(reportId, patch, staffSession = null) {
+  const detail = await applyReportUpdate(reportId, patch, staffSession);
+  if (detail) {
+    const action = String(patch?.action || '').toLowerCase().trim();
+    require('../lib/WebSocket').emitStaffCaseChange({
+      kind: 'report',
+      id: reportId,
+      reason: action || 'updated',
+    });
+  }
+  return detail;
+}
+
+async function applyReportUpdate(reportId, patch, staffSession = null) {
   const action = String(patch?.action || '').toLowerCase().trim();
   if (REPORT_DECISIONS.has(action)) {
     return decideReport(reportId, action, patch, staffSession);
@@ -6000,10 +6089,24 @@ async function getReportDetail(reportId, staffSession = null, options = {}) {
     includeStaffId: row.assigned_staff_id,
   });
 
-  const [subject, history] = await Promise.all([
+  const sanctionable = reportCanBeSanctioned(row);
+  const [subject, history, reportedContext] = await Promise.all([
     buildReportSubject(row),
     getReportHistory(row),
+    // Only the case view needs the reported member's record; PATCH pre-checks skip it.
+    options.includeAccountContext && sanctionable
+      ? require('./TicketCaseRepositories')
+          .getReportedAccountContext(row.for_account_id, {
+            excludeReportId: row.report_id,
+            includeForum: isForumReport(row),
+          })
+          .catch((error) => {
+            console.warn('Reported account context skipped:', error.message);
+            return null;
+          })
+      : Promise.resolve(null),
   ]);
+  const staffRole = staff?.role || staffSession?.role || null;
   return {
     history,
     report: mapReportRow({
@@ -6013,18 +6116,22 @@ async function getReportDetail(reportId, staffSession = null, options = {}) {
       assignee_name: row.assignee_name,
     }),
     subject,
+    reportedContext,
     permissions: buildReportPermissions(row, staff, staffSession),
     // False for technical-problem reports and anything that only names the reporter.
-    sanctionable: reportCanBeSanctioned(row),
+    sanctionable,
+    // What this viewer may apply from the decision panel (role rules of the Users desk).
+    sanctionTypes: reportSanctionTypes(row, staffRole),
     assignableQueue: normalizeQueueKey(queueKey),
     assignableStaff,
   };
 }
 
-async function safeTicketRows(sql, params) {
+/** One picker list; a failed query leaves that list empty (the member can still type it). */
+async function safeTicketRows(sql, params, labelFor = (row) => row.label) {
   try {
     const result = await pool.query(sql, params);
-    return result.rows.map((row) => ({ id: String(row.id), label: String(row.label || row.id) }));
+    return result.rows.map((row) => ({ id: String(row.id), label: String(labelFor(row) || row.id) }));
   } catch (err) {
     console.warn('Ticket picker query skipped:', err.message);
     return [];
@@ -6085,6 +6192,285 @@ const PICKER_LISTS = {
   contract: 'contracts',
   job: 'jobs',
 };
+
+/** How an error names each list picker's record. */
+const PICKER_NOUNS = {
+  project: 'project',
+  listing: 'listing',
+  order: 'purchase',
+  contract: 'contract or order',
+  job: 'job or gig',
+};
+
+/** Search pickers other than teams (`GET /api/users/ticket-search?kind=`). */
+const TICKET_SEARCH_NOUNS = {
+  asset: 'listing',
+  posting: 'job or gig',
+};
+
+const TICKET_UUID_IN_TEXT = /[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/i;
+
+const LISTING_STATUS_LABELS = {
+  pending: 'In review',
+  approved: 'Approved',
+  rejected: 'Rejected',
+  delisted: 'Delisted',
+};
+
+function pickerStatusLabel(status, labels = {}) {
+  const raw = String(status || '').trim();
+  if (!raw) return '';
+  const known = labels[raw.toLowerCase()];
+  if (known) return known;
+  const words = raw.replace(/[_-]+/g, ' ').toLowerCase();
+  return words.charAt(0).toUpperCase() + words.slice(1);
+}
+
+function pickerAccountName(handle, name) {
+  const cleanHandle = String(handle || '').trim();
+  if (cleanHandle) return `@${cleanHandle}`;
+  return String(name || '').trim();
+}
+
+/**
+ * The accounts a member acts as on Jobs & Gigs and the marketplace: their own, plus teams
+ * they own (`MarketplaceActorRepositories.getAuthorizedActorAccountIds`). Contracts, postings
+ * and listings may belong to any of them.
+ */
+async function ticketActorAccountIds(accountId) {
+  const own = String(accountId);
+  try {
+    const { getAuthorizedActorAccountIds } = require('./MarketplaceActorRepositories');
+    const ids = await getAuthorizedActorAccountIds(accountId);
+    return [...new Set([own, ...(ids || []).map(String)])];
+  } catch (err) {
+    console.warn('Ticket actor accounts skipped:', err.message);
+    return [own];
+  }
+}
+
+/**
+ * Marketplace assets for the ticket asset picker. Visible: published and not trashed, or the
+ * member's own (as themselves or a team they own), or one they bought. `id` looks up one asset
+ * (a picked id or a pasted link); otherwise `query` searches names and sellers, and an empty
+ * query lists the assets the member bought (and, without `othersOnly`, their own).
+ */
+async function findTicketAssets(accountId, actorIds, { id = null, query = '', othersOnly = false, limit = 8 }) {
+  const escaped = escapeTicketSearch(query);
+  const result = await pool.query(
+    `
+    SELECT ma.market_asset_id AS id, ma.name, ma.status, ma.trashed_at,
+           seller.display_name AS seller_name, seller.handle AS seller_handle,
+           (latest.account_id = ANY($1::uuid[])) AS own,
+           purchase.bought
+    FROM market_assets ma
+    JOIN LATERAL (
+      SELECT ml.submitted_by_account_id AS account_id
+      FROM marketplace_listings ml
+      WHERE ml.market_asset_id = ma.market_asset_id
+      ORDER BY ml.created_at DESC, ml.listing_id DESC
+      LIMIT 1
+    ) latest ON TRUE
+    JOIN accounts seller ON seller.account_id = latest.account_id
+    CROSS JOIN LATERAL (
+      SELECT EXISTS (
+        SELECT 1
+        FROM market_asset_licenses l
+        JOIN users buyer ON buyer.user_id = l.buyer_user_id
+        WHERE l.market_asset_id = ma.market_asset_id
+          AND buyer.account_id = $2
+          AND l.deleted_at IS NULL
+      ) AS bought
+    ) purchase
+    WHERE ma.deleted_at IS NULL
+      AND (
+        (ma.status = 'published' AND ma.trashed_at IS NULL AND seller.deleted_at IS NULL)
+        OR latest.account_id = ANY($1::uuid[])
+        OR purchase.bought
+      )
+      AND ($4::boolean = FALSE OR latest.account_id <> ALL($1::uuid[]))
+      AND (
+        ($3::uuid IS NOT NULL AND ma.market_asset_id = $3::uuid)
+        OR (
+          $3::uuid IS NULL AND $5::text <> ''
+          AND (
+            ma.name ILIKE $6 ESCAPE '\\'
+            OR seller.handle ILIKE $6 ESCAPE '\\'
+            OR seller.display_name ILIKE $6 ESCAPE '\\'
+          )
+        )
+        OR (
+          $3::uuid IS NULL AND $5::text = ''
+          AND (purchase.bought OR (NOT $4::boolean AND latest.account_id = ANY($1::uuid[])))
+        )
+      )
+    ORDER BY
+      CASE
+        WHEN LOWER(ma.name) = LOWER($5::text) OR LOWER(COALESCE(seller.handle, '')) = LOWER($5::text) THEN 0
+        WHEN ma.name ILIKE $7 ESCAPE '\\' THEN 1
+        ELSE 2
+      END,
+      (purchase.bought OR latest.account_id = ANY($1::uuid[])) DESC,
+      ma.name ASC,
+      ma.market_asset_id ASC
+    LIMIT $8
+    `,
+    [actorIds, accountId, id, othersOnly, query, `%${escaped}%`, `${escaped}%`, limit]
+  );
+  return result.rows.map((row) => {
+    const name = String(row.name || 'Untitled asset');
+    const seller = pickerAccountName(row.seller_handle, row.seller_name);
+    const notes = [
+      seller ? `by ${seller}` : null,
+      row.own ? 'Yours' : row.bought ? 'Bought' : null,
+      row.status === 'published' && !row.trashed_at ? null : 'Not listed',
+    ].filter(Boolean);
+    return {
+      id: String(row.id),
+      label: [name, ...notes].join(' · '),
+      title: name,
+      detail: notes.join(' · ') || null,
+      own: Boolean(row.own),
+    };
+  });
+}
+
+/**
+ * Jobs and gigs for the ticket posting picker. Visible: jobs and gigs that are not deleted
+ * (gigs also not archived), from accounts that are not deleted, plus the member's own.
+ * `id` looks up one; otherwise `query` searches titles and posters, and an empty query lists
+ * jobs the member applied to and gigs they ordered (and, without `othersOnly`, their own).
+ */
+async function findTicketPostings(actorIds, { id = null, query = '', othersOnly = false, limit = 8 }) {
+  const escaped = escapeTicketSearch(query);
+  const result = await pool.query(
+    `
+    SELECT * FROM (
+      SELECT j.job_id AS id, 'job'::text AS kind, j.title::text AS title, j.status::text AS status,
+             j.created_at::timestamptz AS created_at, j.client_account_id AS owner_id,
+             a.display_name::text AS owner_name, a.handle::text AS owner_handle,
+             EXISTS (
+               SELECT 1 FROM proposals pr
+               WHERE pr.job_id = j.job_id AND pr.freelancer_account_id = ANY($1::uuid[])
+             ) AS related
+      FROM jobs j
+      JOIN accounts a ON a.account_id = j.client_account_id
+      WHERE j.deleted_at IS NULL
+        AND (a.deleted_at IS NULL OR j.client_account_id = ANY($1::uuid[]))
+      UNION ALL
+      SELECT g.gig_id, 'gig'::text, g.title::text, g.status::text,
+             g.created_at::timestamptz, g.freelancer_account_id,
+             a.display_name::text, a.handle::text,
+             EXISTS (
+               SELECT 1
+               FROM gig_requests gr
+               JOIN gig_tiers gt ON gt.gig_tier_id = gr.gig_tier_id
+               WHERE gt.gig_id = g.gig_id AND gr.client_account_id = ANY($1::uuid[])
+             ) AS related
+      FROM gigs g
+      JOIN accounts a ON a.account_id = g.freelancer_account_id
+      WHERE g.deleted_at IS NULL
+        AND (
+          g.freelancer_account_id = ANY($1::uuid[])
+          OR (a.deleted_at IS NULL AND LOWER(COALESCE(g.status::text, '')) NOT IN ('archived', 'deleted'))
+        )
+    ) posting
+    WHERE ($3::boolean = FALSE OR posting.owner_id <> ALL($1::uuid[]))
+      AND (
+        ($2::uuid IS NOT NULL AND posting.id = $2::uuid)
+        OR (
+          $2::uuid IS NULL AND $4::text <> ''
+          AND (
+            posting.title ILIKE $5 ESCAPE '\\'
+            OR posting.owner_handle ILIKE $5 ESCAPE '\\'
+            OR posting.owner_name ILIKE $5 ESCAPE '\\'
+          )
+        )
+        OR (
+          $2::uuid IS NULL AND $4::text = ''
+          AND (posting.related OR (NOT $3::boolean AND posting.owner_id = ANY($1::uuid[])))
+        )
+      )
+    ORDER BY
+      CASE
+        WHEN LOWER(posting.title) = LOWER($4::text) OR LOWER(COALESCE(posting.owner_handle, '')) = LOWER($4::text) THEN 0
+        WHEN posting.title ILIKE $6 ESCAPE '\\' THEN 1
+        ELSE 2
+      END,
+      (posting.related OR posting.owner_id = ANY($1::uuid[])) DESC,
+      posting.created_at DESC,
+      posting.id ASC
+    LIMIT $7
+    `,
+    [actorIds, id, othersOnly, query, `%${escaped}%`, `${escaped}%`, limit]
+  );
+  return result.rows.map((row) => {
+    const title = `${row.kind === 'gig' ? 'Gig' : 'Job'}: ${String(row.title || 'Untitled')}`;
+    const own = actorIds.includes(String(row.owner_id));
+    const owner = pickerAccountName(row.owner_handle, row.owner_name);
+    const notes = [
+      owner ? `by ${owner}` : null,
+      own ? 'Yours' : row.related ? (row.kind === 'gig' ? 'You ordered' : 'You applied') : null,
+      pickerStatusLabel(row.status) || null,
+    ].filter(Boolean);
+    return {
+      id: String(row.id),
+      label: [title, ...notes].join(' · '),
+      title,
+      detail: notes.join(' · ') || null,
+      own,
+    };
+  });
+}
+
+async function findTicketItems(kind, accountId, actorIds, options) {
+  if (kind === 'asset') return findTicketAssets(accountId, actorIds, options);
+  if (kind === 'posting') return findTicketPostings(actorIds, options);
+  return [];
+}
+
+/**
+ * `GET /api/users/ticket-search?kind=asset|posting&q=&scope=others`: suggestions for the ticket
+ * form's asset and job-or-gig pickers. A pasted link or id finds that record.
+ */
+async function searchTicketItems(accountId, rawKind, rawQuery, rawScope) {
+  const kind = String(rawKind || '').trim();
+  if (!Object.prototype.hasOwnProperty.call(TICKET_SEARCH_NOUNS, kind)) throw ticketError('Unknown search type', 400);
+  const query = String(rawQuery || '').trim();
+  if (query.length > 300) throw ticketError('Search is too long', 400);
+  const pasted = query.match(TICKET_UUID_IN_TEXT);
+  if (!pasted && query.length > 80) throw ticketError('Search is too long', 400);
+  const actorIds = await ticketActorAccountIds(accountId);
+  const items = await findTicketItems(kind, accountId, actorIds, {
+    id: pasted ? pasted[0].toLowerCase() : null,
+    query: pasted ? '' : query.replace(/^@/, ''),
+    othersOnly: rawScope === 'others',
+  });
+  return items.map(({ id, title, detail }) => ({ id, label: title, detail }));
+}
+
+/**
+ * A search picker answer: a picked id must be a record the member could pick, and a pasted
+ * link is matched when it names one. Text without an id is stored as the member typed it.
+ */
+async function resolveTicketItemAnswer(accountId, field, row) {
+  const value = String(row.value || '').trim();
+  if (!value) return row;
+  const noun = TICKET_SEARCH_NOUNS[field.picker];
+  const exactId = TICKET_ACCOUNT_UUID.test(value);
+  const embedded = exactId ? value : (value.match(TICKET_UUID_IN_TEXT) || [])[0];
+  if (!embedded) return row;
+  const actorIds = await ticketActorAccountIds(accountId);
+  const [item] = await findTicketItems(field.picker, accountId, actorIds, { id: embedded.toLowerCase(), limit: 1 });
+  if (!item) {
+    if (exactId) throw ticketError(`Choose the ${noun} from the suggestions`, 400);
+    return row;
+  }
+  if (field.pickerScope === 'others' && item.own) {
+    throw ticketError(`You cannot report your own ${noun}`, 400);
+  }
+  return { ...row, value: item.label.slice(0, 2000), id: item.id };
+}
 
 const TICKET_TEAM_VISIBLE_SQL = `
   t.deleted_at IS NULL
@@ -6194,15 +6580,17 @@ async function resolveTicketTeamAnswer(accountId, row) {
 async function resolveFormAnswers(accountId, type, rows) {
   const { fieldsForType } = require('../lib/TicketFormFields');
   const definitions = new Map(fieldsForType(type).map((field) => [field.key, field]));
-  const needsPicker = rows.some((row) => {
-    const picker = definitions.get(row.key)?.picker;
-    return picker && picker !== 'team';
-  });
+  const listNameFor = (field) =>
+    field?.picker && Object.prototype.hasOwnProperty.call(PICKER_LISTS, field.picker) ? PICKER_LISTS[field.picker] : null;
+  const needsPicker = rows.some((row) => listNameFor(definitions.get(row.key)));
   const pickers = needsPicker && accountId ? await getTicketPickers(accountId) : null;
   return Promise.all(rows.map(async (row) => {
     const field = definitions.get(row.key);
     if (field?.picker === 'team') return resolveTicketTeamAnswer(accountId, row);
-    const listName = field?.picker ? PICKER_LISTS[field.picker] : null;
+    if (field?.picker && Object.prototype.hasOwnProperty.call(TICKET_SEARCH_NOUNS, field.picker)) {
+      return accountId ? resolveTicketItemAnswer(accountId, field, row) : row;
+    }
+    const listName = listNameFor(field);
     if (!listName || !pickers) return row;
     const options = pickers[listName] || [];
     const match = options.find((option) => option.id === row.value)
@@ -6211,7 +6599,7 @@ async function resolveFormAnswers(accountId, type, rows) {
       return { ...row, value: String(match.label || match.id).slice(0, 2000), id: match.id };
     }
     if (TICKET_ACCOUNT_UUID.test(row.value)) {
-      throw ticketError(`Choose a ${field.label.toLowerCase()} from your account`, 400);
+      throw ticketError(`Choose the ${PICKER_NOUNS[field.picker] || 'record'} from your list`, 400);
     }
     return row;
   }));
@@ -6275,6 +6663,11 @@ async function findAccountByEmailOrUsername(identifier) {
 }
 
 async function getTicketPickers(accountId) {
+  // Listings, contracts and postings can belong to a team the member owns, as on their pages.
+  const actorIds = await ticketActorAccountIds(accountId);
+  const isActor = (id) => id != null && actorIds.includes(String(id));
+  const asTeam = (ownerId, handle) =>
+    ownerId != null && String(ownerId) !== String(accountId) && handle ? `as @${handle}` : null;
   const [projects, listings, orders, contracts, jobs] = await Promise.all([
     safeTicketRows(
       `
@@ -6290,13 +6683,25 @@ async function getTicketPickers(accountId) {
     ),
     safeTicketRows(
       `
-      SELECT listing_id AS id, title AS label
-      FROM marketplace_listings
-      WHERE submitted_by_account_id = $1
-      ORDER BY created_at DESC
+      -- One row per asset (its latest listing), so a resubmitted asset is not listed twice.
+      SELECT id, title, status, owner_id, owner_handle FROM (
+        SELECT DISTINCT ON (COALESCE(l.market_asset_id, l.listing_id))
+               l.listing_id AS id, l.title, l.status, l.created_at,
+               l.submitted_by_account_id AS owner_id, owner.handle AS owner_handle
+        FROM marketplace_listings l
+        LEFT JOIN accounts owner ON owner.account_id = l.submitted_by_account_id
+        WHERE l.submitted_by_account_id = ANY($1::uuid[])
+        ORDER BY COALESCE(l.market_asset_id, l.listing_id), l.created_at DESC, l.listing_id DESC
+      ) latest
+      ORDER BY created_at DESC NULLS LAST, id DESC
       LIMIT 50
       `,
-      [accountId]
+      [actorIds],
+      (row) => [
+        row.title || 'Untitled listing',
+        pickerStatusLabel(row.status, LISTING_STATUS_LABELS),
+        asTeam(row.owner_id, row.owner_handle),
+      ].filter(Boolean).join(' · ')
     ),
     safeTicketRows(
       `
@@ -6314,8 +6719,13 @@ async function getTicketPickers(accountId) {
     safeTicketRows(
       `
       -- Job contracts and gig orders, so either can be named on a jobs ticket.
-      SELECT c.contract_id AS id,
-             COALESCE(j.title, CASE WHEN g.title IS NOT NULL THEN 'Gig order: ' || g.title END, c.contract_id::text) AS label
+      SELECT DISTINCT ON (c.created_at, c.contract_id)
+             c.contract_id AS id, c.status, c.created_at,
+             CASE WHEN g.gig_id IS NOT NULL THEN 'gig' ELSE 'job' END AS kind,
+             COALESCE(j.title, g.title) AS title,
+             COALESCE(j.client_account_id, gr.client_account_id) AS client_id,
+             ca.handle AS client_handle, ca.display_name AS client_name,
+             fa.handle AS freelancer_handle, fa.display_name AS freelancer_name
       FROM contracts c
       LEFT JOIN job_contracts jc ON jc.contract_id = c.contract_id
       LEFT JOIN proposals p ON p.proposal_id = jc.proposal_id
@@ -6324,29 +6734,61 @@ async function getTicketPickers(accountId) {
       LEFT JOIN gig_requests gr ON gr.gig_request_id = gc.gig_request_id
       LEFT JOIN gig_tiers gt ON gt.gig_tier_id = gr.gig_tier_id
       LEFT JOIN gigs g ON g.gig_id = gt.gig_id
-      WHERE j.client_account_id = $1 OR p.freelancer_account_id = $1
-         OR gr.client_account_id = $1 OR g.freelancer_account_id = $1
-      ORDER BY c.created_at DESC
+      LEFT JOIN accounts ca ON ca.account_id = COALESCE(j.client_account_id, gr.client_account_id)
+      LEFT JOIN accounts fa ON fa.account_id = COALESCE(p.freelancer_account_id, g.freelancer_account_id)
+      WHERE j.client_account_id = ANY($1::uuid[]) OR p.freelancer_account_id = ANY($1::uuid[])
+         OR gr.client_account_id = ANY($1::uuid[]) OR g.freelancer_account_id = ANY($1::uuid[])
+      ORDER BY c.created_at DESC, c.contract_id DESC
       LIMIT 50
       `,
-      [accountId]
+      [actorIds],
+      (row) => {
+        // Name the other side, so two contracts on the same job or gig can be told apart.
+        const other = isActor(row.client_id)
+          ? pickerAccountName(row.freelancer_handle, row.freelancer_name)
+          : pickerAccountName(row.client_handle, row.client_name);
+        return [
+          `${row.kind === 'gig' ? 'Gig order' : 'Job contract'}: ${row.title || 'Untitled'}`,
+          other ? `with ${other}` : null,
+          pickerStatusLabel(row.status) || null,
+        ].filter(Boolean).join(' · ');
+      }
     ),
     safeTicketRows(
       `
-      SELECT id, label FROM (
-        SELECT job_id AS id, title AS label, created_at FROM jobs WHERE client_account_id = $1
-        UNION
+      SELECT DISTINCT ON (items.created_at, items.id, items.kind)
+             items.id, items.kind, items.title, items.status, items.deleted_at,
+             items.owner_id, owner.handle AS owner_handle
+      FROM (
+        SELECT job_id AS id, 'job'::text AS kind, title::text AS title, status::text AS status,
+               created_at::timestamptz AS created_at, deleted_at::timestamptz AS deleted_at,
+               client_account_id AS owner_id
+        FROM jobs
+        WHERE client_account_id = ANY($1::uuid[])
+        UNION ALL
         -- Freelancers file "Proposals and hiring" about jobs they applied to.
-        SELECT j.job_id, j.title, j.created_at
-        FROM proposals pr JOIN jobs j ON j.job_id = pr.job_id
-        WHERE pr.freelancer_account_id = $1
-        UNION
-        SELECT gig_id AS id, title AS label, created_at FROM gigs WHERE freelancer_account_id = $1
+        SELECT j.job_id, 'applied'::text, j.title::text, j.status::text,
+               j.created_at::timestamptz, j.deleted_at::timestamptz, pr.freelancer_account_id
+        FROM proposals pr
+        JOIN jobs j ON j.job_id = pr.job_id
+        WHERE pr.freelancer_account_id = ANY($1::uuid[])
+          AND j.client_account_id <> ALL($1::uuid[])
+        UNION ALL
+        SELECT gig_id, 'gig'::text, title::text, status::text,
+               created_at::timestamptz, deleted_at::timestamptz, freelancer_account_id
+        FROM gigs
+        WHERE freelancer_account_id = ANY($1::uuid[])
       ) items
-      ORDER BY created_at DESC
+      LEFT JOIN accounts owner ON owner.account_id = items.owner_id
+      ORDER BY items.created_at DESC NULLS LAST, items.id DESC, items.kind, items.owner_id
       LIMIT 50
       `,
-      [accountId]
+      [actorIds],
+      (row) => [
+        `${row.kind === 'gig' ? 'Gig' : row.kind === 'applied' ? 'Job you applied to' : 'Job'}: ${row.title || 'Untitled'}`,
+        row.deleted_at ? 'Removed' : pickerStatusLabel(row.status) || null,
+        asTeam(row.owner_id, row.owner_handle),
+      ].filter(Boolean).join(' · ')
     ),
   ]);
   return { projects, listings, orders, contracts, jobs };
@@ -6752,6 +7194,7 @@ module.exports = {
   findAccountByEmailOrUsername,
   getTicketPickers,
   searchTicketTeams,
+  searchTicketItems,
   nextTicketNumber,
   nextDisputeNumber,
   updateTicket,

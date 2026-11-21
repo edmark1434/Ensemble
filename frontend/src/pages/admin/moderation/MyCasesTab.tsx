@@ -5,9 +5,9 @@ import { useStaffCaseEvents } from '@/lib/staffCaseEvents';
 import { showErrorToast, showSuccessToast } from '@/components/utility/toast.ts';
 import ModeratorDisputeDetailModal from '@/pages/moderator/shared/ModeratorDisputeDetailModal';
 import { VerificationModal } from '../userTeam/components/AccountModals';
-import type { PlatformUserAccount } from '../userTeam/userTeamTypes';
 import { ListingCaseDetailModal, ReportCaseDetailModal } from './CaseDetailModals';
 import type { ModerationCase } from './moderationTypes';
+import { loadVerificationSubject, type VerificationSubject } from './verificationCase';
 
 function formatDateTime(value: string | null | undefined) {
   if (!value) return '—';
@@ -84,11 +84,11 @@ export default function MyCasesTab({
   const [selected, setSelected] = useState<ModerationCase | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<ModerationCase | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
-  const [identityUser, setIdentityUser] = useState<PlatformUserAccount | null>(null);
+  const [identityUser, setIdentityUser] = useState<VerificationSubject | null>(null);
   const [identityLoading, setIdentityLoading] = useState(false);
 
-  // Disputes here change from the parties, other desks and the payout job: keep rows current.
-  useStaffCaseEvents(['dispute'], () => onUpdated(), { delayMs: 800 });
+  // Disputes and reports here change from the parties, other desks and the payout job: keep rows current.
+  useStaffCaseEvents(['dispute', 'report'], () => onUpdated(), { delayMs: 800 });
 
   const counts = useMemo(
     () => ({
@@ -131,7 +131,7 @@ export default function MyCasesTab({
     { id: 'dispute', label: 'Disputes', count: counts.dispute },
     { id: 'report', label: 'Reports', count: counts.report },
     { id: 'listing', label: 'Listings', count: counts.listing },
-    { id: 'identity', label: 'Identity', count: counts.identity },
+    { id: 'identity', label: 'Verification', count: counts.identity },
   ];
 
   const closeDetail = () => {
@@ -149,13 +149,7 @@ export default function MyCasesTab({
       setIdentityLoading(true);
       setIdentityUser(null);
       try {
-        const res = await api.get('/api/admin/users-management');
-        if (!res.data?.success) throw new Error(res.data?.message || 'Failed to load user');
-        const user = (res.data.data.users as PlatformUserAccount[]).find(
-          (u) => String(u.accountId) === String(c.accountId)
-        );
-        if (!user) throw new Error('User not found for this verification case');
-        setIdentityUser(user);
+        setIdentityUser(await loadVerificationSubject(c));
       } catch (err: unknown) {
         const message =
           (err as { response?: { data?: { message?: string } } })?.response?.data?.message ||
@@ -350,6 +344,7 @@ export default function MyCasesTab({
       {selected?.source === 'report' && (
         <ReportCaseDetailModal
           reportId={selected.id}
+          forumContentApiBase="/api/admin/moderation/forum"
           onClose={closeDetail}
           onUpdated={onUpdated}
         />

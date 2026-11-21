@@ -325,7 +325,13 @@ export function ConfirmStatusModal({
   onClose,
   onConfirm,
   team,
+  desk = 'admin',
+  openEndedAllowed = true,
 }: {
+  /** Desk whose punishment rows to list (the server also clamps specialists to their own). */
+  desk?: 'admin' | 'support' | 'forum' | 'marketplace' | 'jobs';
+  /** False for specialist desks: suspensions and timeouts need an end date (the server refuses open-ended ones). */
+  openEndedAllowed?: boolean;
   entityName: string;
   action: 'ban' | 'suspend' | 'restore' | 'lock' | 'unban' | 'unsuspend' | 'unlock' | 'timeout' | 'clear_timeout';
   onClose: () => void;
@@ -550,6 +556,7 @@ export function ConfirmStatusModal({
       {choosesCatalog && (
         <div className="mt-4">
           <PunishmentPresetFields
+            desk={desk}
             kind={catalogKind}
             punishmentId={punishmentId}
             onPunishmentId={(id) => {
@@ -581,6 +588,7 @@ export function ConfirmStatusModal({
       {choosesDuration && (action === 'lock' || customDuration) && (
         <SanctionScheduleFields
           key={`${action}-${punishmentId}-${customDuration ? 'custom' : 'catalog'}`}
+          allowPermanent={openEndedAllowed || (action !== 'suspend' && action !== 'timeout')}
           defaultDuration={
             action === 'lock'
               ? 'permanent'
