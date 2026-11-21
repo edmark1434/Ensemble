@@ -777,23 +777,15 @@ export default function ModeratorDisputeDetailModal({
 
   /**
    * PATCH the case. The response carries the refreshed case, so the form (resolution notes
-   * included) shows exactly what was saved. `closeOnSuccess` is for decisions that close the
-   * dispute: the modal goes away and the desk list refreshes.
+   * included) shows exactly what was saved. The modal stays open after every decision,
+   * including ones that close the dispute, and shows the decided case; the desk list refreshes.
    */
-  const runAction = async (
-    body: Record<string, unknown>,
-    successMsg: string,
-    { closeOnSuccess = false }: { closeOnSuccess?: boolean } = {}
-  ) => {
+  const runAction = async (body: Record<string, unknown>, successMsg: string) => {
     setSaving(true);
     try {
       const res = await api.patch(`${endpointBase}/${disputeId}`, body);
       showSuccessToast(successMsg);
       onUpdated();
-      if (closeOnSuccess) {
-        onClose();
-        return true;
-      }
       if (res.data?.success && res.data.data) applyDetail(res.data.data as DisputeDetail);
       else await load();
       return true;
@@ -818,13 +810,11 @@ export default function ModeratorDisputeDetailModal({
     setReverseOpen(true);
   };
 
-  /** POST a money action; on success the response already carries the refreshed case. */
-  const postFinancial = async (
-    body: Record<string, unknown>,
-    successMsg: string,
-    fallback: string,
-    { closeOnSuccess = false }: { closeOnSuccess?: boolean } = {}
-  ) => {
+  /**
+   * POST a money action; on success the response already carries the refreshed case, which
+   * replaces what the modal shows (the modal stays open, even when the ruling closes the case).
+   */
+  const postFinancial = async (body: Record<string, unknown>, successMsg: string, fallback: string) => {
     setSaving(true);
     try {
       const res = await api.post(`${endpointBase}/${disputeId}/financial-resolution`, body);
@@ -833,10 +823,6 @@ export default function ModeratorDisputeDetailModal({
       const warning = (res.data?.data as DisputeDetail | undefined)?.warning;
       if (warning) showErrorToast(warning);
       onUpdated();
-      if (closeOnSuccess) {
-        onClose();
-        return true;
-      }
       if (res.data?.success && res.data.data) applyDetail(res.data.data as DisputeDetail);
       else await load();
       return true;
@@ -927,8 +913,7 @@ export default function ModeratorDisputeDetailModal({
         : from === "award"
           ? `Escrow returned to the disputer, ${paid}. Dispute closed`
           : `Escrow settled, ${paid}. Dispute closed`,
-      "Failed to settle escrow",
-      { closeOnSuccess: true }
+      "Failed to settle escrow"
     );
     if (!ok) return;
     setResolvePromptOpen(false);
@@ -963,8 +948,7 @@ export default function ModeratorDisputeDetailModal({
       reverseTiming.mode === "now"
         ? "Transaction reversed and paid out — dispute closed"
         : "Transaction reversed, payout scheduled — dispute closed",
-      "Failed to reverse transaction",
-      { closeOnSuccess: true }
+      "Failed to reverse transaction"
     );
     if (!ok) return;
     setReverseOpen(false);
@@ -1186,9 +1170,7 @@ export default function ModeratorDisputeDetailModal({
       showErrorToast("A reason is required");
       return;
     }
-    const ok = await runAction({ action: "convict", reason }, "Permanent ban applied — dispute closed", {
-      closeOnSuccess: true,
-    });
+    const ok = await runAction({ action: "convict", reason }, "Permanent ban applied — dispute closed");
     if (!ok) return;
     setResolvePromptOpen(false);
     setResolveMode("choose");
@@ -1204,8 +1186,7 @@ export default function ModeratorDisputeDetailModal({
         // Frozen escrow stays with the contract; the server needs that said out loud.
         ...(escrowFirst ? { escrow: "keep" } : {}),
       },
-      "Dispute dismissed and closed",
-      { closeOnSuccess: true }
+      "Dispute dismissed and closed"
     );
     if (!ok) return;
     setResolvePromptOpen(false);
@@ -1297,8 +1278,7 @@ export default function ModeratorDisputeDetailModal({
         // Frozen escrow stays with the contract; the server needs that said out loud.
         ...(escrowFirst ? { escrow: "keep" } : {}),
       },
-      `Dispute closed — ${choice.label.toLowerCase()}`,
-      { closeOnSuccess: true }
+      `Dispute closed — ${choice.label.toLowerCase()}`
     );
     if (!ok) return;
     setResolvePromptOpen(false);
