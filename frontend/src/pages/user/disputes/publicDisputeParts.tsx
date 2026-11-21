@@ -617,12 +617,12 @@ export function ThreadMessage({
   return (
     <div
       id={`dispute-message-${message.id}`}
-      className={`group relative flex scroll-mt-4 gap-3 rounded-xl px-3 transition-colors sm:px-4 ${
-        continued ? "py-1" : "mt-1 pb-2 pt-3"
+      className={`group relative flex scroll-mt-4 gap-3 px-3 transition-colors sm:px-4 ${
+        continued ? "py-0.5" : "mt-1 pb-1 pt-3"
       } ${
         flagged
-          ? "bg-amber-50/70 hover:bg-amber-50 dark:bg-amber-500/[0.05] dark:hover:bg-amber-500/[0.08]"
-          : "hover:bg-gray-50 dark:hover:bg-white/[0.025]"
+          ? "border-l-2 border-amber-400/70 bg-amber-50/70 hover:bg-amber-50 dark:border-amber-500/40 dark:bg-amber-500/[0.05] dark:hover:bg-amber-500/[0.08]"
+          : "rounded-xl hover:bg-gray-50 dark:hover:bg-white/[0.025]"
       } ${pending ? "opacity-60" : ""} ${
         animate ? "animate-[console-rise_0.35s_ease-out_backwards] motion-reduce:animate-none" : ""
       }`}
@@ -659,7 +659,7 @@ export function ThreadMessage({
           </div>
         ) : null}
 
-        {held ? (
+        {continued ? null : held ? (
           <p className="mt-1 text-[11px] text-amber-700 dark:text-amber-300/80">
             Only you and staff can see this reply until a staff member or admin makes it public.
           </p>
@@ -681,7 +681,7 @@ export function ThreadMessage({
           <button
             type="button"
             onClick={onReply}
-            className="mt-1 inline-flex items-center gap-1 rounded-md px-1 py-0.5 text-[11px] font-semibold text-gray-400 transition hover:bg-gray-100 hover:text-gray-700 focus:opacity-100 sm:opacity-0 sm:group-hover:opacity-100 dark:text-zinc-500 dark:hover:bg-white/5 dark:hover:text-white"
+            className="mt-1 inline-flex items-center gap-1 rounded-md px-1 py-0.5 text-[11px] font-semibold text-gray-400 transition hover:bg-gray-100 hover:text-gray-700 focus:opacity-100 sm:absolute sm:right-2 sm:top-1 sm:mt-0 sm:border sm:border-gray-200 sm:bg-white sm:px-1.5 sm:opacity-0 sm:shadow-sm sm:group-hover:opacity-100 dark:text-zinc-500 dark:hover:bg-white/5 dark:hover:text-white sm:dark:border-white/10 sm:dark:bg-zinc-900"
           >
             <CornerUpLeft className="h-3 w-3" />
             Reply
