@@ -34,6 +34,7 @@ import ModeratorTicketDetailModal from "../shared/ModeratorTicketDetailModal";
 import type { Alert, SupportOverview } from "../shared/moderatorTypes";
 import { PriorityBadge, StatusBadge, titleCaseWords } from "../shared/ui";
 import ConsolePageSkeleton from '@/pages/staff/ConsolePageSkeleton';
+import { useStaffCaseEvents } from '@/lib/staffCaseEvents';
 
 const OVERVIEW_URL = "/api/moderator/support/overview";
 
@@ -212,6 +213,9 @@ export default function SupportModeratorDashboard() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  // Queue counts and recent cases follow changes made anywhere else.
+  useStaffCaseEvents(["ticket", "dispute"], () => void load(true));
 
   const openTicketDesk = (filters: Record<string, string> = {}) => {
     const params = new URLSearchParams(filters);

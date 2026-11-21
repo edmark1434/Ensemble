@@ -151,7 +151,7 @@ interface CreditTransaction {
   staffReason?: string | null;
   /** When a hold was set to be released, at the time it was placed. Null = until staff review. */
   holdUntil?: string | null;
-  /** Set on credits that are on their way but not paid yet (e.g. a dispute payout). */
+  /** Set on a dispute payout with no ledger entry: on its way, or withdrawn (`cancelled`). */
   pending?: {
     kind: "dispute_payout";
     disputeId: string;
@@ -159,6 +159,20 @@ interface CreditTransaction {
     releaseAt: string | null;
     paused: boolean;
     failed: boolean;
+    cancelled?: boolean;
+    cancelledAt?: string | null;
+  } | null;
+  /**
+   * Spendable credits in your wallet (`wallet`) just before and just after this entry, rebuilt
+   * from the ledger. `approximate` when an older staff adjustment had no recorded direction.
+   */
+  balance?: {
+    wallet: string;
+    before: number;
+    after: number;
+    heldBefore: number;
+    heldAfter: number;
+    approximate: boolean;
   } | null;
 }
 
@@ -173,6 +187,7 @@ interface WalletSummary {
 function pendingLine(transaction: CreditTransaction) {
   const pending = transaction.pending;
   if (!pending) return null;
+  if (pending.cancelled) return "No credits moved";
   if (pending.failed) return "Delayed";
   if (pending.paused) return "On hold";
   if (!pending.releaseAt) return null;
@@ -262,6 +277,11 @@ function statusClasses(status: string) {
 
 function isCompleted(status: string) {
   return status.toLowerCase() === "completed";
+}
+
+/** "1,250 credits", or "≈ 1,250 credits" when the history cannot say exactly. */
+function balanceText(value: number, approximate: boolean) {
+  return `${approximate ? "≈ " : ""}${credits(value)} credits`;
 }
 
 function CreditAmount({ transaction }: { transaction: CreditTransaction }) {
@@ -1717,6 +1737,40 @@ export const TransactionHistoryMain = () => {
                   label="Context"
                   value={transactionContext(selectedTransaction)}
                 />
+                {selectedTransaction.balance ? (
+                  <>
+                    <DetailItem
+                      label="Balance Before"
+                      value={balanceText(selectedTransaction.balance.before, selectedTransaction.balance.approximate)}
+                    />
+                    <DetailItem
+                      label="Balance After"
+                      value={balanceText(selectedTransaction.balance.after, selectedTransaction.balance.approximate)}
+                    />
+                    {selectedTransaction.balance.heldBefore !== selectedTransaction.balance.heldAfter && (
+                      <div className="sm:col-span-2">
+                        <DetailItem
+                          label="Credits On Hold"
+                          value={`${credits(selectedTransaction.balance.heldBefore)} → ${credits(
+                            selectedTransaction.balance.heldAfter
+                          )} credits`}
+                        />
+                      </div>
+                    )}
+                    <div className="text-[11px] text-gray-500 dark:text-zinc-500 sm:col-span-2">
+                      Spendable credits in {selectedTransaction.balance.wallet} just before and after this transaction.
+                      {selectedTransaction.balance.approximate
+                        ? " Approximate: an older staff adjustment on this wallet has no recorded direction."
+                        : ""}
+                    </div>
+                  </>
+                ) : selectedTransaction.pending ? (
+                  <div className="text-[11px] text-gray-500 dark:text-zinc-500 sm:col-span-2">
+                    {selectedTransaction.pending.cancelled
+                      ? "Your balance did not change: these credits were never paid."
+                      : "Your balance changes when this payout lands."}
+                  </div>
+                ) : null}
                 {selectedTransaction.staffReason && (
                   <div className="sm:col-span-2">
                     <DetailItem label="Reason from staff" value={selectedTransaction.staffReason} />
@@ -1747,15 +1801,17 @@ export const TransactionHistoryMain = () => {
                 />
                 {selectedTransaction.pending ? (
                   <DetailItem
-                    label="Arrives"
+                    label={selectedTransaction.pending.cancelled ? "Payout" : "Arrives"}
                     value={
-                      selectedTransaction.pending.failed
-                        ? "Delayed — staff are completing it"
-                        : selectedTransaction.pending.paused
-                          ? "On hold while the dispute is reviewed again"
-                          : selectedTransaction.pending.releaseAt
-                            ? new Date(selectedTransaction.pending.releaseAt).toLocaleString()
-                            : "—"
+                      selectedTransaction.pending.cancelled
+                        ? "Cancelled — staff withdrew the ruling"
+                        : selectedTransaction.pending.failed
+                          ? "Delayed — staff are completing it"
+                          : selectedTransaction.pending.paused
+                            ? "On hold while the dispute is reviewed again"
+                            : selectedTransaction.pending.releaseAt
+                              ? new Date(selectedTransaction.pending.releaseAt).toLocaleString()
+                              : "—"
                     }
                   />
                 ) : null}

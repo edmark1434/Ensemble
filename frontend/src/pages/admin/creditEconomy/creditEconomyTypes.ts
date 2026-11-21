@@ -191,6 +191,20 @@ export type LedgerParty = {
   contractId: string | null;
 };
 
+/**
+ * A wallet's credits just before and just after a ledger row, rebuilt from the ledger.
+ * `before`/`after` are spendable; `heldBefore`/`heldAfter` are a staff hold. `approximate`
+ * when a pre-audit adjustment (no recorded direction) sits between the row and today.
+ */
+export type LedgerBalance = {
+  walletId: string;
+  before: number;
+  after: number;
+  heldBefore: number;
+  heldAfter: number;
+  approximate: boolean;
+};
+
 export type LedgerEntry = {
   id: string;
   type: CreditTransactionType | string;
@@ -228,6 +242,11 @@ export type LedgerEntry = {
   reversedBy: { id: string; status: string | null } | null;
   /** The payout record behind a Cashout / Cashout Refund row. */
   cashout: { id: string; reference: string | null; status: string | null } | null;
+  /**
+   * Each side's balance around this row. Member and escrow wallets only (null for the platform
+   * wallet); a self-transfer sets `source` alone. Absent on the overview's recent list.
+   */
+  balances?: { source: LedgerBalance | null; destination: LedgerBalance | null };
 };
 
 /** `totalCredits` (ledger only): credits across every matching row, not just this page. */

@@ -608,16 +608,23 @@ export function AccountRestrictionHost() {
       window.dispatchEvent(new CustomEvent('ensemble:wallet-changed'));
     };
 
+    // A dispute payout was paid, scheduled, moved or withdrawn: open wallet views reload.
+    const handleWalletChanged = () => {
+      window.dispatchEvent(new CustomEvent('ensemble:wallet-changed'));
+    };
+
     socket.on('account:restricted', handleRestricted);
     socket.on('account:status_changed', handleStatusChanged);
     socket.on('account:warning', handleWarning);
     socket.on('account:credits_hold', handleCreditsHold);
+    socket.on('account:wallet_changed', handleWalletChanged);
 
     return () => {
       socket.off('account:restricted', handleRestricted);
       socket.off('account:status_changed', handleStatusChanged);
       socket.off('account:warning', handleWarning);
       socket.off('account:credits_hold', handleCreditsHold);
+      socket.off('account:wallet_changed', handleWalletChanged);
     };
   }, [user?.account_id, navigate]);
 

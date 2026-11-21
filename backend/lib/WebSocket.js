@@ -902,11 +902,34 @@ function emitStaffCaseChange({ kind, id, reason = null } = {}) {
   }
 }
 
+/**
+ * Tell members their wallet or credit history changed (a dispute payout paid, scheduled,
+ * moved or withdrawn), so open wallet views reload. Call after the change is committed.
+ * The payload carries no amounts: the client re-reads its own history. Never throws.
+ * @param {Array<string|null|undefined>} accountIds
+ * @param {{ reason?: string|null, disputeId?: string|null }} [detail]
+ */
+function emitWalletChanged(accountIds, { reason = null, disputeId = null } = {}) {
+  if (!io) return;
+  const rooms = [...new Set((accountIds || []).filter(Boolean).map(String))];
+  if (!rooms.length) return;
+  try {
+    io.to(rooms).emit('account:wallet_changed', {
+      reason: reason || null,
+      disputeId: disputeId ? String(disputeId) : null,
+      at: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.warn('Wallet change not delivered:', error.message);
+  }
+}
+
 module.exports = {
   initSocket,
   getIo,
   emitForumEvent,
   emitStaffCaseChange,
+  emitWalletChanged,
   emitConversationMessage,
   refreshSocketStanding,
 };

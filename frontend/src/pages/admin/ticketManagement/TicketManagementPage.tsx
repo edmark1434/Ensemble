@@ -34,6 +34,7 @@ import {
 import type { SupportTicket, TicketsOverview } from './ticketTypes';
 import { TICKET_TYPE_OPTIONS } from './ticketTypes';
 import ConsolePageSkeleton from '@/pages/staff/ConsolePageSkeleton';
+import { useStaffCaseEvents } from '@/lib/staffCaseEvents';
 
 type TabId = 'overview' | 'tickets' | 'mine' | 'assignments';
 
@@ -141,6 +142,9 @@ export default function TicketManagementPage() {
   useEffect(() => {
     void load();
   }, []);
+
+  // New tickets, replies, claims and closes from anyone else show up without a reload.
+  useStaffCaseEvents(['ticket', 'dispute'], () => void load(true));
 
   useEffect(() => {
     if (paramTab && valid.includes(paramTab)) setTab(paramTab);

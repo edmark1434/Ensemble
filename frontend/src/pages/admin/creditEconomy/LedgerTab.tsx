@@ -2,6 +2,7 @@ import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { AlertTriangle, ChevronDown, ChevronRight, Download, Loader2, Search, SlidersHorizontal, X } from 'lucide-react';
 import {
+  BalanceChange,
   ECONOMY_ACCENT,
   ECONOMY_API,
   EmptyRow,
@@ -554,8 +555,14 @@ export default function LedgerTab({ variant, refreshToken, onOpenWallet, onOpenT
                       <p className="text-[11px] text-zinc-500">{entrySubtitle(e)}</p>
                       <LedgerLinkChips entry={e} onOpenTransaction={onOpenTransaction} />
                     </td>
-                    <td className="max-w-[200px] px-3 py-3">{partyButton(e.source)}</td>
-                    <td className="max-w-[200px] px-3 py-3">{partyButton(e.destination, e.isAdjustment)}</td>
+                    <td className="max-w-[200px] px-3 py-3">
+                      {partyButton(e.source)}
+                      <BalanceChange balance={e.balances?.source} />
+                    </td>
+                    <td className="max-w-[200px] px-3 py-3">
+                      {partyButton(e.destination, e.isAdjustment)}
+                      <BalanceChange balance={e.balances?.destination} />
+                    </td>
                     <td className="px-3 py-3 text-right">
                       <LedgerAmount entry={e} />
                     </td>

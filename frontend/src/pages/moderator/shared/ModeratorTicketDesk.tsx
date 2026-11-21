@@ -23,6 +23,7 @@ import ModeratorTicketDetailModal from "./ModeratorTicketDetailModal";
 import { PriorityBadge, StatusBadge, type Accent } from "./ui";
 import type { SupportTicket } from "./moderatorTypes";
 import ConsolePageSkeleton from '@/pages/staff/ConsolePageSkeleton';
+import { useStaffCaseEvents } from '@/lib/staffCaseEvents';
 
 function formatDateTime(value: string | null | undefined) {
   if (!value) return "—";
@@ -202,6 +203,9 @@ export default function ModeratorTicketDesk({
     void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [listPath, endpointBase]);
+
+  // New tickets, replies, claims and closes from anyone else show up without a reload.
+  useStaffCaseEvents(["ticket"], () => void load(true));
 
   const myStaffId = useMemo(() => {
     const id = user?.staffId ?? user?.staff_id ?? null;

@@ -634,11 +634,19 @@ export default function ModeratorDisputeDetailModal({
       window.clearTimeout(timer);
       timer = window.setTimeout(() => void refreshLive(), 250);
     };
+    // Reaches every staff console, also one that is not yet a member of this case's chat.
+    // New replies arrive as `disputeMessage`; anything else may change the case itself.
+    const onStaffCase = (payload: { kind?: string; id?: string; reason?: string | null } | null) => {
+      if (payload?.kind !== "dispute" || payload.reason === "message") return;
+      onState({ disputeId: payload.id });
+    };
     if (!socket.connected) socket.connect();
     socket.on("disputeUpdated", onState);
+    socket.on("staffCaseChanged", onStaffCase);
     return () => {
       window.clearTimeout(timer);
       socket.off("disputeUpdated", onState);
+      socket.off("staffCaseChanged", onStaffCase);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [disputeId, endpointBase]);

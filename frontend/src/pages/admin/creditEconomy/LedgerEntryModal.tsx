@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { AlertTriangle, ArrowLeft, ArrowRight, Filter, Loader2, X } from 'lucide-react';
 import { peekStaffGet, staffGet } from '@/lib/staffCache';
 import {
+  BalanceChange,
   CopyId,
   ECONOMY_ACCENT,
   ECONOMY_API,
@@ -13,6 +14,7 @@ import {
 import {
   referenceLabel,
   type EconomyVariant,
+  type LedgerBalance,
   type LedgerEntry,
   type LedgerEntryDetailResponse,
   type LedgerFilters,
@@ -107,7 +109,7 @@ export default function LedgerEntryModal({
 
   const entry = data?.entry && String(data.entry.id) === String(transactionId) ? data.entry : null;
 
-  const partyBlock = (label: string, p: LedgerParty) => (
+  const partyBlock = (label: string, p: LedgerParty, balance: LedgerBalance | null | undefined) => (
     <div className="min-w-0 rounded-xl border border-white/[0.06] bg-white/[0.02] px-3 py-2.5">
       <p className="mb-1 text-[10px] uppercase tracking-wide text-zinc-600">{label}</p>
       {p.walletId && p.walletType === 'Account' ? (
@@ -116,6 +118,12 @@ export default function LedgerEntryModal({
         </button>
       ) : (
         <PartyCell party={p} />
+      )}
+      {balance && (
+        <div className="mt-2 border-t border-white/[0.06] pt-2">
+          <p className="text-[10px] uppercase tracking-wide text-zinc-600">Balance before → after</p>
+          <BalanceChange balance={balance} label={null} />
+        </div>
       )}
     </div>
   );
@@ -143,7 +151,7 @@ export default function LedgerEntryModal({
           </span>
           <span className="flex shrink-0 flex-col items-end gap-1">
             <LedgerAmount entry={e} />
-            {e.status !== 'Completed' && <StatusPill status={e.status} />}
+            <StatusPill status={e.status} />
           </span>
           {!current && <ArrowRight className="mt-1 h-3.5 w-3.5 shrink-0 text-zinc-600" />}
         </button>
@@ -202,7 +210,7 @@ export default function LedgerEntryModal({
           {entry && data && (
             <>
               <div className="grid items-stretch gap-2 sm:grid-cols-[1fr_auto_1fr]">
-                {partyBlock('From', entry.source)}
+                {partyBlock('From', entry.source, entry.balances?.source)}
                 <div className="flex flex-col items-center justify-center px-2 text-center">
                   <span className="text-xl"><LedgerAmount entry={entry} /></span>
                   <span className="text-[10px] text-zinc-600">credits</span>
@@ -212,7 +220,7 @@ export default function LedgerEntryModal({
                     Same wallet (staff adjustment)
                   </div>
                 ) : (
-                  partyBlock('To', entry.destination)
+                  partyBlock('To', entry.destination, entry.balances?.destination)
                 )}
               </div>
 
@@ -223,6 +231,7 @@ export default function LedgerEntryModal({
                 onShowInLedger={onShowInLedger}
                 showOpenEntry={false}
                 showLinks={false}
+                showBalances={false}
               />
 
               {data.links.length > 0 && (

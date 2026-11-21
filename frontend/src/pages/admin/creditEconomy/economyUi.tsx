@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { Check, ChevronLeft, ChevronRight, Copy } from 'lucide-react';
 import api from '@/lib/axios';
 import { peekStaffGet, staffGet } from '@/lib/staffCache';
-import type { EconomyVariant, LedgerEntry, LedgerParty, Page } from './creditEconomyTypes';
+import type { EconomyVariant, LedgerBalance, LedgerEntry, LedgerParty, Page } from './creditEconomyTypes';
 
 export const ECONOMY_API = {
   overview: '/api/admin/economy-overview',
@@ -199,7 +199,11 @@ export function StatTile({
 const STATUS_TONE: Record<string, string> = {
   completed: 'bg-emerald-500/15 text-emerald-300',
   pending: 'bg-amber-500/15 text-amber-200',
+  processing: 'bg-amber-500/15 text-amber-200',
+  'on hold': 'bg-amber-500/15 text-amber-200',
   failed: 'bg-red-500/15 text-red-300',
+  cancelled: 'bg-red-500/15 text-red-300',
+  canceled: 'bg-red-500/15 text-red-300',
   reversed: 'bg-violet-500/15 text-violet-200',
   active: 'bg-emerald-500/15 text-emerald-300',
   suspended: 'bg-amber-500/15 text-amber-200',
@@ -257,6 +261,42 @@ export function LedgerAmount({ entry }: { entry: LedgerEntry }) {
     );
   }
   return <span className="font-semibold tabular-nums text-white">{formatCredits(entry.amount)}</span>;
+}
+
+/** "1,200 → 850" (or "≈ 1,200 → 850") for a wallet's spendable credits around one row. */
+export function balanceChangeText(balance: LedgerBalance) {
+  return `${balance.approximate ? '≈ ' : ''}${formatCredits(balance.before)} → ${formatCredits(balance.after)}`;
+}
+
+export function balanceChangeTitle(balance: LedgerBalance) {
+  const held =
+    balance.heldBefore !== balance.heldAfter
+      ? ` On hold: ${formatCredits(balance.heldBefore)} → ${formatCredits(balance.heldAfter)}.`
+      : '';
+  const approx = balance.approximate ? ' Approximate: an older adjustment on this wallet has no recorded direction.' : '';
+  return `Spendable balance: ${formatCredits(balance.before)} before, ${formatCredits(balance.after)} after.${held}${approx}`;
+}
+
+/**
+ * A wallet's balance just before and after a ledger row: "Bal 1,200 → 850", the new balance
+ * green when it grew and red when it shrank, plus held credits when a hold moved them.
+ */
+export function BalanceChange({ balance, label = 'Bal' }: { balance: LedgerBalance | null | undefined; label?: string | null }) {
+  if (!balance) return null;
+  const delta = balance.after - balance.before;
+  const tone = delta > 0 ? 'text-emerald-300' : delta < 0 ? 'text-red-300' : 'text-zinc-400';
+  return (
+    <span className="mt-0.5 block whitespace-nowrap text-[10px] tabular-nums text-zinc-500" title={balanceChangeTitle(balance)}>
+      {label && <span className="text-zinc-600">{label} </span>}
+      {balance.approximate ? '≈ ' : ''}
+      {formatCredits(balance.before)} → <span className={tone}>{formatCredits(balance.after)}</span>
+      {balance.heldBefore !== balance.heldAfter && (
+        <span className="text-amber-300/80">
+          {' '}· held {formatCredits(balance.heldBefore)} → {formatCredits(balance.heldAfter)}
+        </span>
+      )}
+    </span>
+  );
 }
 
 export function EmptyRow({ colSpan, children }: { colSpan: number; children: ReactNode }) {

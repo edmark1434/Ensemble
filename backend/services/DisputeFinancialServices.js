@@ -317,6 +317,30 @@ async function announceFailure(row, failed, error) {
   });
 }
 
+/** Accounts whose wallet a money result touched: payout recipients and a reversal's two sides. */
+function walletAccountsOf(result) {
+  const lists = [result?.payouts, result?.paid, result?.failed, result?.cancelled].filter(Array.isArray);
+  return [
+    ...lists.flat().map((p) => p?.recipient_account_id),
+    result?.fromAccountId,
+    result?.recipientAccountId,
+  ].filter(Boolean);
+}
+
+/**
+ * Open wallet views (Transactions, Settings → Wallet) of both parties and every recipient
+ * reload, so a paid, scheduled, moved or withdrawn payout shows without a refresh. The change
+ * is already committed when this runs.
+ */
+function broadcastWalletChange(row, result, reason) {
+  // Lazy require: the socket module loads services of its own.
+  const { emitWalletChanged } = require('../lib/WebSocket');
+  emitWalletChanged([row.by_account_id, row.for_account_id, ...walletAccountsOf(result)], {
+    reason,
+    disputeId: row.dispute_id,
+  });
+}
+
 async function logActivity(row, staffId, eventCode, action, metadata) {
   await recordAccountActivity({
     accountId: row.by_account_id || row.for_account_id,
@@ -450,6 +474,7 @@ async function applyFinancialResolution(disputeId, body, staffSession) {
 
   // Every money action changes what both parties and every open staff view should show.
   await emitDisputeState(disputeId, { reason });
+  broadcastWalletChange(row, result, reason);
 
   const detail = await getDisputeDetail(disputeId, staffSession);
   return { ...detail, financialResult: summarizeResult(result) };
@@ -481,10 +506,15 @@ async function releaseDueDisputePayoutsServices() {
       released += item.paid.length;
       await announcePaid(row, item.paid, { auto: true });
       await emitDisputeState(item.disputeId, { reason: 'payout_released' });
+      broadcastWalletChange(row, { paid: item.paid }, 'payout_released');
     } else if (item.failed?.length) {
       failed += item.failed.length;
       // Say it once; hourly retries stay quiet until someone acts.
-      if (item.firstFailure) await announceFailure(row, item.failed, item.error);
+      if (item.firstFailure) {
+        await announceFailure(row, item.failed, item.error);
+        // The member's row turns from Pending to Delayed.
+        broadcastWalletChange(row, { failed: item.failed }, 'payout_failed');
+      }
       await emitDisputeState(item.disputeId, { reason: 'payout_failed' });
     }
   }

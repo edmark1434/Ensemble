@@ -21,6 +21,7 @@ const {
   getConversationByConvoId,
 } = require('./InboxRepositories');
 const { createNotificationServices } = require('../services/NotificationServices');
+const { listOwnedUploadKeysRepository } = require('./FileRepositories');
 const { buildReportSubject, snapshotTitle } = require('../lib/ReportSubject');
 const { CLOSED_REPORT_STATUSES } = require('../lib/ReportEnums');
 const {
@@ -327,60 +328,74 @@ async function createSupportTicket(input, session = null) {
   if (formAnswers.length) {
     formAnswers = await resolveFormAnswers(requesterAccountId, type, formAnswers);
   }
+  const authorSession = session || {
+    account_id: requesterAccountId,
+    type: 'User',
+    username: sessionDisplayName(session),
+  };
+  // Checked before the ticket exists, so a bad file never leaves a ticket without its message.
+  const screenshots = description ? await resolveTicketAttachments(input?.attachments, authorSession) : [];
   const submissionContext = await buildSubmissionContext(requesterAccountId, input.context, input?.email);
-  const ticketNumber = await nextTicketNumber();
   const handledBy =
     input?.handledByStaffId ?? input?.assignedStaffId ?? null;
   const status = handledBy ? 'In Progress' : 'Open';
   // An account-penalty appeal names the one penalty it is about (checked by assertCanFileAppeal).
   const appealTarget = type === APPEAL_TICKET_TYPE && input?.appealTarget?.type ? input.appealTarget : null;
-  const params = [
-    ticketNumber,
-    reason,
-    type,
-    priority,
-    status,
-    requesterAccountId,
-    handledBy,
-    JSON.stringify(formAnswers),
-    JSON.stringify(submissionContext),
-  ];
-  if (appealTarget) {
-    params.push(
-      appealTarget.type,
-      String(appealTarget.id),
-      appealTarget.label ? String(appealTarget.label).slice(0, 200) : null,
-      appealTarget.startedAt || null
-    );
-  }
 
   let insert;
-  try {
-    insert = await pool.query(
-      `
-      INSERT INTO tickets (
-        ticket_number, reason, type, priority, status,
-        account_id, handled_by_staff_id,
-        message_count, last_message_at,
-        form_answers, submission_context
-        ${appealTarget ? ', appeal_target_type, appeal_target_id, appeal_target_label, appeal_target_started_at' : ''}
-      ) VALUES (
-        $1, $2, $3, $4, $5,
-        $6, $7,
-        0, NULL,
-        $8::jsonb, $9::jsonb
-        ${appealTarget ? ', $10, $11, $12, $13::timestamptz' : ''}
-      )
-      RETURNING ticket_id
-      `,
-      params
-    );
-  } catch (err) {
-    // Two submits for the same penalty at once: the partial unique index keeps one.
-    if (err?.code === '23505' && String(err.constraint || '').includes('penalty_appeal')) {
-      throw ticketError('This penalty already has an open appeal. Reply on that ticket instead.', 409);
+  let ticketNumber;
+  // Ticket numbers are MAX + 1, so two submits at the same moment can pick the same one.
+  for (let attempt = 1; ; attempt += 1) {
+    ticketNumber = await nextTicketNumber();
+    const params = [
+      ticketNumber,
+      reason,
+      type,
+      priority,
+      status,
+      requesterAccountId,
+      handledBy,
+      JSON.stringify(formAnswers),
+      JSON.stringify(submissionContext),
+    ];
+    if (appealTarget) {
+      params.push(
+        appealTarget.type,
+        String(appealTarget.id),
+        appealTarget.label ? String(appealTarget.label).slice(0, 200) : null,
+        appealTarget.startedAt || null
+      );
     }
-    throw err;
+    try {
+      insert = await pool.query(
+        `
+        INSERT INTO tickets (
+          ticket_number, reason, type, priority, status,
+          account_id, handled_by_staff_id,
+          message_count, last_message_at,
+          form_answers, submission_context
+          ${appealTarget ? ', appeal_target_type, appeal_target_id, appeal_target_label, appeal_target_started_at' : ''}
+        ) VALUES (
+          $1, $2, $3, $4, $5,
+          $6, $7,
+          0, NULL,
+          $8::jsonb, $9::jsonb
+          ${appealTarget ? ', $10, $11, $12, $13::timestamptz' : ''}
+        )
+        RETURNING ticket_id
+        `,
+        params
+      );
+      break;
+    } catch (err) {
+      const constraint = String(err?.constraint || '');
+      // Two submits for the same penalty at once: the partial unique index keeps one.
+      if (err?.code === '23505' && constraint.includes('penalty_appeal')) {
+        throw ticketError('This penalty already has an open appeal. Reply on that ticket instead.', 409);
+      }
+      if (err?.code === '23505' && constraint.includes('ticket_number') && attempt < 4) continue;
+      throw err;
+    }
   }
 
   const ticketId = insert.rows[0].ticket_id;
@@ -396,14 +411,10 @@ async function createSupportTicket(input, session = null) {
   } catch {}
 
   if (description) {
-    const authorSession = session || {
-      account_id: requesterAccountId,
-      type: 'User',
-      username: sessionDisplayName(session),
-    };
     try {
-      await addTicketMessage(ticketId, description, authorSession, false, input?.attachments || [], null, {
+      await addTicketMessage(ticketId, description, authorSession, false, [], null, {
         initial: true,
+        screenshots,
       });
     } catch (err) {
       // Ticket metadata still exists; chat can be started later when Mongo is up.
@@ -1195,6 +1206,56 @@ function ticketError(message, statusCode) {
   const error = new Error(message);
   error.statusCode = statusCode;
   return error;
+}
+
+const TICKET_ATTACHMENT_LIMIT = 4;
+
+/**
+ * The files on a new ticket message. A member may only attach files their own account
+ * uploaded: otherwise a key seen elsewhere (a shared chat, say) would become readable
+ * through the ticket. Members get a 400 for anything unusable instead of a silent drop.
+ * Staff messages keep the plain key check.
+ */
+async function resolveTicketAttachments(rawAttachments, session) {
+  if (isStaffSession(session)) return normalizeTicketScreenshots(rawAttachments);
+  const requested = Array.isArray(rawAttachments) ? rawAttachments.filter(Boolean) : [];
+  if (!requested.length) return [];
+  if (requested.length > TICKET_ATTACHMENT_LIMIT) {
+    throw ticketError(`Attach up to ${TICKET_ATTACHMENT_LIMIT} files per message`, 400);
+  }
+  const screenshots = normalizeTicketScreenshots(requested);
+  const unusable = ticketError('One of the attachments could not be used. Remove it and upload it again.', 400);
+  if (screenshots.length !== requested.length) throw unusable;
+  const owned = new Set(
+    await listOwnedUploadKeysRepository(
+      sessionAccountId(session),
+      screenshots.map((item) => item.attachment_key)
+    )
+  );
+  if (screenshots.some((item) => !owned.has(item.attachment_key))) throw unusable;
+  return screenshots;
+}
+
+/** An open ticket this account filed with the same type and subject in the last few minutes. */
+async function findRecentOpenTicketLike(accountId, type, reason, minutes = 10) {
+  if (!accountId || !type || !reason) return null;
+  const result = await pool.query(
+    `
+    SELECT ticket_id, ticket_number
+    FROM tickets
+    WHERE account_id = $1
+      AND type = $2
+      AND LOWER(reason) = LOWER($3)
+      AND deleted_at IS NULL
+      AND LOWER(status) NOT IN ('closed', 'resolved')
+      AND created_at > NOW() - ($4::int * INTERVAL '1 minute')
+    ORDER BY created_at DESC
+    LIMIT 1
+    `,
+    [accountId, type, reason, minutes]
+  );
+  const row = result.rows[0];
+  return row ? { id: String(row.ticket_id), number: row.ticket_number } : null;
 }
 
 async function loadTicketInbox(chatId) {
@@ -2778,6 +2839,8 @@ async function applyTicketAssignmentAction(ticketId, patch, staffSession) {
       summary: 'Released the ticket',
       actorStaffId: staff.staff_id,
     });
+    // Unassigned (and maybe back to Open): every desk and the member see it straight away.
+    await announceTicketState(ticketId);
     return getTicketDetail(ticketId, staffSession);
   }
 
@@ -3249,6 +3312,15 @@ async function addTicketMessage(ticketId, body, staffSession, isInternal = false
     }
   }
 
+  // Validate the message before it touches the chat (membership, inbox preview).
+  const screenshots = Array.isArray(options.screenshots)
+    ? options.screenshots
+    : await resolveTicketAttachments(rawAttachments, staffSession);
+  const messageBody = String(body || '').trim();
+  if (!messageBody && !screenshots.length) {
+    throw ticketError('Message body is required', 400);
+  }
+
   const chatId = await ensureTicketChat(ticketId, ticketResult.rows[0]);
   const now = new Date();
   const accountId = sessionAccountId(staffSession);
@@ -3268,11 +3340,6 @@ async function addTicketMessage(ticketId, body, staffSession, isInternal = false
     }
   }
 
-  const screenshots = normalizeTicketScreenshots(rawAttachments);
-  const messageBody = String(body || '').trim();
-  if (!messageBody && !screenshots.length) {
-    throw new Error('Message body is required');
-  }
   let replyParentId = null;
   const requestedReply = String(replyToMessageId || '').trim();
   if (requestedReply) {
@@ -6084,7 +6151,8 @@ async function buildSubmissionContext(accountId, clientContext, explicitEmail = 
   };
   assign('accountId', accountId, 80);
   assign('username', row.handle);
-  assign('email', explicitEmail || clientContext?.email || row.email_address || null);
+  // The account's own address: a client-sent email would let anyone pose as another inbox.
+  assign('email', explicitEmail || row.email_address || null);
   assign('plan', row.subscription_plan || 'Free', 80);
   assign('submittedAt', new Date().toISOString(), 40);
   assign('browser', clientContext?.browser);
@@ -6586,6 +6654,7 @@ module.exports = {
   respondTicketInvite,
   getTicketCatalog,
   createSupportTicket,
+  findRecentOpenTicketLike,
   createStaffTicketForAccount,
   findAccountByEmailOrUsername,
   getTicketPickers,

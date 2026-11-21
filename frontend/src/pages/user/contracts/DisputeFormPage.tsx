@@ -536,7 +536,8 @@ export const DisputeFormPage: React.FC = () => {
                   </div>
                   <p className="text-xs text-gray-500 dark:text-zinc-400">
                     Screenshots, delivered files, chat logs or receipts that show what happened. Only you and staff
-                    can see them while the case is private. {ATTACHMENT_HINT}
+                    can see them while the case is private. If staff make it public, the other party can see them
+                    too, so they can answer. The public never can. {ATTACHMENT_HINT}
                   </p>
                   <PendingFileList files={evidenceFiles.files} onRemove={evidenceFiles.remove} disabled={isSubmitting} />
                 </div>

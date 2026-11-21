@@ -2,6 +2,16 @@ const express = require('express');
 const router = express.Router();
 const requireAuth = require('../middleware/RequireAuth');
 const checkSession = require('../middleware/CheckSession');
+const { createRateLimiter } = require('../middleware/RateLimiter');
+
+// New tickets and appeals, per account. Replies on an existing ticket are not counted here.
+const ticketCreateLimiter = createRateLimiter('ticketCreate', {
+    windowMs: 60 * 60 * 1000,
+    accountLimit: 15,
+    anonymousLimit: 15,
+    networkLimit: 300,
+    message: 'You have opened several tickets in a short time. Add details to an open ticket in Cases, or try again later.',
+});
 const {
     getAllUsers,
     signup,
@@ -74,7 +84,7 @@ router.post('/update-personal-details', [checkSession, requireAuth],updatePerson
 router.get('/ticket-catalog', getPublicTicketCatalog);
 router.get('/ticket-context', [checkSession, requireAuth], getTicketContext);
 router.get('/ticket-teams', [checkSession, requireAuth], getTicketTeamSearch);
-router.post('/tickets', [checkSession, requireAuth], createPublicTicket);
+router.post('/tickets', [checkSession, requireAuth, ticketCreateLimiter], createPublicTicket);
 router.get('/tickets', [checkSession, requireAuth], listMyTickets);
 router.get('/tickets/:id', [checkSession, requireAuth], getMyTicket);
 router.get('/disputes', [checkSession, requireAuth], listMyDisputes);

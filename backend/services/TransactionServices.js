@@ -1,8 +1,9 @@
 const {
     getCreditTransactionsByAccountId,
-    getPendingDisputePayoutsByAccountId,
+    getUnpaidDisputePayoutsByAccountId,
     getAccountWalletSummaryByAccountId,
 } = require('../repositories/TransactionRepositories');
+const { fetchLedgerBalances, balanceKey } = require('../repositories/LedgerBalanceRepositories');
 const { formatPayoutDate } = require('../lib/DisputeResolutions');
 const { staffAdjustmentOf, staffHoldOf } = require('../lib/StaffLedgerNotes');
 
@@ -424,28 +425,32 @@ function mapTransaction(row) {
     };
 }
 
+const PAYOUT_NOUN = { escrow_refund: 'Refund', escrow_release: 'Payout' };
+
 /**
- * A dispute payout that has not landed yet, shaped like a ledger entry with status Pending.
- * It never counts toward balances: the credits are still locked in escrow until release_at,
- * and the real ledger entry replaces it once the payout is paid.
+ * A dispute payout with no ledger row, shaped like a ledger entry. It never counts toward
+ * balances: a waiting payout's credits stay locked in escrow until release_at (the real ledger
+ * entry replaces it once paid), and a cancelled one never moved any.
+ * Status: Pending (scheduled), On Hold (case reopened), Delayed (failed, retrying) or
+ * Cancelled (staff withdrew the ruling).
  */
 function mapPendingPayout(row) {
     const number = row.dispute_number || 'your dispute';
     const type = normalizeType(row.transaction_type);
-    const paused = String(row.dispute_status || '').toLowerCase() !== 'closed';
+    const cancelled = row.status === 'cancelled';
+    const paused = !cancelled && String(row.dispute_status || '').toLowerCase() !== 'closed';
     const failed = row.status === 'failed';
     const destination = formatWalletTypeLabel(row.destination_wallet_type, true);
-    const title =
-        row.kind === 'escrow_refund'
-            ? 'Dispute Refund on the Way'
-            : row.kind === 'escrow_release'
-              ? 'Dispute Payout on the Way'
-              : 'Dispute Reversal on the Way';
-    const summary = failed
-        ? `From dispute ${number}. The payout is delayed and staff are completing it.`
-        : paused
-          ? `From dispute ${number}. On hold while the case is reviewed again.`
-          : `From dispute ${number}. Arrives in ${destination} on ${formatPayoutDate(row.release_at)}.`;
+    const noun = PAYOUT_NOUN[row.kind] || 'Reversal';
+    const title = cancelled ? `Dispute ${noun} Cancelled` : `Dispute ${noun} on the Way`;
+    const summary = cancelled
+        ? `From dispute ${number}. Staff withdrew this ruling, so no credits moved.`
+        : failed
+          ? `From dispute ${number}. The payout is delayed and staff are completing it.`
+          : paused
+            ? `From dispute ${number}. On hold while the case is reviewed again.`
+            : `From dispute ${number}. Arrives in ${destination} on ${formatPayoutDate(row.release_at)}.`;
+    const status = cancelled ? 'Cancelled' : failed ? 'Delayed' : paused ? 'On Hold' : 'Pending';
     return {
         id: `dispute-payout-${row.dispute_payout_id}`,
         type,
@@ -456,8 +461,9 @@ function mapPendingPayout(row) {
         walletFlow: `Escrow (dispute ${number}) → ${destination}`,
         isCreditPurchase: false,
         amountCredits: Math.abs(Number(row.amount_credits)),
-        status: 'Pending',
-        createdAt: row.created_at,
+        status,
+        // A cancelled payout sits in the history at the moment it was withdrawn.
+        createdAt: cancelled ? row.cancelled_at || row.created_at : row.created_at,
         direction: 'incoming',
         sourceWalletId: 'Escrow',
         destinationWalletId: row.destination_wallet_id,
@@ -474,8 +480,61 @@ function mapPendingPayout(row) {
             releaseAt: row.release_at,
             paused,
             failed,
+            cancelled,
+            cancelledAt: row.cancelled_at || null,
         },
     };
+}
+
+const BALANCE_WALLET_TYPES = new Set(['account wallets', 'escrow wallets']);
+
+/**
+ * The member's own wallet whose balance a row shows: the Account Wallet when the row touches
+ * it, otherwise the escrow wallet it touches. Null for rows on no member or escrow wallet.
+ */
+function balanceWalletOf(row) {
+    const sides = [
+        row.source_owned && { walletId: row.source_wallet_id, type: String(row.source_wallet_type || '').toLowerCase() },
+        row.destination_owned && { walletId: row.destination_wallet_id, type: String(row.destination_wallet_type || '').toLowerCase() },
+    ].filter((side) => side && BALANCE_WALLET_TYPES.has(side.type));
+    return sides.find((side) => side.type === 'account wallets') || sides[0] || null;
+}
+
+/** Each row's wallet balance before and after it; a read failure leaves the history without them. */
+async function loadRowBalances(rows) {
+    const pairs = [];
+    for (const row of rows) {
+        const wallet = balanceWalletOf(row);
+        if (wallet) pairs.push({ transactionId: row.credit_transaction_id, walletId: wallet.walletId });
+    }
+    try {
+        return await fetchLedgerBalances(pairs);
+    } catch (error) {
+        console.error('Transaction balances skipped:', error.message);
+        return new Map();
+    }
+}
+
+function withBalance(mapped, row, balances) {
+    const wallet = balanceWalletOf(row);
+    const found = wallet ? balances.get(balanceKey(row.credit_transaction_id, wallet.walletId)) : null;
+    if (!found) return { ...mapped, balance: null };
+    return {
+        ...mapped,
+        balance: {
+            wallet: formatWalletTypeLabel(wallet.type, true),
+            before: found.before,
+            after: found.after,
+            heldBefore: found.heldBefore,
+            heldAfter: found.heldAfter,
+            approximate: found.approximate,
+        },
+    };
+}
+
+function timeOf(value) {
+    const time = new Date(value).getTime();
+    return Number.isFinite(time) ? time : 0;
 }
 
 async function getCreditTransactionsService(accountId) {
@@ -485,19 +544,26 @@ async function getCreditTransactionsService(accountId) {
         throw error;
     }
 
-    const [rows, pendingPayouts, walletSummary] = await Promise.all([
+    const [rows, unpaidPayouts, walletSummary] = await Promise.all([
         getCreditTransactionsByAccountId(accountId),
-        getPendingDisputePayoutsByAccountId(accountId),
+        getUnpaidDisputePayoutsByAccountId(accountId),
         getAccountWalletSummaryByAccountId(accountId),
     ]);
+    const balances = await loadRowBalances(rows);
 
-    const pending = pendingPayouts.map(mapPendingPayout);
+    const payouts = unpaidPayouts.map(mapPendingPayout);
+    const waiting = payouts.filter((item) => !item.pending.cancelled);
+    const cancelled = payouts.filter((item) => item.pending.cancelled);
+    // Withdrawn payouts sit among the ledger rows by date (stable sort keeps ledger order on ties).
+    const history = [...rows.map((row) => withBalance(mapTransaction(row), row, balances)), ...cancelled].sort(
+        (a, b) => timeOf(b.createdAt) - timeOf(a.createdAt)
+    );
     return {
         // Waiting payouts first: they are what a member is most likely looking for.
-        transactions: [...pending, ...rows.map(mapTransaction)],
+        transactions: [...waiting, ...history],
         walletSummary: {
             ...walletSummary,
-            pendingCredits: pending.reduce((sum, item) => sum + item.amountCredits, 0),
+            pendingCredits: waiting.reduce((sum, item) => sum + item.amountCredits, 0),
         },
     };
 }

@@ -296,6 +296,13 @@ function readAnswer(field, source) {
   return raw == null ? '' : String(raw).trim();
 }
 
+/** A bad answer is the member's to fix, so it carries a 400. */
+function answerError(message) {
+  const error = new Error(message);
+  error.statusCode = 400;
+  return error;
+}
+
 function sanitizeTicketFormValues(type, input) {
   const definitions = TICKET_FORM_FIELDS[type] || [];
   const source = input && typeof input === 'object' && !Array.isArray(input) ? input : {};
@@ -306,21 +313,21 @@ function sanitizeTicketFormValues(type, input) {
     const answer = readAnswer(field, source);
     const value = Array.isArray(answer) ? answer.join(', ') : answer;
     if (!value) {
-      if (field.required) throw new Error(`${field.label} is required`);
+      if (field.required) throw answerError(`${field.label} is required`);
       continue;
     }
     if (field.kind === 'select' && !field.options.includes(value)) {
-      throw new Error(`${field.label} is not a valid choice`);
+      throw answerError(`${field.label} is not a valid choice`);
     }
     if (field.kind === 'multiselect') {
       const invalid = answer.find((part) => !field.options.includes(part));
-      if (invalid) throw new Error(`${field.label} is not a valid choice`);
+      if (invalid) throw answerError(`${field.label} is not a valid choice`);
     }
     if (field.kind === 'checkbox' && field.required && value !== 'yes') {
-      throw new Error(`${field.label} is required`);
+      throw answerError(`${field.label} is required`);
     }
     if (field.key === 'card_last4' && !/^\d{4}$/.test(value)) {
-      throw new Error('Enter only the last 4 digits of the card');
+      throw answerError('Enter only the last 4 digits of the card');
     }
     rows.push({
       key: field.key,
