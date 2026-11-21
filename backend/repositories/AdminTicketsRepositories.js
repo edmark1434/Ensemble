@@ -23,7 +23,7 @@ const {
 const { createNotificationServices } = require('../services/NotificationServices');
 const { listOwnedUploadKeysRepository } = require('./FileRepositories');
 const { buildReportSubject, snapshotTitle } = require('../lib/ReportSubject');
-const { CLOSED_REPORT_STATUSES, FORUM_REPORT_TYPES, isReportTypeInScope } = require('../lib/ReportEnums');
+const { CLOSED_REPORT_STATUSES } = require('../lib/ReportEnums');
 const {
   isMongoReady,
   getDisputeChatId,
