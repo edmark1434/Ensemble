@@ -31,13 +31,17 @@ export const CONTRACT_DISPUTE_FILING_CODES: readonly ContractDisputeFilingCode[]
 /**
  * After a dispute closes without a ruling that ends the contract, both parties choose whether to
  * continue it (`dispute_decision` from the contracts API). Continuing needs both; ending needs one;
- * if nobody ends it by `decideBy`, it continues. The contract stays on hold meanwhile.
+ * if nobody ends it by `decideBy`, it continues. When one side chose continue and the other has
+ * not answered by then, the silent side first gets one extension (`extendedAt` set, `decideBy`
+ * moved). The contract stays on hold meanwhile.
  * `viewerSide` is null for someone who can see the contract but cannot decide for either party.
  */
 export type ContractDisputeDecision = {
   id: string;
   decideBy: string;
   createdAt?: string;
+  /** Set once the silent side was given extra time; `decideBy` is then the final deadline. */
+  extendedAt?: string | null;
   viewerSide: "client" | "freelancer" | null;
   viewerChoice: "continue" | "end" | null;
   otherChoice: "continue" | "end" | null;
@@ -143,20 +147,31 @@ export function contractDecisionCopy(decision: ContractDisputeDecision): { title
       body: `${caseName} is closed. The client and the freelancer are choosing whether to continue this contract${deadline}.`,
     };
   }
+  const extended = Boolean(decision.extendedAt);
   if (decision.viewerChoice === "continue") {
     return {
       title: "You chose to continue",
       body:
         decision.otherChoice === "continue"
           ? "You both chose to continue."
-          : `Waiting for ${otherParty.toLowerCase()} to answer${deadline}. If nobody ends the contract by then, it continues. You can still end it instead.`,
+          : extended
+            ? `${otherParty} did not answer in time, so they were given until ${by || "the new deadline"}. If they don't end the contract by then, it continues. You can still end it instead.`
+            : `Waiting for ${otherParty.toLowerCase()} to answer${deadline}. If they haven't answered by then, they get one extension before the contract continues. You can still end it instead.`,
+    };
+  }
+  if (decision.otherChoice === "continue") {
+    return {
+      title: extended ? "Extra time to answer" : "Continue this contract?",
+      body: `${caseName} is closed and ${otherParty.toLowerCase()} chose to continue. Choose whether to keep working on this contract${deadline}; if you continue too, it resumes right away, or you can end it instead. ${
+        extended
+          ? "This is your extension: if you don't end it by then, it continues."
+          : "If you haven't answered by then, you get one extension before it continues."
+      } Deadlines stay paused until then.`,
     };
   }
   return {
     title: "Continue this contract?",
-    body: `${caseName} is closed. Choose whether to keep working on this contract${deadline}. If you both continue, it resumes right away; either of you can end it instead. If nobody ends it by then, it continues.${
-      decision.otherChoice === "continue" ? ` ${otherParty} already chose to continue.` : ""
-    } Deadlines stay paused until then.`,
+    body: `${caseName} is closed. Choose whether to keep working on this contract${deadline}. If you both continue, it resumes right away; either of you can end it instead. If nobody ends it by then, it continues. Deadlines stay paused until then.`,
   };
 }
 

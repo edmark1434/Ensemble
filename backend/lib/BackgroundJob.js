@@ -671,10 +671,10 @@ function startPaymentReconciliationJob() {
         try {
             const { reconcileContractDisputeHoldsServices } = require('../services/ContractDisputeHoldServices');
             const result = await reconcileContractDisputeHoldsServices();
-            if (result.ended || result.synced || result.continued || result.reminded) {
+            if (result.ended || result.synced || result.continued || result.extended || result.reminded) {
                 console.log(
                     `Contract dispute holds: ended ${result.ended}, synced ${result.synced}, ` +
-                    `auto-continued ${result.continued}, reminded ${result.reminded}`
+                    `auto-continued ${result.continued}, extended ${result.extended}, reminded ${result.reminded}`
                 );
             }
         } catch (err) {

@@ -1142,7 +1142,7 @@ export const ContractDetailsPage: React.FC = () => {
           ? "The contract has ended. Unfinished escrow goes back to the client; approved milestones stay paid."
           : outcome === "continued"
             ? "You both chose to continue. The contract is active again and its deadlines moved forward."
-            : "Your choice is saved. The contract continues once the other party agrees, or if nobody ends it in time."
+            : "Your choice is saved. The contract continues once the other party agrees. If they don't answer in time, they get one extension before it continues."
       );
       setEndDecisionModalOpen(false);
       await fetchContractData();

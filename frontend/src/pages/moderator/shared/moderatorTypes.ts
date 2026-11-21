@@ -195,6 +195,8 @@ export type DisputeContractAfterCase = {
     freelancerChoice: "continue" | "end" | null;
     freelancerChosenAt: string | null;
     decideBy: string;
+    /** Set once a silent party (the other chose continue) was given its one extension. */
+    extendedAt?: string | null;
     /** both_continued | auto_continued | ended_by_client | ended_by_freelancer | reopened | contract_ended */
     resolution: string | null;
     resolvedAt: string | null;
