@@ -20,9 +20,12 @@ import {
   Play,
   Pause,
   Clapperboard,
-  AlertCircle
+  AlertCircle,
+  RefreshCw
 } from "lucide-react";
 import useStore from "../store/use-store";
+import useLayoutStore from "../store/use-layout-store";
+import { replaceTrackItemMedia } from "../utils/replace-media";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import axios from "axios";
 import { getCurrentTime } from "@/features/editor/utils/time";
@@ -216,11 +219,13 @@ const MAX_ROW_HEIGHT = 999999;
 const UploadImageItem = ({
   item,
   onAdd,
-  shouldDisplayPreview
+  shouldDisplayPreview,
+  replaceMode
 }: {
   item: any;
   onAdd: (payload: any) => void;
   shouldDisplayPreview: boolean;
+  replaceMode: boolean;
 }) => {
   const isReady = item.__status === "ready" || item.__status == null;
   const isError = item.__status === "error";
@@ -349,7 +354,7 @@ const UploadImageItem = ({
         <div
           className="absolute inset-0 flex items-center justify-center bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity rounded-md">
           <div className="rounded-full p-1">
-            <PlusIcon className="h-6 w-6 fill-current" />
+            {replaceMode ? <RefreshCw className="h-5 w-5" /> : <PlusIcon className="h-6 w-6 fill-current" />}
           </div>
         </div>
       </div>
@@ -360,11 +365,13 @@ const UploadImageItem = ({
 const UploadVideoItem = ({
   item,
   onAdd,
-  shouldDisplayPreview
+  shouldDisplayPreview,
+  replaceMode
 }: {
   item: any;
   onAdd: (payload: any) => void;
   shouldDisplayPreview: boolean;
+  replaceMode: boolean;
 }) => {
   const isReady = item.__status === "ready" || item.__status == null;
   const isError = item.__status === "error";
@@ -504,7 +511,7 @@ const UploadVideoItem = ({
         <div
           className="absolute inset-0 flex items-center justify-center bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity rounded-md">
           <div className="rounded-full p-1">
-            <PlusIcon className="h-6 w-6 fill-current" />
+            {replaceMode ? <RefreshCw className="h-5 w-5" /> : <PlusIcon className="h-6 w-6 fill-current" />}
           </div>
         </div>
       </div>
@@ -684,11 +691,13 @@ const UploadAudioItem = ({
 const UploadImagesGrid = ({
   items,
   onAdd,
-  shouldDisplayPreview
+  shouldDisplayPreview,
+  replaceMode
 }: {
   items: any[];
   onAdd: (payload: any) => void;
   shouldDisplayPreview: boolean;
+  replaceMode: boolean;
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerWidth, setContainerWidth] = useState(0);
@@ -729,7 +738,7 @@ const UploadImagesGrid = ({
                 className="h-full"
                 style={{ width, height: row.height }}
               >
-                <UploadImageItem item={item} onAdd={onAdd} shouldDisplayPreview={shouldDisplayPreview} />
+                <UploadImageItem item={item} onAdd={onAdd} shouldDisplayPreview={shouldDisplayPreview} replaceMode={replaceMode} />
               </div>
             ))}
           </div>
@@ -743,11 +752,13 @@ const UploadImagesGrid = ({
 const UploadVideosGrid = ({
   items,
   onAdd,
-  shouldDisplayPreview
+  shouldDisplayPreview,
+  replaceMode
 }: {
   items: any[];
   onAdd: (payload: any) => void;
   shouldDisplayPreview: boolean;
+  replaceMode: boolean;
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerWidth, setContainerWidth] = useState(0);
@@ -788,7 +799,7 @@ const UploadVideosGrid = ({
                 className="h-full"
                 style={{ width, height: row.height }}
               >
-                <UploadVideoItem item={item} onAdd={onAdd} shouldDisplayPreview={shouldDisplayPreview} />
+                <UploadVideoItem item={item} onAdd={onAdd} shouldDisplayPreview={shouldDisplayPreview} replaceMode={replaceMode} />
               </div>
             ))}
           </div>
@@ -806,8 +817,18 @@ export const Uploads = () => {
   const { isDragOver, dragError, handleDragEnter, handleDragOver, handleDragLeave, handleDrop } =
     useFileDropUpload();
 
+  const replaceTargetId = useLayoutStore((state) => state.replaceTargetId);
+  const replaceMode = !!replaceTargetId;
   const [activeTab, setActiveTab] = useState<"videos" | "images" | "audio">("videos");
   const seenUploadIdsRef = useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    if (!replaceTargetId) return;
+    const target = useStore.getState().trackItemsMap[replaceTargetId];
+    if (activeTab === "audio") {
+      setActiveTab(target?.type === "image" ? "images" : "videos");
+    }
+  }, [replaceTargetId, activeTab]);
 
   const { projectId, userId } = useStore();
   const [scope, setScope] = useState<"mine" | "project" | "mine-in-project" | "deleted">("mine");
@@ -837,11 +858,11 @@ export const Uploads = () => {
       const kind = getUploadKind(newOnes[0]);
       if (kind === "video") setActiveTab("videos");
       else if (kind === "image") setActiveTab("images");
-      else if (kind === "audio") setActiveTab("audio");
+      else if (kind === "audio" && !replaceMode) setActiveTab("audio");
     }
 
     seenUploadIdsRef.current = new Set(current.map((u) => u.id));
-  }, [pendingUploads, activeUploads]);
+  }, [pendingUploads, activeUploads, replaceMode]);
 
   // Client-side dimension probes for images that haven't hit the DB yet,
   // keyed by upload id, so the masonry grid can size them correctly.
@@ -1011,6 +1032,18 @@ export const Uploads = () => {
     const clean = stripEphemeralFields(video);
     const srcVideo = clean.metadata?.uploadedUrl || clean.url;
     const payload = { ...clean, details: { ...clean.details, src: srcVideo } };
+    const currentReplaceTargetId = useLayoutStore.getState().replaceTargetId;
+    if (currentReplaceTargetId) {
+      replaceTrackItemMedia(currentReplaceTargetId, {
+        ...payload,
+        type: "video",
+        metadata: {
+          ...payload.metadata,
+          name: payload.fileName || payload.name,
+        },
+      }, "video");
+      return;
+    }
     const normalizedPayload = buildNormalizedVideoPayload(payload);
     const time = getCurrentTime();
     const durationMs = ((normalizedPayload.details as any)?.duration ?? 5) * 1000;
@@ -1039,6 +1072,18 @@ export const Uploads = () => {
     const clean = stripEphemeralFields(image);
     const srcImage = clean.metadata?.uploadedUrl || clean.url;
     const payload = { ...clean, details: { ...clean.details, src: srcImage } };
+    const currentReplaceTargetId = useLayoutStore.getState().replaceTargetId;
+    if (currentReplaceTargetId) {
+      replaceTrackItemMedia(currentReplaceTargetId, {
+        ...payload,
+        type: "image",
+        metadata: {
+          ...payload.metadata,
+          name: payload.fileName || payload.name,
+        },
+      }, "image");
+      return;
+    }
     const normalizedPayload = buildNormalizedImagePayload(payload);
     const time = getCurrentTime();
     const DEFAULT_IMAGE_DURATION_MS = 5000;
@@ -1087,7 +1132,9 @@ export const Uploads = () => {
     });
   };
 
-  const noUploads = images.length === 0 && videos.length === 0 && audios.length === 0;
+  const noUploads = replaceMode
+    ? images.length === 0 && videos.length === 0
+    : images.length === 0 && videos.length === 0 && audios.length === 0;
   const storageUsedLabel = storage
     ? storage.usedBytes < 1024 ** 3
       ? `${(storage.usedBytes / 1024 ** 2).toFixed(1)} MB`
@@ -1144,14 +1191,14 @@ export const Uploads = () => {
         </div>
       ) : (
         <Tabs
-          value={activeTab}
+          value={replaceMode && activeTab === "audio" ? "videos" : activeTab}
           onValueChange={(value) => setActiveTab(value as "videos" | "images" | "audio")}
           className="w-full flex-1 min-h-0 flex flex-col"
         >
           <TabsList className="h-9 mx-4 w-[calc(100%-32px)]">
             <TabsTrigger value="videos">Videos</TabsTrigger>
             <TabsTrigger value="images">Images</TabsTrigger>
-            <TabsTrigger value="audio">Audio</TabsTrigger>
+            {!replaceMode && <TabsTrigger value="audio">Audio</TabsTrigger>}
           </TabsList>
 
           <TabsContent value="videos" className="flex-1 min-h-0 flex flex-col overflow-hidden">
@@ -1159,6 +1206,7 @@ export const Uploads = () => {
               items={videos}
               onAdd={handleAddVideo}
               shouldDisplayPreview={!isDraggingOverTimeline}
+              replaceMode={replaceMode}
             />
           </TabsContent>
 
@@ -1167,32 +1215,35 @@ export const Uploads = () => {
               items={images}
               onAdd={handleAddImage}
               shouldDisplayPreview={!isDraggingOverTimeline}
+              replaceMode={replaceMode}
             />
           </TabsContent>
 
-          <TabsContent value="audio" className="flex-1 min-h-0 flex flex-col">
-            {audios.length === 0 ? (
-              <div className="h-full flex flex-col items-center justify-center py-10 text-muted-foreground gap-2">
-                <AudioLines size={32} className="opacity-50" />
-                <span className="text-sm">No audio uploaded yet</span>
-              </div>
-            ) : (
-              <ScrollArea className="flex-1 h-full max-w-full px-4">
-                <div className="flex flex-col gap-2 pb-4">
-                  {audios.map((audio: any, index: number) => (
-                    <UploadAudioItem
-                      key={audio.id || index}
-                      item={audio}
-                      onAdd={handleAddAudio}
-                      playingId={playingId}
-                      setPlayingId={setPlayingId}
-                      shouldDisplayPreview={!isDraggingOverTimeline}
-                    />
-                  ))}
+          {!replaceMode && (
+            <TabsContent value="audio" className="flex-1 min-h-0 flex flex-col">
+              {audios.length === 0 ? (
+                <div className="h-full flex flex-col items-center justify-center py-10 text-muted-foreground gap-2">
+                  <AudioLines size={32} className="opacity-50" />
+                  <span className="text-sm">No audio uploaded yet</span>
                 </div>
-              </ScrollArea>
-            )}
-          </TabsContent>
+              ) : (
+                <ScrollArea className="flex-1 h-full max-w-full px-4">
+                  <div className="flex flex-col gap-2 pb-4">
+                    {audios.map((audio: any, index: number) => (
+                      <UploadAudioItem
+                        key={audio.id || index}
+                        item={audio}
+                        onAdd={handleAddAudio}
+                        playingId={playingId}
+                        setPlayingId={setPlayingId}
+                        shouldDisplayPreview={!isDraggingOverTimeline}
+                      />
+                    ))}
+                  </div>
+                </ScrollArea>
+              )}
+            </TabsContent>
+          )}
         </Tabs>
       )}
 

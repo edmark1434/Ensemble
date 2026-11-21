@@ -1,5 +1,6 @@
 import React, { useState, cloneElement, ReactElement } from "react";
 import { createPortal } from "react-dom";
+import { clearActiveMediaDrag, setActiveMediaDrag } from "@/features/editor/utils/replace-media";
 
 interface DraggableProps {
   children: ReactElement;
@@ -19,6 +20,7 @@ const Draggable: React.FC<DraggableProps> = ({
 
   const handleDragStart = (e: React.DragEvent<HTMLElement>) => {
     setIsDragging(true);
+    setActiveMediaDrag(data);
     // An unloaded Image can fall back to a screenshot of the media card.
     const dragImage = document.createElement("canvas");
     dragImage.width = dragImage.height = 1;
@@ -27,7 +29,7 @@ const Draggable: React.FC<DraggableProps> = ({
     e.dataTransfer.setDragImage(dragImage, 0, 0);
     setTimeout(() => dragImage.remove(), 0);
     e.dataTransfer.setData(JSON.stringify(data), JSON.stringify(data));
-    e.dataTransfer.effectAllowed = "move";
+    e.dataTransfer.effectAllowed = "copyMove";
 
     setPosition({
       x: e.clientX,
@@ -37,6 +39,7 @@ const Draggable: React.FC<DraggableProps> = ({
 
   const handleDragEnd = () => {
     setIsDragging(false);
+    clearActiveMediaDrag();
   };
 
   const handleDragOver = (e: React.DragEvent<HTMLElement>) => {

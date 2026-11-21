@@ -2,6 +2,8 @@ import { TourSceneLane } from "./tour-scene-lane";
 import { useTourDemo } from "@/features/editor/store/use-tour-demo";
 import { useMissingMedia } from "../store/use-missing-media";
 import { TimelineMarketPriceBadges } from "./market-price-badges";
+import { TimelineReplaceOverlay } from "./replace-overlay";
+import { clearActiveMediaDrag, getActiveMediaDrag, replaceTrackItemMedia } from "../utils/replace-media";
 import { useEffect, useRef, useState, type DragEvent } from "react";
 import { useFileDropUpload } from "../hooks/use-file-drop-upload";
 import { UploadDropOverlay } from "../components/upload-drop-overlay";
@@ -193,6 +195,26 @@ const Timeline = ({ stateManager, readOnly = false, allowSceneNavigation = true 
   const canvasElRef = useRef<HTMLCanvasElement>(null);
   const canvasRef = useRef<CanvasTimeline | null>(null);
   const localFileDragRef = useRef<LocalFileDrag | null>(null);
+  const [replaceHoverItemId, setReplaceHoverItemId] = useState<string | null>(null);
+  const replaceHoverItemIdRef = useRef<string | null>(null);
+  const suppressedFabricDragRef = useRef(false);
+
+  useEffect(() => {
+    const clearDragReplace = () => {
+      if (replaceHoverItemIdRef.current !== null) {
+        replaceHoverItemIdRef.current = null;
+        setReplaceHoverItemId(null);
+      }
+      suppressedFabricDragRef.current = false;
+      clearActiveMediaDrag();
+    };
+    window.addEventListener("dragend", clearDragReplace);
+    window.addEventListener("drop", clearDragReplace);
+    return () => {
+      window.removeEventListener("dragend", clearDragReplace);
+      window.removeEventListener("drop", clearDragReplace);
+    };
+  }, []);
   useEffect(() => useMissingMedia.subscribe(() => {
     const canvas = canvasRef.current;
     canvas?.getObjects().forEach(object => { object.dirty = true; });
@@ -1238,9 +1260,99 @@ const Timeline = ({ stateManager, readOnly = false, allowSceneNavigation = true 
     syncCanvasTransitions(canvas, transitionsMap, "timeline: local edit");
   }, [transitionsMap]);
 
-  // Capture native files before Fabric tries to interpret them as editor drags.
+  // Capture native files before Fabric tries to interpret them as editor drags,
+  // and intercept menu image/video drags hovered over timeline image/video items
+  // to support drag-to-replace.
   const handleFileDrag = (event: DragEvent<HTMLDivElement>) => {
-    if (!event.dataTransfer.types.includes("Files") && !event.dataTransfer.files.length) return;
+    const isNativeFileDrag = event.dataTransfer.types.includes("Files") || event.dataTransfer.files.length > 0;
+    if (!isNativeFileDrag) {
+      const dragged = getActiveMediaDrag();
+      const canvas = canvasRef.current;
+      if (!dragged || readOnly || !canvas) return;
+
+      if (event.type === "dragleave") {
+        if (!(event.relatedTarget instanceof Node) || !event.currentTarget.contains(event.relatedTarget)) {
+          if (replaceHoverItemIdRef.current !== null) {
+            replaceHoverItemIdRef.current = null;
+            setReplaceHoverItemId(null);
+          }
+          suppressedFabricDragRef.current = false;
+        }
+        return;
+      }
+
+      const lanesBounds = lanesRef.current?.getBoundingClientRect();
+      const overLanes =
+        !!lanesBounds &&
+        event.clientX >= lanesBounds.left &&
+        event.clientX <= lanesBounds.right &&
+        event.clientY >= lanesBounds.top &&
+        event.clientY <= lanesBounds.bottom;
+
+      const hitItem = overLanes
+        ? (() => {
+            const point = canvas.getScenePoint(event.nativeEvent);
+            const itemsMap = useStore.getState().trackItemsMap;
+            return canvas.getTrackItems().find((obj: any) => {
+              const item = itemsMap[obj.id];
+              if (!item || (item.type !== "image" && item.type !== "video") || (item.details as any)?.locked) {
+                return false;
+              }
+              const rect = obj.getBoundingRect();
+              return (
+                point.x >= rect.left &&
+                point.x <= rect.left + rect.width &&
+                point.y >= rect.top &&
+                point.y <= rect.top + rect.height
+              );
+            });
+          })()
+        : undefined;
+
+      if (hitItem) {
+        const hitId = (hitItem as any).id as string;
+        event.preventDefault();
+        event.stopPropagation();
+        event.dataTransfer.dropEffect = "move";
+
+        if (event.type === "drop") {
+          replaceHoverItemIdRef.current = null;
+          setReplaceHoverItemId(null);
+          if (!suppressedFabricDragRef.current) {
+            canvas.fire("dragleave", {} as any);
+            canvas.requestRenderAll();
+          }
+          suppressedFabricDragRef.current = false;
+          clearActiveMediaDrag();
+          replaceTrackItemMedia(hitId, dragged.data, dragged.type);
+          return;
+        }
+
+        if (!suppressedFabricDragRef.current) {
+          suppressedFabricDragRef.current = true;
+          canvas.fire("dragleave", {} as any);
+          canvas.requestRenderAll();
+        }
+        if (replaceHoverItemIdRef.current !== hitId) {
+          replaceHoverItemIdRef.current = hitId;
+          setReplaceHoverItemId(hitId);
+        }
+        return;
+      }
+
+      if (replaceHoverItemIdRef.current !== null) {
+        replaceHoverItemIdRef.current = null;
+        setReplaceHoverItemId(null);
+      }
+      if (suppressedFabricDragRef.current) {
+        suppressedFabricDragRef.current = false;
+        if (overLanes && (event.type === "dragover" || event.type === "dragenter")) {
+          canvas.fire("dragenter", { e: event.nativeEvent } as any);
+        }
+      }
+      return;
+    }
+
     event.preventDefault();
     event.stopPropagation();
     const bounds = dropAreaRef.current?.getBoundingClientRect();
@@ -1327,6 +1439,7 @@ const Timeline = ({ stateManager, readOnly = false, allowSceneNavigation = true 
             >
               <canvas id="designcombo-timeline-canvas" ref={canvasElRef} />
               <TimelineMarketPriceBadges readOnly={readOnly} />
+              {!readOnly && <TimelineReplaceOverlay targetId={replaceHoverItemId} />}
             </div>
           </div>
         </div>

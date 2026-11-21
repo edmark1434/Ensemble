@@ -55,4 +55,8 @@ export interface ILayoutState {
 
   activeRightItem: "controls" | "comments" | "saves" | "workspace";
   setActiveRightItem: (item: "controls" | "comments" | "saves" | "workspace") => void;
+
+  replaceTargetId: string | null;
+  startReplace: (targetId: string, initialMenu?: "videos" | "images" | "uploads") => void;
+  exitReplace: () => void;
 }

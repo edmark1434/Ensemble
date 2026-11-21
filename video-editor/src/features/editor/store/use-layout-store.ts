@@ -15,7 +15,11 @@ const useLayoutStore = create<ILayoutState>((set) => ({
   labelControlItem: "",
   setCropTarget: (cropTarget) => set({ cropTarget }),
   setActiveMenuItem: (showMenu) => set({ activeMenuItem: showMenu }),
-  setShowMenuItem: (showMenuItem) => set({ showMenuItem }),
+  setShowMenuItem: (showMenuItem) =>
+    set((state) => ({
+      showMenuItem,
+      replaceTargetId: showMenuItem ? state.replaceTargetId : null,
+    })),
   setShowControlItem: (showControlItem) => set({ showControlItem }),
   setShowToolboxItem: (showToolboxItem) => set({ showToolboxItem }),
   setActiveToolboxItem: (activeToolboxItem) => set({ activeToolboxItem }),
@@ -47,6 +51,15 @@ const useLayoutStore = create<ILayoutState>((set) => ({
 
   activeRightItem: "controls",
   setActiveRightItem: (activeRightItem) => set({ activeRightItem }),
+
+  replaceTargetId: null,
+  startReplace: (targetId, initialMenu = "images") =>
+    set({
+      replaceTargetId: targetId,
+      activeMenuItem: initialMenu,
+      showMenuItem: true,
+    }),
+  exitReplace: () => set({ replaceTargetId: null }),
 }));
 
 export default useLayoutStore;

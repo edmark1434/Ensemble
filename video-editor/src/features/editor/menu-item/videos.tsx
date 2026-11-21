@@ -9,11 +9,13 @@ import { IImage, IVideo } from "@designcombo/types";
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import { useIsDraggingOverTimeline } from "../hooks/is-dragging-over-timeline";
 import { Button } from "@/components/ui/button";
-import { Loader2, PlusIcon } from "lucide-react";
+import { Loader2, PlusIcon, RefreshCw } from "lucide-react";
 import { usePexelsVideos } from "@/hooks/use-pexels-videos";
 import { ImageLoading } from "@/components/ui/image-loading";
 import { getCurrentTime } from "@/features/editor/utils/time";
 import useStore from "../store/use-store";
+import useLayoutStore from "../store/use-layout-store";
+import { replaceTrackItemMedia } from "../utils/replace-media";
 import { useMasonryRows } from "@/features/editor/hooks/use-masonry-rows";
 import { millisecondsToHHMMSS } from "../utils/format";
 import { useMarketAssets } from "@/hooks/use-market-assets";
@@ -100,6 +102,20 @@ export const Videos = () => {
   }, [loadPopularVideos, loadMarket]);
 
   const handleAddVideo = (payload: Partial<IVideo>) => {
+    const replaceTargetId = useLayoutStore.getState().replaceTargetId;
+    if (replaceTargetId) {
+      replaceTrackItemMedia(replaceTargetId, {
+        ...payload,
+        type: "video",
+        metadata: {
+          ...payload.metadata,
+          name: payload.name,
+          previewUrl: (payload.metadata as any)?.previewUrl ?? payload.preview ?? "",
+        },
+      }, "video");
+      return;
+    }
+
     const normalizedPayload = buildNormalizedVideoPayload(payload);
 
     const time = getCurrentTime();
@@ -271,6 +287,7 @@ const VideoItem = ({
   marketListing?: MarketAssetBundle;
   shouldDisplayPreview: boolean;
 }) => {
+  const replaceMode = useLayoutStore((state) => !!state.replaceTargetId);
   const hoverVideoSrc = useMemo(() => {
     const metadata = video.metadata as { pexels_id?: number; video_files?: Array<{
       file_type: string; link: string; width: number; height: number;
@@ -332,7 +349,7 @@ const VideoItem = ({
         <div
           className="absolute inset-0 flex items-center justify-center bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity rounded-md">
           <div className="rounded-full p-1">
-            <PlusIcon className="h-6 w-6 fill-current" />
+            {replaceMode ? <RefreshCw className="h-5 w-5" /> : <PlusIcon className="h-6 w-6 fill-current" />}
           </div>
         </div>
         {/* Duration badge */}

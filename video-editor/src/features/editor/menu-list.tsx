@@ -75,6 +75,8 @@ const MenuButton = memo<{
 
 MenuButton.displayName = "MenuButton";
 
+const REPLACE_MENU_IDS = new Set<string>(["videos", "images", "uploads"]);
+
 // Main MenuList component
 function MenuList() {
   const {
@@ -83,13 +85,17 @@ function MenuList() {
     activeMenuItem,
     showMenuItem,
     drawerOpen,
-    setDrawerOpen
+    setDrawerOpen,
+    replaceTargetId,
   } = useLayoutStore();
 
   const isLargeScreen = useIsLargeScreen();
   const scrollRef = useRef<HTMLDivElement>(null);
   const [showLeftFade, setShowLeftFade] = useState(false);
   const [showRightFade, setShowRightFade] = useState(false);
+  const visibleItems = replaceTargetId
+    ? MENU_ITEMS.filter((item) => REPLACE_MENU_IDS.has(item.id))
+    : MENU_ITEMS;
 
   const handleMenuItemClick = useCallback(
     (menuItem: string) => {
@@ -97,7 +103,7 @@ function MenuList() {
         setActiveMenuItem(menuItem as any);
         setDrawerOpen(true);
       } else {
-        if (activeMenuItem === menuItem && showMenuItem) {
+        if (!replaceTargetId && activeMenuItem === menuItem && showMenuItem) {
           // Clicking the active item collapses the sidebar
           setShowMenuItem(false);
         } else {
@@ -106,7 +112,7 @@ function MenuList() {
         }
       }
     },
-    [isLargeScreen, activeMenuItem, showMenuItem, setActiveMenuItem, setDrawerOpen, setShowMenuItem]
+    [isLargeScreen, replaceTargetId, activeMenuItem, showMenuItem, setActiveMenuItem, setDrawerOpen, setShowMenuItem]
   );
 
   const handleDrawerOpenChange = useCallback(
@@ -153,7 +159,7 @@ function MenuList() {
           className="overflow-x-auto scrollbar-hidden! w-full"
         >
           <div className="flex flex-col items-center gap-2 w-fit mx-auto px-3">
-            {MENU_ITEMS.map((item) => {
+            {visibleItems.map((item) => {
               const isActive =
                 (drawerOpen && activeMenuItem === item.id) ||
                 (showMenuItem && activeMenuItem === item.id);

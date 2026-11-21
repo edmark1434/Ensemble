@@ -9,13 +9,15 @@ import React, { useState, useEffect, useRef, useMemo } from "react";
 import { useIsDraggingOverTimeline } from "../hooks/is-dragging-over-timeline";
 import { ADD_IMAGE } from "@designcombo/state";
 import { Button } from "@/components/ui/button";
-import { Loader2, PlusIcon } from "lucide-react";
+import { Loader2, PlusIcon, RefreshCw } from "lucide-react";
 import { usePexelsImages } from "@/hooks/use-pexels-images";
 import { useMarketAssets } from "@/hooks/use-market-assets";
 import { ImageLoading } from "@/components/ui/image-loading";
 import { getCurrentTime } from "@/features/editor/utils/time";
 import { normalizeDimensionsToCanvas } from "@/features/editor/utils/dimensions";
 import useStore from "../store/use-store";
+import useLayoutStore from "../store/use-layout-store";
+import { replaceTrackItemMedia } from "../utils/replace-media";
 import { useMasonryRows } from "@/features/editor/hooks/use-masonry-rows";
 import { MarketAssetActions } from "@/components/market-asset-actions";
 import { MarketPreview } from "@/components/market-asset-browser";
@@ -105,6 +107,20 @@ export const Images = () => {
   }, [loadCuratedImages, loadMarket]);
 
   const handleAddImage = (payload: Partial<IImage>) => {
+    const replaceTargetId = useLayoutStore.getState().replaceTargetId;
+    if (replaceTargetId) {
+      replaceTrackItemMedia(replaceTargetId, {
+        ...payload,
+        type: "image",
+        metadata: {
+          ...payload.metadata,
+          name: payload.name,
+          previewUrl: (payload.metadata as any)?.previewUrl ?? payload.preview ?? "",
+        },
+      }, "image");
+      return;
+    }
+
     const normalizedPayload = buildNormalizedImagePayload(payload);
     if (!normalizedPayload.details) return;
 
@@ -261,6 +277,7 @@ const ImageItem = ({
   marketListing?: MarketAssetBundle;
   shouldDisplayPreview: boolean;
 }) => {
+  const replaceMode = useLayoutStore((state) => !!state.replaceTargetId);
   const normalizedImage = useMemo(
     () => buildNormalizedImagePayload(image),
     [image]
@@ -299,7 +316,7 @@ const ImageItem = ({
         <div
           className="absolute inset-0 flex items-center justify-center bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity rounded-md">
           <div className="rounded-full p-1">
-            <PlusIcon className="h-6 w-6 fill-current" />
+            {replaceMode ? <RefreshCw className="h-5 w-5" /> : <PlusIcon className="h-6 w-6 fill-current" />}
           </div>
         </div>
         <MarketPriceBadge

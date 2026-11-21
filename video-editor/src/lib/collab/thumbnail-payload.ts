@@ -13,6 +13,8 @@ export const THUMBNAIL_SHORT_SIDE_PX = 480;
 function isVisualItem(item: ITrackItem): boolean {
   if (item.type === "audio") return false;
   if ((item.details as any)?.hidden) return false;
+  const src = (item.details as any)?.src;
+  if (typeof src === "string" && src.startsWith("pending-upload:")) return false;
   return true;
 }
 
@@ -97,6 +99,41 @@ export async function buildThumbnailJob(
       );
     });
 
+    // Keep only items visible at timeMs (plus any real transition neighbor whose
+    // transition overlaps timeMs) so off-frame GIFs/videos never stall Lambda.
+    const includedIds = new Set(visibleIds);
+    for (const transition of Object.values(snap.transitionsMap)) {
+      if (!transition || transition.kind === "none") continue;
+      const fromItem = snap.trackItemsMap[transition.fromId];
+      const toItem = snap.trackItemsMap[transition.toId];
+      if (!fromItem || !toItem || !isVisualItem(fromItem) || !isVisualItem(toItem)) continue;
+      const half = (transition.duration ?? 0) / 2;
+      const seam = fromItem.display.to;
+      if (timeMs >= seam - half && timeMs <= seam + half) {
+        includedIds.add(fromItem.id);
+        includedIds.add(toItem.id);
+      }
+    }
+
+    const filteredTrackItemIds = snap.trackItemIds.filter((id) => includedIds.has(id));
+    const filteredTrackItemsMap = Object.fromEntries(
+      filteredTrackItemIds.map((id) => [id, snap.trackItemsMap[id]]),
+    );
+    const filteredTracks = snap.tracks
+      .map((track) => ({
+        ...track,
+        items: track.items.filter((id) => includedIds.has(id)),
+      }))
+      .filter((track) => track.items.length > 0);
+    const filteredTransitionsMap = Object.fromEntries(
+      Object.entries(snap.transitionsMap).filter(
+        ([, t]) => t && t.kind !== "none" && includedIds.has(t.fromId) && includedIds.has(t.toId),
+      ),
+    );
+    const filteredTransitionIds = snap.transitionIds.filter(
+      (id) => !!filteredTransitionsMap[id],
+    );
+
     const hash = createHash("sha1")
       .update(
         stableStringify({
@@ -112,11 +149,11 @@ export async function buildThumbnailJob(
 
     const payload = {
       id: `thumb-${projectId}`,
-      trackItemsMap: snap.trackItemsMap,
-      trackItemIds: snap.trackItemIds,
-      transitionsMap: snap.transitionsMap,
-      transitionIds: snap.transitionIds,
-      tracks: snap.tracks,
+      trackItemsMap: filteredTrackItemsMap,
+      trackItemIds: filteredTrackItemIds,
+      transitionsMap: filteredTransitionsMap,
+      transitionIds: filteredTransitionIds,
+      tracks: filteredTracks,
       size: snap.size,
       fps,
       duration,

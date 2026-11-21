@@ -6,7 +6,7 @@ const RENDER_SERVER_URL =
 
 const IDLE_DEBOUNCE_MS = 2 * 60_000;
 const IDLE_MAX_WAIT_MS = 10 * 60_000;
-const RENDER_TIMEOUT_MS = 60_000;
+const RENDER_TIMEOUT_MS = 180_000;
 
 const scheduled = new Map<
   string,

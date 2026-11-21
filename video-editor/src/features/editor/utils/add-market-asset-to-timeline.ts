@@ -6,6 +6,8 @@ import type { MarketAssetContent } from "@/components/market-asset-browser";
 import { getCurrentTime } from "@/features/editor/utils/time";
 import { normalizeDimensionsToCanvas } from "@/features/editor/utils/dimensions";
 import useStore from "@/features/editor/store/use-store";
+import useLayoutStore from "@/features/editor/store/use-layout-store";
+import { replaceTrackItemMedia } from "@/features/editor/utils/replace-media";
 
 // The add handlers supply the remaining media defaults.
 type MediaAddPayload<T extends IImage | IVideo | IAudio> =
@@ -13,6 +15,11 @@ type MediaAddPayload<T extends IImage | IVideo | IAudio> =
 
 export function addMarketAssetToTimeline(asset: MarketAssetContent) {
   if (asset.proxyStatus !== "ready" || !asset.details?.src) return;
+  const replaceTargetId = useLayoutStore.getState().replaceTargetId;
+  if (replaceTargetId && (asset.type === "image" || asset.type === "video")) {
+    replaceTrackItemMedia(replaceTargetId, asset, asset.type);
+    return;
+  }
   const time = getCurrentTime();
   const metadata = {
     ...asset.metadata,

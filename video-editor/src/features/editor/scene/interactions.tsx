@@ -442,7 +442,7 @@ export function SceneInteractions({
       .on("dragStart", (e) => {
         isDraggingRef.current = false;
         const target = e.inputEvent.target as HTMLDivElement;
-        if (target?.closest("[data-market-purchase], [data-ensemble-watermark-control]")) { e.stop(); return; }
+        if (target?.closest("[data-market-purchase], [data-canvas-media-actions], [data-ensemble-watermark-control]")) { e.stop(); return; }
         dragStartEnd = false;
 
         // Ask Moveable directly whether this element is currently a registered
