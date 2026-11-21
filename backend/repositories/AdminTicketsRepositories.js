@@ -3359,6 +3359,8 @@ async function addTicketMessage(ticketId, body, staffSession, isInternal = false
       }
 
       if (!isInternal) announceTicketCase(ticketId, 'message');
+      // Internal notes never reach members, but other staff desks still show the activity.
+      else require('../lib/WebSocket').emitStaffCaseChange({ kind: 'ticket', id: ticketId, reason: 'internal_note' });
 
       void Promise.all(
         recipients.map(async (member) => {

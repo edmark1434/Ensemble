@@ -8,6 +8,8 @@ const { createCorsOriginValidator, getAllowedOrigins } = require('./CorsOrigins'
 dotenv.config();
 
 let io;
+/** Every connected staff socket. Gets `staffCaseChanged` (ids only; desks re-read over HTTP). */
+const STAFF_CASES_ROOM = 'staff:cases';
 const onlineAccounts = new Map();
 const callExpiryTimers = new Map();
 
@@ -275,6 +277,8 @@ async function initSocket(httpServer) {
       console.error('Failed to join marketplace actor rooms:', error.message);
       await socket.join(accountId);
     }
+    // Staff desks hear that a ticket or dispute changed (`staffCaseChanged`) and re-read it.
+    if (isStaffSocket) await socket.join(STAFF_CASES_ROOM);
 
     socket.on('joinRoom', async (roomPayload, callback) => {
       const roomId =
@@ -878,10 +882,31 @@ function emitForumEvent(type, payload = {}) {
   });
 }
 
+/**
+ * Tell every staff desk that a ticket or dispute changed. Call after the change is saved.
+ * The payload carries no case content: each desk re-reads its queue, which applies its own
+ * access rules. Never throws.
+ * @param {{ kind: 'ticket'|'dispute', id: string, reason?: string|null }} change
+ */
+function emitStaffCaseChange({ kind, id, reason = null } = {}) {
+  if (!kind || !id || !io) return;
+  try {
+    io.to(STAFF_CASES_ROOM).emit('staffCaseChanged', {
+      kind,
+      id: String(id),
+      reason: reason || null,
+      at: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.warn('Staff case change not delivered:', error.message);
+  }
+}
+
 module.exports = {
   initSocket,
   getIo,
   emitForumEvent,
+  emitStaffCaseChange,
   emitConversationMessage,
   refreshSocketStanding,
 };
