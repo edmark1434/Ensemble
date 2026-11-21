@@ -8,6 +8,8 @@ export function getPreparedImageType(url: string) {
 }
 
 // Browser-only media cache, scoped to the currently open project preview.
+const MAX_CACHED_IMAGES = 150;
+
 export function createPreparedImageCache() {
   const entries = new Map<string, { controller: AbortController; url?: string; promise: Promise<string> }>();
   function remove(source: string) {
@@ -20,6 +22,15 @@ export function createPreparedImageCache() {
     }
     entries.delete(source);
   }
+  function touch(source: string, entry: { controller: AbortController; url?: string; promise: Promise<string> }) {
+    entries.delete(source);
+    entries.set(source, entry);
+    while (entries.size > MAX_CACHED_IMAGES) {
+      const oldest = entries.keys().next().value;
+      if (!oldest || oldest === source) break;
+      remove(oldest);
+    }
+  }
   return {
     retain(sources: string[]) {
       const needed = new Set(sources);
@@ -27,7 +38,10 @@ export function createPreparedImageCache() {
     },
     load(source: string, downloadUrl = source): Promise<string> {
       const existing = entries.get(source);
-      if (existing) return existing.promise;
+      if (existing) {
+        touch(source, existing);
+        return existing.promise;
+      }
       const controller = new AbortController();
       const entry = { controller, url: undefined as string | undefined, promise: Promise.resolve("") };
       const fetchImage = async (target: string, noStore = false) => {
@@ -59,7 +73,7 @@ export function createPreparedImageCache() {
         if (entries.get(source) === entry) remove(source);
         throw error;
       });
-      entries.set(source, entry);
+      touch(source, entry);
       return entry.promise;
     },
     dispose() { for (const source of entries.keys()) remove(source); },

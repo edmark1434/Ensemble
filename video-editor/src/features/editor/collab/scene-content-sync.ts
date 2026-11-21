@@ -1,5 +1,7 @@
-import { CollabSchema, readStateFromDoc } from "./ydoc-schema";
+import { CollabSchema, readStateFromDoc, transitionToY } from "./ydoc-schema";
 import { isSceneItem, DEFAULT_SCENE_DURATION_MS, SceneRenderContent, ISceneDetails } from "../types/ensemble-scene";
+import { reconcileAdjacentTransitions } from "../utils/item-actions";
+import type { ITrackItem } from "@designcombo/types";
 
 export const DURATION_SYNC_INTERVAL_MS = 400;
 
@@ -35,19 +37,81 @@ function applyContentToSceneItem(
   if (!sceneItem || !isSceneItem(sceneItem.type)) return false;
 
   const effectiveMs = newContentDurationMs > 0 ? newContentDurationMs : DEFAULT_SCENE_DURATION_MS;
+  const oldFrom = sceneItem.display.from;
   const oldTo = sceneItem.display.to;
-  const newTo = sceneItem.display.from + effectiveMs;
+  const newTo = oldFrom + effectiveMs;
   const deltaMs = newTo - oldTo;
 
   const track = snapshot.tracks.find((t) => t.items.includes(sceneItemId));
-  const affectedIds =
-    deltaMs !== 0 && track
-      ? track.items.filter((id) => {
-        if (id === sceneItemId) return true;
-        const item = snapshot.trackItemsMap[id];
-        return !!item && item.display.from >= oldTo;
-      })
-      : [];
+  const displayUpdates = new Map<string, { from: number; to: number }>();
+
+  if (Math.abs(deltaMs) >= 0.5) {
+    displayUpdates.set(sceneItemId, { from: oldFrom, to: newTo });
+
+    if (track?.magnetic) {
+      // Magnetic tracks stay tightly packed in chronological order.
+      const ordered = track.items
+        .map((id) => snapshot.trackItemsMap[id])
+        .filter((item): item is ITrackItem => !!item)
+        .sort((a, b) => a.display.from - b.display.from);
+      let cursor = 0;
+      for (const item of ordered) {
+        const length = item.id === sceneItemId ? effectiveMs : item.display.to - item.display.from;
+        if (Math.abs(item.display.from - cursor) >= 0.5 || Math.abs(item.display.to - (cursor + length)) >= 0.5) {
+          displayUpdates.set(item.id, { from: cursor, to: cursor + length });
+        }
+        cursor += length;
+      }
+    } else if (deltaMs > 0 && track) {
+      // Non-magnetic growth: only ripple-push downstream items that the growing
+      // scene actually collides with, absorbing any empty gap instead of shifting
+      // unrelated clips far down the timeline. Shrinking leaves neighbors put.
+      const downstream = track.items
+        .filter((id) => id !== sceneItemId)
+        .map((id) => snapshot.trackItemsMap[id])
+        .filter((item): item is ITrackItem => !!item && item.display.from >= oldTo - 1)
+        .sort((a, b) => a.display.from - b.display.from);
+
+      let cursor = newTo;
+      for (const item of downstream) {
+        if (item.display.from < cursor - 0.5) {
+          const length = item.display.to - item.display.from;
+          displayUpdates.set(item.id, { from: cursor, to: cursor + length });
+          cursor += length;
+        } else {
+          break;
+        }
+      }
+    }
+  }
+
+  const nextTrackItemsMap: Record<string, ITrackItem> = { ...snapshot.trackItemsMap };
+  for (const [id, nextDisplay] of displayUpdates) {
+    const existing = nextTrackItemsMap[id];
+    if (existing) nextTrackItemsMap[id] = { ...existing, display: nextDisplay };
+  }
+
+  const cleanedTransitionsMap =
+    displayUpdates.size > 0
+      ? Object.fromEntries(
+          Object.entries(snapshot.transitionsMap).filter(([, t]) => {
+            if (!displayUpdates.has(t.fromId) && !displayUpdates.has(t.toId)) return true;
+            const fromItem = nextTrackItemsMap[t.fromId];
+            const toItem = nextTrackItemsMap[t.toId];
+            return !!fromItem && !!toItem && Math.abs(toItem.display.from - fromItem.display.to) <= 1;
+          }),
+        )
+      : snapshot.transitionsMap;
+
+  const reconciledTransitions =
+    displayUpdates.size > 0
+      ? reconcileAdjacentTransitions(
+          snapshot.tracks,
+          nextTrackItemsMap,
+          cleanedTransitionsMap,
+          snapshot.transitionIds.filter((id) => id in cleanedTransitionsMap),
+        )
+      : null;
 
   const details = sceneItem.details as ISceneDetails;
   const newSize = newContent.size;
@@ -98,20 +162,36 @@ function applyContentToSceneItem(
       yItem.set("details", { ...yItem.get("details"), ...patch });
     }
 
-    for (const id of affectedIds) {
+    for (const [id, nextDisplay] of displayUpdates) {
       const yAffected = projectSchema.trackItems.get(id);
       if (!yAffected) continue;
-      const display = yAffected.get("display");
-      yAffected.set(
-        "display",
-        id === sceneItemId
-          ? { ...display, to: newTo }
-          : { from: display.from + deltaMs, to: display.to + deltaMs },
-      );
+      yAffected.set("display", nextDisplay);
     }
 
-    if (deltaMs !== 0) {
-      const newDuration = Math.max(projectSchema.meta.get("duration") ?? 0, newTo);
+    if (reconciledTransitions?.changed) {
+      const nextMap = reconciledTransitions.transitionsMap;
+      const toDelete: string[] = [];
+      projectSchema.transitions.forEach((_, id) => {
+        if (!(id in nextMap)) toDelete.push(id);
+      });
+      for (const id of toDelete) projectSchema.transitions.delete(id);
+      for (const [id, transition] of Object.entries(nextMap)) {
+        const existing = projectSchema.transitions.get(id);
+        if (!existing || JSON.stringify(existing.toJSON()) !== JSON.stringify(transition)) {
+          projectSchema.transitions.set(id, transitionToY(transition));
+        }
+      }
+      projectSchema.transitionIds.delete(0, projectSchema.transitionIds.length);
+      if (reconciledTransitions.transitionIds.length > 0) {
+        projectSchema.transitionIds.push(reconciledTransitions.transitionIds);
+      }
+    }
+
+    if (displayUpdates.size > 0) {
+      const newDuration = Math.max(
+        0,
+        ...Object.values(nextTrackItemsMap).map((item) => item.display.to),
+      );
       if (projectSchema.meta.get("duration") !== newDuration) {
         projectSchema.meta.set("duration", newDuration);
       }
@@ -148,6 +228,14 @@ export function applySceneContentToDoc(
       targetIds.push(id);
     });
   }
+
+  // Process clones in chronological order so multiple clones on the same track
+  // ripple cleanly without compounding shifts out of order.
+  targetIds.sort((a, b) => {
+    const aFrom = projectSchema.trackItems.get(a)?.get("display")?.from ?? 0;
+    const bFrom = projectSchema.trackItems.get(b)?.get("display")?.from ?? 0;
+    return aFrom - bFrom;
+  });
 
   // One outer transaction so collaborators receive a single update and a
   // half-applied state never renders.

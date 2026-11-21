@@ -134,6 +134,8 @@ async function createWatermarkedProxy(sourceBuffer) {
     const scale = Math.min(1, maxW / width, maxH / height);
     const targetWidth = Math.max(1, Math.round(width * scale));
     const targetHeight = Math.max(1, Math.round(height * scale));
+    // Keep animated proxies as real GIFs so the editor's <Gif> component scrubs
+    // them along the playhead and exports preserve exact per-frame timing.
     return sharp(sourceBuffer, ANIMATED_INPUT_OPTIONS)
       .resize({
         width: targetWidth,
@@ -144,7 +146,7 @@ async function createWatermarkedProxy(sourceBuffer) {
         input: createWatermarkSvg(targetWidth, targetHeight),
         tile: true,
       }])
-      .webp({ quality: 82, effort: 3 })
+      .gif({ effort: 4 })
       .toBuffer();
   }
 
@@ -166,19 +168,21 @@ async function createWatermarkedProxy(sourceBuffer) {
     .toBuffer();
 }
 
-async function putDerivative(prefix, baseName, suffix, bytes) {
-  const key = `${prefix}/${crypto.randomUUID()}.webp`;
+async function putDerivative(prefix, baseName, suffix, bytes, format = 'webp') {
+  const ext = format === 'gif' ? 'gif' : 'webp';
+  const contentType = format === 'gif' ? 'image/gif' : 'image/webp';
+  const key = `${prefix}/${crypto.randomUUID()}.${ext}`;
   await s3.send(new PutObjectCommand({
     Bucket: process.env.AWS_BUCKET_NAME,
     Key: key,
     Body: bytes,
-    ContentType: 'image/webp',
+    ContentType: contentType,
     CacheControl: 'public, max-age=31536000, immutable',
   }), { abortSignal: AbortSignal.timeout(120_000) });
   return {
-    name: `${baseName}-${suffix}.webp`,
+    name: `${baseName}-${suffix}.${ext}`,
     path: key,
-    mimeType: 'image/webp',
+    mimeType: contentType,
     sizeBytes: bytes.length,
   };
 }
@@ -247,11 +251,11 @@ async function generateImageDerivatives(file) {
   const baseName = safeBaseName(file.name);
   const uploaded = [];
   const thumbPrefix = isAnimated ? 'assets/thumbnails/640-anim' : 'assets/thumbnails/640';
-  const proxyPrefix = isAnimated ? 'assets/proxies/v2-anim' : 'assets/proxies/v2';
+  const proxyPrefix = isAnimated ? 'assets/proxies/v2-anim-gif' : 'assets/proxies/v2';
   try {
     const results = await Promise.allSettled([
-      putDerivative(thumbPrefix, baseName, 'thumbnail-640px', thumbnailBytes),
-      putDerivative(proxyPrefix, baseName, 'proxy-ensemble-1080p', proxyBytes),
+      putDerivative(thumbPrefix, baseName, 'thumbnail-640px', thumbnailBytes, 'webp'),
+      putDerivative(proxyPrefix, baseName, 'proxy-ensemble-1080p', proxyBytes, isAnimated ? 'gif' : 'webp'),
     ]);
     for (const result of results) {
       if (result.status === 'fulfilled') uploaded.push(result.value.path);

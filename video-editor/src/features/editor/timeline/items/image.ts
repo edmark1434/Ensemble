@@ -1,6 +1,9 @@
 import { drawMissingMedia } from "./missing-media";
 import { isMissingMediaSource } from "../../utils/missing-media";
 import { mediaSourceKey } from "../../utils/media-sources";
+import { getLocalMediaUrl } from "../../utils/local-media-cache";
+
+const loadedTimelineImages = new Map<string, HTMLImageElement>();
 import {
   Resizable,
   ResizableProps,
@@ -28,6 +31,7 @@ class Image extends Resizable {
   declare hidden: boolean;
   public name: string = "Image";
   private thumbnailSrc: string | undefined;
+  private loadedEffectiveSrc?: string;
 
   public isLoading = true;
   private loaderPath: Path2D | null = null;
@@ -159,15 +163,16 @@ class Image extends Resizable {
   }
 
   public loadImage() {
-    if (this.src?.startsWith("pending-upload:")) return;
-    const src = this.thumbnailSrc ?? this.src;
+    const localUrl = getLocalMediaUrl(this.src);
+    if (this.src?.startsWith("pending-upload:") && !localUrl) return;
+    const src = localUrl ?? (this.thumbnailSrc ?? this.src);
     if (isMissingMediaSource(this.src) || !src) {
       this.isLoading = false;
       this.stopLoadingAnimation();
       return;
     }
-    util.loadImage(src).then((img) => {
-      const imgHeight = img.height;
+    const applyLoaded = (img: HTMLImageElement) => {
+      const imgHeight = img.height || 1;
       const rectHeight = this.height;
       const scaleY = rectHeight / imgHeight;
       const pattern = new Pattern({
@@ -175,10 +180,25 @@ class Image extends Resizable {
         repeat: "repeat-x",
         patternTransform: [scaleY, 0, 0, scaleY, 0, 0]
       });
+      this.loadedEffectiveSrc = src;
       this.set("fill", pattern);
       this.isLoading = false;
       this.stopLoadingAnimation();
       this.canvas?.requestRenderAll();
+    };
+    const cached = loadedTimelineImages.get(src);
+    if (cached && cached.complete && cached.naturalWidth > 0) {
+      loadedTimelineImages.delete(src);
+      loadedTimelineImages.set(src, cached);
+      applyLoaded(cached);
+      return;
+    }
+    util.loadImage(src).then((img) => {
+      loadedTimelineImages.set(src, img);
+      if (loadedTimelineImages.size > 128) {
+        loadedTimelineImages.delete(loadedTimelineImages.keys().next().value!);
+      }
+      applyLoaded(img);
     }).catch(() => {
       this.isLoading = false;
       this.stopLoadingAnimation();
@@ -188,8 +208,12 @@ class Image extends Resizable {
 
   public setSrc(src: string) {
     this.src = src;
-    this.isLoading = true;
-    this.startLoadingAnimation();
+    const effective = getLocalMediaUrl(src) ?? (this.thumbnailSrc ?? src);
+    if (effective && effective === this.loadedEffectiveSrc && !this.isLoading) return;
+    if (!this.loadedEffectiveSrc) {
+      this.isLoading = true;
+      this.startLoadingAnimation();
+    }
     this.loadImage();
     this.canvas?.requestRenderAll();
   }

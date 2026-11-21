@@ -6,7 +6,11 @@ import { MarketAssetActions } from "./market-asset-actions";
 import { Tooltip, TooltipTrigger, TooltipContent } from "./ui/tooltip";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { MarketPriceBadge } from "@/components/market-price-badge";
+import Draggable from "@/components/shared/draggable";
 import { useMasonryRows } from "@/features/editor/hooks/use-masonry-rows";
+import { useIsDraggingOverTimeline } from "@/features/editor/hooks/is-dragging-over-timeline";
+import { normalizeDimensionsToCanvas } from "@/features/editor/utils/dimensions";
+import useStore from "@/features/editor/store/use-store";
 
 export type MarketAssetType = "image" | "video" | "audio";
 
@@ -211,6 +215,9 @@ export function MarketAssetCard({ bundle, onOpen, layout = "grid" }: {
     return () => window.clearInterval(interval);
   }, [isHovering, slides.length]);
   const reset = () => { setIsHovering(false); setActiveShowcaseIndex(0); };
+  const isDraggingOverTimeline = useIsDraggingOverTimeline();
+  const singleAsset = !isBundle ? bundle.assets[0] : undefined;
+  const dragData = useMemo(() => (singleAsset ? buildMarketDragPayload(singleAsset) : null), [singleAsset]);
 
   if (layout === "list") return <div className="group flex w-full items-center gap-2 rounded-lg px-2 py-2 transition-colors hover:bg-zinc-800/50">
     <button type="button" onClick={() => onOpen(bundle)} className="flex min-w-0 flex-1 items-center gap-3 rounded text-left focus-visible:ring-2 focus-visible:ring-primary" aria-label={`Open ${bundle.name}`}>
@@ -222,7 +229,7 @@ export function MarketAssetCard({ bundle, onOpen, layout = "grid" }: {
     <MarketAssetActions bundle={bundle} menuOnly />
   </div>;
 
-  return <div className="group relative size-full overflow-hidden rounded-md bg-zinc-800" onMouseEnter={() => setIsHovering(true)} onMouseLeave={reset} onFocus={() => setIsHovering(true)} onBlur={reset}>
+  const card = <div className="group relative size-full overflow-hidden rounded-md bg-zinc-800" onMouseEnter={() => setIsHovering(true)} onMouseLeave={reset} onFocus={() => setIsHovering(true)} onBlur={reset}>
     <button type="button" disabled={unavailable} onClick={() => onOpen(bundle)} className="size-full text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary disabled:cursor-not-allowed" aria-label={isBundle ? `Open ${bundle.name} bundle` : unavailable ? `${bundle.name}: preview unavailable` : `Add ${bundle.name} to the timeline`}>
       <MarketPreview src={slides[activeShowcaseIndex]} type={bundle.type} className="size-full object-contain transition-transform duration-300 group-hover:scale-[1.03]" />
       <MarketPriceBadge credits={bundle.price_credits} className="absolute left-2 top-2" />
@@ -230,6 +237,16 @@ export function MarketAssetCard({ bundle, onOpen, layout = "grid" }: {
     </button>
     <div className="absolute right-1 top-1 flex gap-1">{isBundle && <BundleIndicator />}<MarketAssetActions bundle={bundle} menuOnly /></div>
   </div>;
+  if (!singleAsset || !dragData) return card;
+  return (
+    <Draggable
+      data={dragData}
+      shouldDisplayPreview={!isDraggingOverTimeline}
+      renderCustomPreview={renderMarketDragPreview(singleAsset)}
+    >
+      {card}
+    </Draggable>
+  );
 }
 
 // Browse listings without expanding bundle contents until the bundle is opened.
@@ -342,14 +359,71 @@ function MarketAudioList({ items, onSelect, renderActions }: MarketAssetContents
   );
 }
 
+function buildMarketDragPayload(item: MarketAssetContent): Record<string, any> | null {
+  if (item.proxyStatus !== "ready" || !item.details?.src) return null;
+  const metadata = {
+    ...item.metadata,
+    name: item.name,
+    ...(item.type !== "audio" ? { previewUrl: item.preview ?? "" } : {}),
+  };
+  if (item.type === "image") {
+    let details: Record<string, any> = { ...item.details };
+    if (details.width && details.height) {
+      const { size } = useStore.getState();
+      const normalized = normalizeDimensionsToCanvas(details.width, details.height, size.width, size.height);
+      details = {
+        ...details,
+        width: normalized.width,
+        height: normalized.height,
+        left: `${(size.width - normalized.width) / 2}px`,
+        top: `${(size.height - normalized.height) / 2}px`,
+      };
+    }
+    return { ...item, type: "image", duration: 5000, metadata, details };
+  }
+  if (item.type === "video") {
+    const { size } = useStore.getState();
+    const details = {
+      ...item.details,
+      ...(item.details.width && item.details.height
+        ? {
+            left: `${(size.width - item.details.width) / 2}px`,
+            top: `${(size.height - item.details.height) / 2}px`,
+          }
+        : {}),
+    };
+    const durationMs = (item.details.duration ?? 5) * 1000;
+    return { ...item, type: "video", duration: durationMs, metadata, details };
+  }
+  const durationMs = (item.details.duration ?? 5) * 1000;
+  return { ...item, type: "audio", duration: durationMs, metadata, details: { ...item.details } };
+}
+
+function renderMarketDragPreview(item: MarketAssetContent) {
+  if (item.type === "audio") {
+    return (
+      <div className="flex size-[120px] items-center justify-center rounded-md border border-primary bg-zinc-800">
+        <AudioLines className="size-10 text-muted-foreground" />
+      </div>
+    );
+  }
+  return (
+    <div className="draggable size-[120px] overflow-hidden rounded-md border border-primary bg-zinc-800">
+      <MarketPreview src={item.preview} type={item.type} />
+    </div>
+  );
+}
+
 function MarketAudioRow({ item, onSelect, isPlaying, setPlayingId }: {
   item: MarketAssetContent;
   onSelect: (asset: MarketAssetContent) => void;
   isPlaying: boolean;
   setPlayingId: (id: string | null) => void;
 }) {
+  const isDraggingOverTimeline = useIsDraggingOverTimeline();
   const playable = item.proxyStatus === "ready" && !!item.details?.src;
-  return (
+  const dragData = useMemo(() => buildMarketDragPayload(item), [item]);
+  const row = (
     <div className="group flex w-full items-center gap-3 rounded px-3 py-2 transition-colors hover:bg-zinc-800/50">
       <AudioPreviewButton src={item.audioPreview} name={item.name} isPlaying={isPlaying}
         onToggle={() => setPlayingId(isPlaying ? null : item.id)} onStop={() => setPlayingId(null)} />
@@ -361,11 +435,62 @@ function MarketAudioRow({ item, onSelect, isPlaying, setPlayingId }: {
       {!item.audioPreview && <span className="shrink-0 text-[10px] text-muted-foreground">Preview unavailable</span>}
     </div>
   );
+  if (!dragData) return row;
+  return (
+    <Draggable
+      data={dragData}
+      shouldDisplayPreview={!isDraggingOverTimeline}
+      renderCustomPreview={renderMarketDragPreview(item)}
+    >
+      {row}
+    </Draggable>
+  );
+}
+
+function MarketAssetMasonryItem({ item, width, onSelect, renderActions, shouldDisplayPreview }: {
+  item: MarketAssetContent;
+  width: number;
+  onSelect: (asset: MarketAssetContent) => void;
+  renderActions?: (asset: MarketAssetContent) => ReactNode;
+  shouldDisplayPreview: boolean;
+}) {
+  const dragData = useMemo(() => buildMarketDragPayload(item), [item]);
+  const card = (
+    <div className="group relative h-full w-full overflow-hidden rounded-md bg-zinc-800">
+      <button
+        type="button"
+        onClick={() => onSelect(item)}
+        disabled={item.proxyStatus !== "ready" || !item.details?.src}
+        aria-label={item.proxyStatus === "ready" ? `Add ${item.name} to the timeline` : `${item.name}: preview unavailable`}
+        className="relative size-full cursor-pointer overflow-hidden rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary disabled:cursor-not-allowed disabled:opacity-60"
+      >
+        <MarketPreview src={item.preview} type={item.type} />
+        <span className="absolute inset-0 bg-black/20 opacity-0 transition-opacity group-hover:opacity-100" />
+        {item.proxyStatus !== "ready" && <span className="absolute inset-x-0 top-0 bg-black/70 px-2 py-1 text-[10px] text-white">Preview unavailable</span>}
+        <span className="absolute inset-x-0 bottom-0 truncate bg-black/50 px-2 py-1 text-xs text-white opacity-0 transition-opacity group-hover:opacity-100">{item.name}</span>
+      </button>
+      {renderActions && <div className="absolute right-1 top-1">{renderActions(item)}</div>}
+    </div>
+  );
+  return (
+    <div className="h-full" style={{ width }}>
+      {dragData ? (
+        <Draggable
+          data={dragData}
+          shouldDisplayPreview={shouldDisplayPreview}
+          renderCustomPreview={renderMarketDragPreview(item)}
+        >
+          {card}
+        </Draggable>
+      ) : card}
+    </div>
+  );
 }
 
 function MarketAssetMasonry({ items, onSelect, renderActions }: MarketAssetContentsProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerWidth, setContainerWidth] = useState(0);
+  const isDraggingOverTimeline = useIsDraggingOverTimeline();
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -386,21 +511,14 @@ function MarketAssetMasonry({ items, onSelect, renderActions }: MarketAssetConte
       {rows.map((row, rowIndex) => (
         <div key={rowIndex} className="flex gap-2" style={{ height: row.height }}>
           {row.items.map(({ item, width }) => (
-            <div key={item.id} className="group relative h-full overflow-hidden rounded-md bg-zinc-800" style={{ width }}>
-            <button
-              type="button"
-              onClick={() => onSelect(item)}
-              disabled={item.proxyStatus !== "ready" || !item.details?.src}
-              aria-label={item.proxyStatus === "ready" ? `Add ${item.name} to the timeline` : `${item.name}: preview unavailable`}
-              className="relative size-full cursor-pointer overflow-hidden rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              <MarketPreview src={item.preview} type={item.type} />
-              <span className="absolute inset-0 bg-black/20 opacity-0 transition-opacity group-hover:opacity-100" />
-              {item.proxyStatus !== "ready" && <span className="absolute inset-x-0 top-0 bg-black/70 px-2 py-1 text-[10px] text-white">Preview unavailable</span>}
-              <span className="absolute inset-x-0 bottom-0 truncate bg-black/50 px-2 py-1 text-xs text-white opacity-0 transition-opacity group-hover:opacity-100">{item.name}</span>
-            </button>
-            {renderActions && <div className="absolute right-1 top-1">{renderActions(item)}</div>}
-            </div>
+            <MarketAssetMasonryItem
+              key={item.id}
+              item={item}
+              width={width}
+              onSelect={onSelect}
+              renderActions={renderActions}
+              shouldDisplayPreview={!isDraggingOverTimeline}
+            />
           ))}
         </div>
       ))}

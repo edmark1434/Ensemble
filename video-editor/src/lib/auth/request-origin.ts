@@ -22,3 +22,25 @@ export function isSameOriginRequest(request: NextRequest): boolean {
   const forwardedHost = request.headers.get("x-forwarded-host")?.split(",")[0]?.trim();
   return originHost === (forwardedHost || request.headers.get("host"));
 }
+
+/**
+ * Resolve the public origin that the browser addressed, rather than the
+ * internal Next.js listener URL (e.g. http://localhost:4002 behind a reverse
+ * proxy). Use this whenever constructing absolute redirect URLs.
+ */
+export function getPublicOrigin(request: NextRequest): string {
+  const forwardedHost = request.headers.get("x-forwarded-host")?.split(",")[0]?.trim();
+  const host = forwardedHost || request.headers.get("host")?.trim();
+  if (host) {
+    const forwardedProto = request.headers.get("x-forwarded-proto")?.split(",")[0]?.trim();
+    const proto = forwardedProto
+      || (forwardedHost ? "https" : request.nextUrl.protocol.replace(/:$/, ""))
+      || "https";
+    return `${proto}://${host}`;
+  }
+  const configured = process.env.NEXT_PUBLIC_APP_URL?.trim();
+  if (configured) {
+    try { return new URL(configured).origin; } catch { /* ignore invalid env */ }
+  }
+  return request.nextUrl.origin;
+}

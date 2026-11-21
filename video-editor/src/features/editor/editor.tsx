@@ -210,7 +210,7 @@ const ScenePlayer = ({ sceneRef, playerRef, stateManager, isLargeScreen, viewOnl
         </div>
       )}
 
-      <div className={cn("min-h-0 flex-1 relative overflow-hidden", insideSample && "[&>:not([data-tour-empty-preview])]:invisible")}>
+      <div className={cn("min-h-0 flex-1 relative isolate overflow-hidden", insideSample && "[&>:not([data-tour-empty-preview])]:invisible")}>
         <CropModal />
         <MarketAssetLicensing>
         {!isLargeScreen && trackItemIds.length === 0 ? (

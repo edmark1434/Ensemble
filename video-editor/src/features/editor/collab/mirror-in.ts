@@ -128,10 +128,10 @@ export function setupMirrorIn(
 
         useStore.setState({
           markers: snapshot.markers,
-          trackItemsMap: snapshot.trackItemsMap,
-          trackItemIds: snapshot.trackItemIds,
-          transitionsMap: snapshot.transitionsMap,
-          transitionIds: snapshot.transitionIds,
+          trackItemsMap: statePatch.trackItemsMap ?? snapshot.trackItemsMap,
+          trackItemIds: statePatch.trackItemIds ?? snapshot.trackItemIds,
+          transitionsMap: statePatch.transitionsMap ?? snapshot.transitionsMap,
+          transitionIds: statePatch.transitionIds ?? snapshot.transitionIds,
           tracks: snapshot.tracks,
           // A block's own doc never owns the project's name — only mirror
           // this in from a project-kind doc, or a block's snapshot would
@@ -152,8 +152,8 @@ export function setupMirrorIn(
         // together, AFTER stateManager/useStore hold the new snapshot —
         // see sync-canvas-transitions.ts for why all three steps have to
         // run as one unit.
-        if (canvas && transitionsChanged) {
-          syncCanvasTransitions(canvas, snapshot.transitionsMap, "mirror-in");
+        if (canvas && (transitionsChanged || statePatch.trackItemsMap !== current.trackItemsMap)) {
+          syncCanvasTransitions(canvas, statePatch.transitionsMap ?? snapshot.transitionsMap, "mirror-in");
         }
       } finally {
         syncGuard.isApplyingRemote = false;

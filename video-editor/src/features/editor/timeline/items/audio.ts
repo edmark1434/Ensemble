@@ -1,6 +1,8 @@
 import { drawMissingMedia } from "./missing-media";
 import { getStickyLabelOffset } from "./sticky-label";
 import { isMissingMediaSource } from "../../utils/missing-media";
+import { getLocalMediaUrl } from "../../utils/local-media-cache";
+import { getCachedAudioData } from "../../player/lib/audio-data";
 import {
   Control,
   Trimmable,
@@ -44,6 +46,7 @@ class Audio extends Trimmable {
   public bars: any[] = [];
 
   public name: string = "Audio";
+  private loadedEffectiveSrc?: string;
   declare volume: number;
 
   public isLoading = true;
@@ -120,7 +123,8 @@ class Audio extends Trimmable {
   }
 
   private async initialize() {
-    if (this.src?.startsWith("pending-upload:")) return;
+    const localUrl = getLocalMediaUrl(this.src);
+    if (this.src?.startsWith("pending-upload:") && !localUrl) return;
     if (isMissingMediaSource(this.src)) {
       this.barData = undefined;
       this.bars = [];
@@ -129,19 +133,31 @@ class Audio extends Trimmable {
       this.canvas?.requestRenderAll();
       return;
     }
-    const audioData = await getAudioData(this.src);
-    this.barData = audioData;
-    this.bars = this.getBars(0, 0) as any;
-    this.isLoading = false;
-    this.stopLoadingAnimation();
-    this.canvas?.requestRenderAll();
-    this.onScrollChange({ scrollLeft: 0 });
+    const effective = getLocalMediaUrl(this.src) ?? this.src;
+    try {
+      const audioData = await getCachedAudioData(this.src);
+      this.loadedEffectiveSrc = effective;
+      this.barData = audioData;
+      this.bars = this.getBars(0, 0) as any;
+    } catch {
+      this.barData = undefined;
+      this.bars = [];
+    } finally {
+      this.isLoading = false;
+      this.stopLoadingAnimation();
+      this.canvas?.requestRenderAll();
+      this.onScrollChange({ scrollLeft: 0 });
+    }
   }
 
   public setSrc(src: string) {
     this.src = src;
-    this.isLoading = true;
-    this.startLoadingAnimation();
+    const effective = getLocalMediaUrl(src) ?? src;
+    if (effective && effective === this.loadedEffectiveSrc && !this.isLoading) return;
+    if (!this.loadedEffectiveSrc) {
+      this.isLoading = true;
+      this.startLoadingAnimation();
+    }
     this.initOffscreenCanvas();
     this.initialize();
     this.setCoords();

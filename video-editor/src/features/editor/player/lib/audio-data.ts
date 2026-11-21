@@ -2,10 +2,49 @@ import { IAudio, ITrackItem, IVideo } from "@designcombo/types";
 import { AudioData, getAudioData, visualizeAudio } from "@remotion/media-utils";
 import { isEqual } from "lodash";
 import { isMissingMediaSource, isPendingMediaSource } from "../../utils/missing-media";
+import { getLocalMediaUrl } from "../../utils/local-media-cache";
 
 interface AudioDataCache {
   data: AudioData;
   lastAccessed: number;
+}
+
+// Shared src-keyed PCM cache used by both AudioDataManager and timeline Audio
+// items so switching in/out of scenes never re-downloads or re-decodes audio.
+const MAX_SHARED_AUDIO_CACHE = 32;
+const SHARED_AUDIO_TTL_MS = 1000 * 60 * 10;
+const sharedAudioCache = new Map<string, AudioDataCache>();
+const sharedAudioInFlight = new Map<string, Promise<AudioData>>();
+
+export function getCachedAudioData(src: string): Promise<AudioData> {
+  const effectiveSrc = getLocalMediaUrl(src) ?? src;
+  const now = Date.now();
+  const cached = sharedAudioCache.get(effectiveSrc);
+  if (cached && now - cached.lastAccessed <= SHARED_AUDIO_TTL_MS) {
+    cached.lastAccessed = now;
+    sharedAudioCache.delete(effectiveSrc);
+    sharedAudioCache.set(effectiveSrc, cached);
+    return Promise.resolve(cached.data);
+  }
+  const existing = sharedAudioInFlight.get(effectiveSrc);
+  if (existing) return existing;
+
+  const promise = getAudioData(effectiveSrc)
+    .then((data) => {
+      sharedAudioCache.delete(effectiveSrc);
+      sharedAudioCache.set(effectiveSrc, { data, lastAccessed: Date.now() });
+      while (sharedAudioCache.size > MAX_SHARED_AUDIO_CACHE) {
+        const oldest = sharedAudioCache.keys().next().value;
+        if (oldest !== undefined) sharedAudioCache.delete(oldest);
+      }
+      return data;
+    })
+    .finally(() => {
+      sharedAudioInFlight.delete(effectiveSrc);
+    });
+
+  sharedAudioInFlight.set(effectiveSrc, promise);
+  return promise;
 }
 
 export class AudioDataManager {
@@ -23,12 +62,13 @@ export class AudioDataManager {
   }
 
   private async loadAudioData(src: string, id: string): Promise<void> {
-    if (isMissingMediaSource(src) || isPendingMediaSource(src)) {
+    const localUrl = getLocalMediaUrl(src);
+    if (isMissingMediaSource(src) || (isPendingMediaSource(src) && !localUrl)) {
       this.removeItem(id);
       return;
     }
     try {
-      const data = await getAudioData(src);
+      const data = await getCachedAudioData(src);
       this.audioDatas[id] = {
         data,
         lastAccessed: Date.now()

@@ -213,11 +213,17 @@ async function shareProjectInvitationService({ projectId, recipientUserId }, inv
         { EX: INVITATION_TOKEN_TTL_SECONDS }
     );
 
-    const editorBaseUrl = (process.env.EDITOR_URL || 'http://localhost:3000').replace(/\/$/, '');
-    const backendBaseUrl = (process.env.BACKEND_URL || 'http://localhost:4000').replace(/\/$/, '');
     const frontendBaseUrl = (process.env.FRONTEND_URL || 'http://localhost:5173').replace(/\/$/, '');
+    const configuredBackendUrl = String(process.env.BACKEND_URL || '').trim().replace(/\/$/, '');
+    const isLocalOrigin = (url) => /^https?:\/\/(?:localhost|127\.0\.0\.1)(?::\d+)?(?:\/|$)/i.test(url);
     const editorProjectUrl = `${frontendBaseUrl}/projects/open/${projectId}`;
-    const acceptInvitationLink = `${backendBaseUrl}/api/invitations/accept?token=${token}`;
+    // Only route the email through /api/invitations/accept when BACKEND_URL is
+    // explicitly configured for the same environment; otherwise link straight to
+    // the frontend open-project route so production emails never point to localhost.
+    const acceptInvitationLink =
+        configuredBackendUrl && (!isLocalOrigin(configuredBackendUrl) || isLocalOrigin(frontendBaseUrl))
+            ? `${configuredBackendUrl}/api/invitations/accept?token=${token}`
+            : editorProjectUrl;
 
     // 6. Channel 1: Email notification (Brevo)
     let emailResult = null;

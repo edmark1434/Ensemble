@@ -52,21 +52,20 @@ export function PrepareMarketImages({ sourcesKey, downloadUrlsKey = "{}", childr
     };
   }, [cache]);
 
+  // Retain already-prepared blobs across scene switches (bounded by LRU inside
+  // createPreparedImageCache and disposed on projectId change/unmount) so
+  // navigating into and back out of scenes never re-downloads or re-decodes
+  // the same market images. Only cancel pending retries for inactive sources.
   useEffect(() => {
-    const sources = [...activeSources];
-    cache.retain(sources);
     for (const source of [...retryTimers.current.keys()]) {
       if (!activeSources.has(source)) clearRetry(source);
     }
-    for (const source of [...inFlight.current]) {
-      if (!activeSources.has(source)) inFlight.current.delete(source);
-    }
-    setReady(current => Object.fromEntries(sources.filter(source => current[source]).map(source => [source, current[source]])));
     setFailed(current => {
+      const sources = [...activeSources];
       const next = Object.fromEntries(sources.filter(source => current[source]).map(source => [source, true]));
       return Object.keys(next).length === Object.keys(current).length ? current : next;
     });
-  }, [activeSources, cache, clearRetry]);
+  }, [activeSources, clearRetry]);
 
   const loadWithRetry = useCallback((source: string, attempt: number) => {
     if (!mounted.current || !activeSourcesRef.current.has(source)) return;
@@ -79,7 +78,7 @@ export function PrepareMarketImages({ sourcesKey, downloadUrlsKey = "{}", childr
     const targetUrl = attempt === 0 ? (downloadUrlsRef.current[source] || source) : source;
     void cache.load(source, targetUrl).then(url => {
       inFlight.current.delete(source);
-      if (mounted.current && activeSourcesRef.current.has(source)) {
+      if (mounted.current) {
         setFailed(current => current[source] ? { ...current, [source]: false } : current);
         setReady(current => current[source] === url ? current : { ...current, [source]: url });
       }
@@ -121,7 +120,7 @@ export function PrepareMarketImages({ sourcesKey, downloadUrlsKey = "{}", childr
         void cache.load(source, targetUrl).then(url => {
           inFlight.current.delete(source);
           backgroundActive.current = Math.max(0, backgroundActive.current - 1);
-          if (mounted.current && activeSourcesRef.current.has(source)) {
+          if (mounted.current) {
             setFailed(current => current[source] ? { ...current, [source]: false } : current);
             setReady(current => current[source] === url ? current : { ...current, [source]: url });
           }

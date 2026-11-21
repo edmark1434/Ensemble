@@ -78,9 +78,15 @@ export function useSceneContentBroadcast(
     let currentPush: Promise<boolean> | null = null;
     let pushQueued = false;
 
+    const computeContentDurationMs = () => {
+      const items = Object.values(stateManager.getState().trackItemsMap);
+      if (items.length === 0) return 0;
+      return Math.max(0, ...items.map((item) => item.display.to));
+    };
+
     const attemptPush = (attempt: number): Promise<boolean> => {
       if (!canPushRef.current || !wsSynced || !blockHydrated) return Promise.resolve(false);
-      const applied = applySceneContentToDoc(schema, sceneItemId, buildContent(), stateManager.getState().duration, localOrigin);
+      const applied = applySceneContentToDoc(schema, sceneItemId, buildContent(), computeContentDurationMs(), localOrigin);
       if (!applied) {
         console.debug("[scene-broadcast] miss", {
           sceneItemId,
@@ -122,25 +128,28 @@ export function useSceneContentBroadcast(
     const schedulePush = () => {
       if (!canPushRef.current) return;
       pendingPush = true;
-      if (!flushTimer) {
-        flushTimer = setTimeout(() => {
-          flushTimer = null;
-          if (!pendingPush) return;
-          pendingPush = false;
-          push();
-        }, DURATION_SYNC_INTERVAL_MS);
-      }
+      // Trailing debounce so dragging/trimming inside a scene settles before
+      // updating the parent project, avoiding mid-gesture timeline jitter.
+      if (flushTimer) clearTimeout(flushTimer);
+      flushTimer = setTimeout(() => {
+        flushTimer = null;
+        if (!pendingPush) return;
+        pendingPush = false;
+        push();
+      }, DURATION_SYNC_INTERVAL_MS);
     };
 
     const handleFirstSync = () => {
-      schema.doc.off("afterTransaction", handleFirstSync);
+      if (wsSynced) return;
       wsSynced = true;
       console.debug("[scene-broadcast] wsSynced", { sceneItemId, idsInDoc: schema.trackItemIds.toArray() });
       push();
     };
-    schema.doc.on("afterTransaction", handleFirstSync);
 
-    const teardownWs = attachWsProvider(schema, target, userId, undefined, { announcePresence: false });
+    const teardownWs = attachWsProvider(schema, target, userId, undefined, {
+      announcePresence: false,
+      onFirstSync: handleFirstSync,
+    });
     broadcastWorkingInsideScene(schema.awareness, sceneItemId, userId, userName);
 
     // Own persistence, independent of the room's 60s internal timer or
@@ -210,7 +219,6 @@ export function useSceneContentBroadcast(
       cancelled = true;
       subscription.unsubscribe();
       storeSubscription();
-      schema.doc.off("afterTransaction", handleFirstSync);
 
       // Whatever was pending or already mid-retry has to actually land in
       // the project doc before we close the socket / destroy the doc below —

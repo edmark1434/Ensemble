@@ -16,8 +16,12 @@ import {
   calculateOffscreenSegments,
   calculateThumbnailSegmentLayout
 } from "../../utils/filmstrip";
-import { videoFilmstrip } from "../../utils/video-filmstrip";
+import { getCachedVideoFrame, videoFilmstrip } from "../../utils/video-filmstrip";
+import { getLocalMediaUrl } from "../../utils/local-media-cache";
 import { createMediaControls } from "../controls";
+
+const resolvedMarketPreviewUrls = new Map<string, string>();
+const fallbackThumbnailImages = new Map<string, { img: HTMLImageElement; aspectRatio: number; width: number }>();
 
 
 const EMPTY_FILMSTRIP: Filmstrip = {
@@ -49,6 +53,8 @@ class Video extends Trimmable {
   static type = "Video";
   private generation = 0;
   private initializedSource?: string;
+  private resolvedFilmstripSource?: string;
+  private consecutiveFilmstripFailures = 0;
   private disposedItem = false;
   declare id: string;
   public resourceId = "";
@@ -164,7 +170,8 @@ class Video extends Trimmable {
   public async initialize() {
     const generation = ++this.generation;
     this.initializedSource = this.src;
-    if (this.src?.startsWith("pending-upload:")) return;
+    const localUrl = getLocalMediaUrl(this.src);
+    if (this.src?.startsWith("pending-upload:") && !localUrl) return;
     if (isMissingMediaSource(this.src)) {
       this.isLoading = false;
       this.stopLoadingAnimation();
@@ -176,18 +183,34 @@ class Video extends Trimmable {
     if (this.metadata?.market && !this.hasVideoPreview()) {
       const meta = this.metadata as Record<string, unknown>;
       if (typeof meta.market_asset_id === "string" && typeof meta.media_asset_id === "string") {
-        try {
-          const response = await fetch(`/api/market-assets/${encodeURIComponent(meta.market_asset_id)}/thumbnail?mediaAssetId=${encodeURIComponent(meta.media_asset_id)}`);
-          if (response.ok) {
-            const data = await response.json();
-            if (generation === this.generation && typeof data.url === "string") this.previewUrl = data.url;
-          }
-        } catch { /* Keep the saved still if the preview is temporarily unavailable. */ }
+        const cacheKey = `${meta.market_asset_id}:${meta.media_asset_id}`;
+        const cachedPreviewUrl = resolvedMarketPreviewUrls.get(cacheKey);
+        if (cachedPreviewUrl) {
+          this.previewUrl = cachedPreviewUrl;
+        } else {
+          try {
+            const response = await fetch(`/api/market-assets/${encodeURIComponent(meta.market_asset_id)}/thumbnail?mediaAssetId=${encodeURIComponent(meta.media_asset_id)}`);
+            if (response.ok) {
+              const data = await response.json();
+              if (typeof data.url === "string") {
+                resolvedMarketPreviewUrls.set(cacheKey, data.url);
+                if (generation === this.generation) this.previewUrl = data.url;
+              }
+            }
+          } catch { /* Keep the saved still if the preview is temporarily unavailable. */ }
+        }
       }
     }
     if (generation !== this.generation) return;
     await this.loadFallbackThumbnail(generation);
     if (generation !== this.generation) return;
+    const filmstripSrc = this.getFilmstripSource();
+    if (!this.thumbnailCache.getThumbnail("fallback") && filmstripSrc) {
+      const cachedFrame = getCachedVideoFrame(filmstripSrc);
+      if (cachedFrame) {
+        this.thumbnailCache.setThumbnail("fallback", cachedFrame);
+      }
+    }
     this.initDimensions();
     this.createFallbackPattern();
     this.isLoading = false;
@@ -239,6 +262,14 @@ class Video extends Trimmable {
     const fallbackThumbnail = this.previewUrl;
     if (!fallbackThumbnail || this.hasVideoPreview()) return;
 
+    const cached = fallbackThumbnailImages.get(fallbackThumbnail);
+    if (cached) {
+      this.aspectRatio = cached.aspectRatio;
+      this.thumbnailWidth = cached.width;
+      this.thumbnailCache.setThumbnail("fallback", cached.img);
+      return;
+    }
+
     return new Promise<void>((resolve) => {
       const img = new Image();
       img.crossOrigin = "anonymous";
@@ -265,6 +296,10 @@ class Video extends Trimmable {
         this.aspectRatio = aspectRatio;
         this.thumbnailWidth = targetWidth;
         resizedImg.onload = () => {
+          fallbackThumbnailImages.set(fallbackThumbnail, { img: resizedImg, aspectRatio, width: targetWidth });
+          if (fallbackThumbnailImages.size > 128) {
+            fallbackThumbnailImages.delete(fallbackThumbnailImages.keys().next().value!);
+          }
           if (generation === this.generation) this.thumbnailCache.setThumbnail("fallback", resizedImg);
           resolve();
         };
@@ -282,6 +317,11 @@ class Video extends Trimmable {
 
   private hasVideoPreview() {
     return /\/thumbnails\/video-5s-(?:320|480)\/[^?#]+\.mp4(?:[?#]|$)/.test(this.previewUrl || "");
+  }
+
+  private getFilmstripSource(): string {
+    if (this.metadata?.market) return this.hasVideoPreview() ? this.previewUrl : "";
+    return getLocalMediaUrl(this.src) ?? this.src;
   }
 
   private generateTimestamps(startTime: number, count: number): number[] {
@@ -317,18 +357,22 @@ class Video extends Trimmable {
 
   public async loadAndRenderThumbnails() {
     if (this.isFetchingThumbnails || this.isLoading || this.disposedItem) return;
-    const src = this.metadata?.market ? (this.hasVideoPreview() ? this.previewUrl : "") : this.src;
+    const src = this.getFilmstripSource();
     if (!src || isMissingMediaSource(src)) return;
+    if (src.startsWith("pending-upload:")) return;
     const generation = this.generation;
     const current = () => this.generation === generation && !this.disposedItem;
     const strip = this.nextFilmstrip;
     this.isFetchingThumbnails = true;
+    this.resolvedFilmstripSource = src;
+    let extractedCount = 0;
     try {
       const lastSecond = Math.max(0, Math.ceil(this.duration / 1000) - 1);
       const times = this.generateTimestamps(strip.startTime, strip.thumbnailsCount);
       const tiles = await videoFilmstrip(src, times.map(t => Math.min(t, lastSecond)),
         this.metadata?.market ? Math.max(0.001, this.duration / 1000) : undefined, current);
       if (!current()) return;
+      extractedCount = tiles.size;
       for (const timestamp of new Set(times)) {
         const tile = tiles.get(Math.min(timestamp, lastSecond));
         if (tile) this.thumbnailCache.setThumbnail(timestamp, tile);
@@ -337,11 +381,18 @@ class Video extends Trimmable {
         this.thumbnailCache.setThumbnail("fallback", tiles.values().next().value!);
         this.createFallbackPattern();
       }
+      if (tiles.size > 0) this.consecutiveFilmstripFailures = 0;
+      else this.consecutiveFilmstripFailures++;
     } catch {
+      this.consecutiveFilmstripFailures++;
       // A failed thumbnail must never interrupt timeline drawing or playback.
     } finally {
       if (current()) {
-        this.currentFilmstrip = strip;
+        // Keep the segment eligible for retry on the next scroll/zoom if no
+        // tiles loaded (up to 2 attempts) so transient slow loads can recover.
+        if (extractedCount > 0 || this.consecutiveFilmstripFailures >= 2) {
+          this.currentFilmstrip = strip;
+        }
         this.isFetchingThumbnails = false;
         this.isDirty = true;
         this.canvas?.requestRenderAll();
@@ -482,7 +533,17 @@ class Video extends Trimmable {
 
   public async setSrc(src: string) {
     if (this.initializedSource === src) return;
+    const nextResolved = this.metadata?.market ? this.previewUrl : (getLocalMediaUrl(src) ?? src);
+    // When a pending upload finishes, aliasLocalMedia maps the durable URL to
+    // the same local blob URL we already extracted filmstrips from — keep them
+    // with zero flicker or re-decoding.
+    if (nextResolved && nextResolved === this.resolvedFilmstripSource && !this.isLoading) {
+      super.setSrc(src);
+      this.initializedSource = src;
+      return;
+    }
     super.setSrc(src);
+    this.consecutiveFilmstripFailures = 0;
     this.isFetchingThumbnails = false;
     this.thumbnailCache.clearCache();
     this.isLoading = true;

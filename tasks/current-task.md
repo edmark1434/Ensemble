@@ -2,13 +2,25 @@
 
 ## Objective
 
-Make team accounts behave as teams, not users, across the admin and staff User & Team desks, punishments and wallets (docs/punishment-system.md §8.10).
+Fix 9 production and editor issues across `video-editor`, `backend`, and `ensemble-render-server`:
+1. Licensed GIFs failing Remotion Lambda export with S3 CORS errors.
+2. Unlicensed GIF proxies not syncing to the editor playhead and playing too fast in exports.
+3. Slow media reloading when navigating into and back out of scenes.
+4. Clunky scene duration sync and neighboring timeline item movement.
+5. Non-draggable assets inside market asset bundle details (and single-asset collection cards).
+6. Missing local preview on timeline items while uploads are still in progress.
+7. Large videos failing to load timeline filmstrip thumbnails.
+8. In-editor template preview links redirecting to `localhost:4002` in production.
+9. Project invitation email links pointing to `localhost` in production.
 
 ## Acceptance Criteria
 
-- **Leader answers for the team.** A warning or forum timeout aimed at a team is issued to its leader (first active Owner); `violations.team_account_id` (migration `1830200000000_team-leader-warnings`) names the team, the leader's notice says it came with the team, and the team's record lists it. No leader → 409 `TEAM_NO_LEADER`.
-- **Team status with leader cascade.** Ban / suspend / lock change the team account; "Also apply to the team leader" (default on, single and bulk) gives the leader the same named punishment. Leaders already at the same or a stricter standing are skipped; a leader staff may not act on stops the action before anything changes. Lifting the team also lifts a leader penalty that was set with it. This works on every path (`warnAccount` / `updateAccountStatus` route team targets to `TeamSanctionServices`).
-- **Team standing gate** (`TeamStandingServices.assertTeamAllows`) on every team write: suspended teams keep only live work; locked and banned teams stop all writes; leave, decline, report and chat always work. A banned, locked or missing leader pauses marketplace actions, wallet moves and subcontract hires. Covers `TeamsServices`, `TeamTaskServices`, `TeamProjectServices` and `MarketplaceActorServices`.
-- **Team notices.** Team status changes, credit holds/releases, staff credit adjustments and timed-penalty expiry notify the team's active Owners and Admins, and push `team:standing_changed` to members. The team page shows a restriction banner (`standing` on `GET /api/teams/:id`) and reloads on that event.
-- **Staff ownership transfer.** `POST /api/admin/teams/:accountId/transfer-ownership` (Admin / Support): the new owner must be an active member in good standing; the previous owner becomes Admin, Member or is removed; both are told; recorded on the team.
-- **Teams desk.** Rows show the real leader (status, merit, timeout), team wallet (spendable, held, owed to members), status with end date, team type and attention flags (no leader, leader restricted, credits held, open disputes); filters for type and attention; stat cards and a leader-issues banner. Team-specific menu labels (Ban team, Warn team leader, Timeout team leader, Transfer ownership). Overview shows a leader card instead of a fake team merit, plus the wallet breakdown; history shows warnings issued through the team (rescind acts on the leader's account); the wallet modal shows escrow / owed / free-to-pay-out and the counterparty of each payment.
+- `ensemble-render-server` prepares GIFs for video, image-sequence, still image, and thumbnail renders, resolves bundled/env/PATH `ffmpeg`/`ffprobe`, handles missing/N/A/zero packet durations cleanly, and matches `response-content-type=image/gif` signed URLs.
+- `backend` generates animated watermarked proxies as real `.gif` files (`assets/proxies/v2-anim-gif/*.gif`) and backfills prior animated-WebP GIF proxies so unlicensed GIFs render via `<Gif>` in the editor and `PreparedGifVideo` in exports.
+- Prepared market image blobs, market license lookups, upload availability queries, audio PCM buffers, and timeline image/video thumbnails persist across scene enter/exit instead of being evicted or refetched.
+- Scene duration sync uses trailing debounce, `onFirstSync`, true item max duration, collision-only ripple pushing on growth (preserving gaps and leaving neighbors put on shrink), accurate project duration recalculation, and transition reconciliation.
+- Ready assets in `MarketAssetDetails` (bundles) and single-asset cards in `MarketAssetListings` are wrapped in `<Draggable>` with normalized payloads matching the main lists.
+- Timeline `Image`, `Video`, and `Audio` items render immediately from `local-media-cache` during `pending-upload:` and keep their rendered preview seamlessly when upload finishes.
+- `videoFilmstrip` uses `preload="metadata"`, captures frame 0 on `loadeddata` as an immediate fallback, isolates per-seek failures with bounded retries, and allows 2 concurrent extractors so big videos still load previews reliably.
+- Editor redirects (`/api/market-templates/[id]/preview` and `proxy.ts`) resolve public origin from `x-forwarded-host`/`host` + `x-forwarded-proto` rather than internal `request.url`.
+- Project invite emails never fall back to `localhost` when `FRONTEND_URL` is a non-local origin.

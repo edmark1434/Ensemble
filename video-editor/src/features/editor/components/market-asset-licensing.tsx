@@ -69,7 +69,10 @@ function LiveMarketAssetLicensing({ children }: { children: ReactNode }) {
         }
       }
     };
-    void refresh();
+    const ids = idsKey.split(",");
+    const currentLicenses = useMarketLicenses.getState();
+    const hasMissing = currentLicenses.projectId !== projectId || ids.some((id) => !currentLicenses.assets[id]);
+    if (hasMissing) void refresh();
     const interval = window.setInterval(() => void refresh(), 15_000);
     const onRefresh = () => { void refresh(); };
     const onPurchase = () => {

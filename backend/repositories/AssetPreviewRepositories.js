@@ -70,7 +70,7 @@ async function listStaticGifDerivativeCandidatesRepository(limit = 50) {
        AND (original.mime_type = 'image/gif' OR original.name ILIKE '%.gif')
        AND (original.path LIKE 'asset-originals/%' OR original.path LIKE 'assets/%')
        AND NOT COALESCE((
-         proxy.path LIKE 'assets/proxies/v2-anim/%'
+         proxy.path LIKE 'assets/proxies/v2-anim-gif/%'
          AND thumbnail.path LIKE 'assets/thumbnails/640-anim/%'
        ), FALSE)
      ORDER BY m.created_at DESC, m.media_asset_id
