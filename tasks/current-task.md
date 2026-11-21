@@ -2,33 +2,13 @@
 
 ## Objective
 
-1. Credits & Economy desk: show the wallet balance before and after every ledger entry, for each member or escrow wallet the entry touches.
-2. Show a status on every transaction (Completed, Pending, On Hold, Delayed, Cancelled, Failed, Reversed), in the desk and the member history.
-3. Dispute "Pay now": the member's open wallet views refresh as soon as a payout is paid, scheduled, rescheduled or cancelled.
+Make team accounts behave as teams, not users, across the admin and staff User & Team desks, punishments and wallets (docs/punishment-system.md §8.10).
 
 ## Acceptance Criteria
 
-- `fetchLedgerBalances` (`LedgerBalanceRepositories`) rebuilds before/after from the wallet's current balance and the ledger. It applies the desk's movement rules: only Completed/Reversed rows move credits; staff adjustments use the audited delta; staff holds move spendable ↔ held. Pre-audit adjustments mark earlier balances `approximate`. Platform wallets are skipped.
-- The desk ledger list, the wallet modal list, the entry modal (the entry's From/To blocks) and the CSV export show balance before → after. The overview's recent list and the entry modal's linked/group rows do not load balances.
-- Desk rows show the status pill even when Completed. Staff hold rows read "Credits put on hold" / "Hold released" instead of "Escrow funded/released".
-- Member history: the detail modal shows Balance Before / Balance After for the member's wallet. Dispute payouts read Pending, On Hold (case reopened), Delayed (failed) or Cancelled (ruling withdrawn, no credits moved).
-- After every dispute money action and the payout job, recipients and both parties get `account:wallet_changed`. `AccountRestrictionHost` relays it as `ensemble:wallet-changed`, so Transactions and Settings → Wallet reload.
-
----
-
-# Parallel task: harden and polish `/support/ticket`
-
-## Objective
-
-Fix the gaps in member ticket intake (`POST /api/users/tickets`, `page_SubmitATicket.tsx`) across backend validation, security and the form UI.
-
-## Acceptance Criteria
-
-- Intake rules live in `TicketServices.createMemberTicket`; the controller only maps results and errors (no raw database messages; unknown errors are 500).
-- Members cannot set priority (type default only); the stored contact email is the account's own, never a client value.
-- Unknown ticket types are rejected; subject ≤ 200 and description 10–5,000 characters for every member ticket.
-- Member attachments must be files that account uploaded (consumed `upload_intents`), checked before the ticket row is written; invalid or foreign keys return 400.
-- The same open ticket (account + type + subject) filed again within 10 minutes returns 409 `TICKET_DUPLICATE` with the existing ticket id.
-- `POST /api/users/tickets` has the `ticketCreate` rate limit; the broken legacy `POST /api/tickets` is removed.
-- Concurrent submits retry on a ticket number collision.
-- The form validates before uploading, reuses the appeal attachment picker (per-type limits, remove, preview, drag and drop), does not re-upload on retry, keeps a per-account session draft, accepts `?type=`, links to a duplicate, sends appeal-only members to their appeals, shows the open-ticket count, and has labelled inputs, counters, inline errors and a "file another" reset.
+- **Leader answers for the team.** A warning or forum timeout aimed at a team is issued to its leader (first active Owner); `violations.team_account_id` (migration `1830200000000_team-leader-warnings`) names the team, the leader's notice says it came with the team, and the team's record lists it. No leader → 409 `TEAM_NO_LEADER`.
+- **Team status with leader cascade.** Ban / suspend / lock change the team account; "Also apply to the team leader" (default on, single and bulk) gives the leader the same named punishment. Leaders already at the same or a stricter standing are skipped; a leader staff may not act on stops the action before anything changes. Lifting the team also lifts a leader penalty that was set with it. This works on every path (`warnAccount` / `updateAccountStatus` route team targets to `TeamSanctionServices`).
+- **Team standing gate** (`TeamStandingServices.assertTeamAllows`) on every team write: suspended teams keep only live work; locked and banned teams stop all writes; leave, decline, report and chat always work. A banned, locked or missing leader pauses marketplace actions, wallet moves and subcontract hires. Covers `TeamsServices`, `TeamTaskServices`, `TeamProjectServices` and `MarketplaceActorServices`.
+- **Team notices.** Team status changes, credit holds/releases, staff credit adjustments and timed-penalty expiry notify the team's active Owners and Admins, and push `team:standing_changed` to members. The team page shows a restriction banner (`standing` on `GET /api/teams/:id`) and reloads on that event.
+- **Staff ownership transfer.** `POST /api/admin/teams/:accountId/transfer-ownership` (Admin / Support): the new owner must be an active member in good standing; the previous owner becomes Admin, Member or is removed; both are told; recorded on the team.
+- **Teams desk.** Rows show the real leader (status, merit, timeout), team wallet (spendable, held, owed to members), status with end date, team type and attention flags (no leader, leader restricted, credits held, open disputes); filters for type and attention; stat cards and a leader-issues banner. Team-specific menu labels (Ban team, Warn team leader, Timeout team leader, Transfer ownership). Overview shows a leader card instead of a fake team merit, plus the wallet breakdown; history shows warnings issued through the team (rescind acts on the leader's account); the wallet modal shows escrow / owed / free-to-pay-out and the counterparty of each payment.

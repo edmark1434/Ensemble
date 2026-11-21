@@ -10,6 +10,8 @@ export type UserTeamCapabilities = {
   canWarn: boolean;
   canSuspend: boolean;
   canLock: boolean;
+  /** Admin / Support: move a team's ownership. */
+  canTransferTeams: boolean;
   /** Status actions allowed in menus / API */
   statusActions: Set<string>;
   /** Bulk action ids allowed */
@@ -36,6 +38,7 @@ function limitedEnforcementCaps(
     canWarn: true,
     canSuspend: true,
     canLock: true,
+    canTransferTeams: false,
     statusActions: new Set(variant === 'forum' ? FORUM_STATUS : LIMITED_STATUS),
     bulkActions: new Set(['suspend', 'lock', 'clear']),
     primaryActions: new Set(['view', 'history', 'export']),
@@ -57,6 +60,7 @@ export function getUserTeamCapabilities(variant: UserTeamVariant = 'admin'): Use
     canWarn: true,
     canSuspend: true,
     canLock: true,
+    canTransferTeams: true,
     statusActions: new Set(FULL_STATUS),
     bulkActions: new Set(['ban', 'suspend', 'restore', 'lock', 'approve', 'reject', 'clear']),
     primaryActions: new Set(['view', 'credit', 'verification', 'history', 'export']),

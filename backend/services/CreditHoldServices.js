@@ -64,6 +64,15 @@ function resolveHoldAmount(amount) {
   return parsed;
 }
 
+/** Whether the wallet belongs to a team (its notices go to the team's Owners and Admins). */
+async function describeWalletTeam(accountId) {
+  try {
+    return await require('./TeamStandingServices').describeTeamAccount(accountId);
+  } catch (_err) {
+    return { isTeam: false, teamId: null, name: null };
+  }
+}
+
 async function assertHoldTarget(accountId, staffId) {
   const result = await pool.query(
     `SELECT account_id FROM accounts WHERE account_id = $1 AND deleted_at IS NULL`,
@@ -81,7 +90,22 @@ async function assertHoldTarget(accountId, staffId) {
  * Persist the notice, then push it and the refreshed standing so an open tab updates its
  * wallet banner without a reload.
  */
-async function announceHoldChange(accountId, { message, walletId, held }) {
+async function announceHoldChange(accountId, { message, teamMessage = null, walletId, held }) {
+  // A team account has no inbox: its Owners and Admins get the team wording instead.
+  if (teamMessage) {
+    try {
+      const { notifyTeamManagers } = require('./TeamStandingServices');
+      await notifyTeamManagers(accountId, {
+        message: teamMessage,
+        prefix: held ? 'TEAM_CREDITS_HOLD' : 'TEAM_CREDITS_RELEASED',
+        referenceTable: 'wallets',
+        referenceId: walletId || accountId,
+        event: 'wallet_changed',
+      });
+    } catch (err) {
+      console.warn('Team credit hold notice skipped:', err.message);
+    }
+  }
   let notification = null;
   try {
     notification = await createNotification({
@@ -157,12 +181,18 @@ async function freezeAccountCredits(accountId, options = {}, staffId = null) {
 
   const until = formatWhen(hold.frozenUntil);
   const total = hold.frozenBalanceCredits > hold.moved ? ` ${credits(hold.frozenBalanceCredits)} are on hold in total.` : '';
+  const team = await describeWalletTeam(accountId);
   await announceHoldChange(accountId, {
     held: true,
     walletId: hold.walletId,
     message: `Staff put ${credits(hold.moved)} in your Account Wallet on hold${
       until ? ` until ${until}` : ' until staff review your account'
     }.${total} Reason: ${reason} They are not taken from you. If you think this is a mistake, file an appeal.`,
+    teamMessage: team.isTeam
+      ? `Staff put ${credits(hold.moved)} in Team ${team.name}'s wallet on hold${
+          until ? ` until ${until}` : ' until staff review the team'
+        }.${total} Reason: ${reason} The credits stay with the team but cannot be spent or paid out. If you think this is a mistake, contact Support.`
+      : null,
   });
 
   return {
@@ -207,10 +237,14 @@ async function unfreezeAccountCredits(accountId, { staffId = null, reason = null
       creditTransactionId: released.creditTransactionId,
     },
   });
+  const team = await describeWalletTeam(accountId);
   await announceHoldChange(accountId, {
     held: false,
     walletId: released.walletId,
     message: `The hold on your credits has ended. ${credits(released.released)} are back in your Account Wallet.`,
+    teamMessage: team.isTeam
+      ? `The hold on Team ${team.name}'s wallet has ended. ${credits(released.released)} can be spent and paid out again.`
+      : null,
   });
   return {
     accountId,

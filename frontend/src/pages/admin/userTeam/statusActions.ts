@@ -107,6 +107,64 @@ export function buildRowActionItems(
   ];
 }
 
+/**
+ * Row menu for a team. A team acts as one account, but warnings and forum timeouts go to its
+ * leader (teams have no Platform Merit and never post in the forums), so those items name the
+ * leader and disappear when the team has none.
+ */
+export function buildTeamRowActionItems(
+  team: {
+    status?: string | null;
+    teamType?: string | null;
+    leader?: { name: string; forumTimeout?: boolean } | null;
+  },
+  capabilities?: UserTeamCapabilities
+): MenuItem[] {
+  const primaryLabels: Record<string, string> = {
+    view: 'View team',
+    credit: 'Team wallet',
+    verification: 'Business verification',
+    history: 'Warnings & disputes',
+  };
+  const primary = getPrimaryRowActions(capabilities).map((item) =>
+    primaryLabels[item.id] ? { ...item, label: primaryLabels[item.id] } : item
+  );
+  const s = normalizeAccountStatus(team.status);
+  const caps = capabilities;
+  const manage: MenuItem[] = [];
+
+  if (s === 'banned') {
+    if (allowAction('unban', caps)) manage.push({ id: 'unban', label: 'Remove team ban', section: 'manage' });
+  } else if (allowAction('ban', caps)) {
+    manage.push({ id: 'ban', label: 'Ban team', danger: true, section: 'manage' });
+  }
+  if (s === 'suspended') {
+    if (allowAction('unsuspend', caps)) manage.push({ id: 'unsuspend', label: 'Remove team suspension', section: 'manage' });
+  } else if (s !== 'banned' && allowAction('suspend', caps)) {
+    manage.push({ id: 'suspend', label: 'Suspend team', danger: true, section: 'manage' });
+  }
+  if (s === 'locked') {
+    if (allowAction('unlock', caps)) manage.push({ id: 'unlock', label: 'Remove team lock', section: 'manage' });
+  } else if (s !== 'banned' && allowAction('lock', caps)) {
+    manage.push({ id: 'lock', label: 'Lock team', section: 'manage' });
+  }
+
+  const leader = team.leader || null;
+  if (leader) {
+    if (allowAction('warn', caps)) manage.push({ id: 'warn', label: 'Warn team leader', section: 'manage' });
+    if (leader.forumTimeout) {
+      if (allowAction('clear_timeout', caps)) manage.push({ id: 'clear_timeout', label: 'Remove leader timeout', section: 'manage' });
+    } else if (allowAction('timeout', caps)) {
+      manage.push({ id: 'timeout', label: 'Timeout team leader', section: 'manage' });
+    }
+  }
+  if (caps?.canTransferTeams && String(team.teamType || 'standard') === 'standard') {
+    manage.push({ id: 'transfer', label: leader ? 'Transfer ownership' : 'Assign an owner', section: 'manage' });
+  }
+
+  return [...primary, ...manage];
+}
+
 export function exportAccountJson(filename: string, payload: unknown) {
   const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);

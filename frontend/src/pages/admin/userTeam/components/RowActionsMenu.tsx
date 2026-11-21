@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
+  ArrowRightLeft,
   BadgeCheck,
   Ban,
   Download,
@@ -77,6 +78,8 @@ function iconForAction(id: string) {
       return ShieldAlert;
     case 'lock':
       return Lock;
+    case 'transfer':
+      return ArrowRightLeft;
     default:
       return Scale;
   }

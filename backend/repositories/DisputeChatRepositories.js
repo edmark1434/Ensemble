@@ -433,9 +433,45 @@ function publicDisputeRoom(disputeId) {
   return disputeId ? `dispute:public:${disputeId}` : null;
 }
 
+/**
+ * Staff consoles that have this case open (`joinDisputeStaffRoom`). Staff read every message
+ * on a case, whatever its audience, so every message and state change goes here. It does not
+ * depend on the staff member being listed on the case's Mongo chat.
+ */
+function staffDisputeRoom(disputeId) {
+  return disputeId ? `dispute:staff:${disputeId}` : null;
+}
+
+/**
+ * The staff room for a dispute, or null when the account is not staff or the dispute does
+ * not exist. Every staff role may view every dispute (`buildDisputePermissions.canView`).
+ */
+async function findStaffDisputeRoom(disputeId, accountId) {
+  if (!DISPUTE_UUID.test(String(disputeId || '')) || !ACCOUNT_UUID.test(String(accountId || ''))) {
+    return null;
+  }
+  const result = await pool.query(
+    `SELECT d.dispute_id
+     FROM disputes d
+     WHERE d.dispute_id = $1
+       AND d.deleted_at IS NULL
+       AND EXISTS (SELECT 1 FROM staff s WHERE s.account_id::text = $2)`,
+    [disputeId, String(accountId)]
+  );
+  return result.rows.length ? staffDisputeRoom(String(result.rows[0].dispute_id)) : null;
+}
+
 function emitDisputeChat(
   event,
-  { chatId = null, disputeId = null, payload, accountIds = [], includeChatRoom = false, includePublicRoom = false } = {}
+  {
+    chatId = null,
+    disputeId = null,
+    payload,
+    accountIds = [],
+    includeChatRoom = false,
+    includePublicRoom = false,
+    includeStaffRoom = false,
+  } = {}
 ) {
   try {
     const { getIo } = require('../lib/WebSocket');
@@ -445,6 +481,10 @@ function emitDisputeChat(
     if (includeChatRoom && chatId) rooms.add(String(chatId));
     if (includePublicRoom) {
       const room = publicDisputeRoom(disputeId);
+      if (room) rooms.add(room);
+    }
+    if (includeStaffRoom) {
+      const room = staffDisputeRoom(disputeId);
       if (room) rooms.add(room);
     }
     for (const accountId of accountIds || []) {
@@ -518,6 +558,7 @@ async function emitDisputeState(disputeId, { reason = null } = {}) {
       Boolean
     ),
     includePublicRoom: true,
+    includeStaffRoom: true,
   });
   // Each party's Cases view gets what they may now do (reply, read only, removed after a swap).
   void require('../services/CaseServices').announceDisputeCase(String(row.dispute_id), {
@@ -962,6 +1003,7 @@ async function createDisputeMessage({
     accountIds: targets.accountIds,
     includeChatRoom: targets.includeChatRoom,
     includePublicRoom: isPublishedAudience(normalizedAudience) && Boolean(disputeId),
+    includeStaffRoom: Boolean(disputeId),
   });
   if (disputeId) {
     void require('../services/CaseServices').announceDisputeCase(String(disputeId), {
@@ -1055,6 +1097,7 @@ async function updateDisputeMessageAudience(
     accountIds: targets.accountIds,
     includeChatRoom: targets.includeChatRoom,
     includePublicRoom: isPublishedAudience(nextAudience) && Boolean(disputeId),
+    includeStaffRoom: Boolean(disputeId),
   });
   if (!isPublishedAudience(nextAudience) && disputeId) {
     // Tell public viewers to drop it, without sending the text.
@@ -1152,6 +1195,7 @@ async function broadcastInboxDisputeMessage(io, event, message) {
     accountIds: targets.accountIds,
     includeChatRoom: targets.includeChatRoom,
     includePublicRoom: isPublishedAudience(audience),
+    includeStaffRoom: true,
   });
   return true;
 }
@@ -1765,6 +1809,8 @@ module.exports = {
   postDisputePublicInvite,
   getDisputeSettlementForParty,
   emitDisputeState,
+  staffDisputeRoom,
+  findStaffDisputeRoom,
   createDisputeMessage,
   updateDisputeMessageAudience,
   ensureStaffMemberOnChat,

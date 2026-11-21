@@ -63,6 +63,8 @@ const STAFF_SOCKET_EVENTS = new Set([
   'leaveForumRooms',
   'joinDisputeDiscussion',
   'leaveDisputeDiscussion',
+  'joinDisputeStaffRoom',
+  'leaveDisputeStaffRoom',
   'getActiveGroupCall',
   'getPresenceSnapshot',
   'markMessageAsRead',
@@ -129,6 +131,7 @@ async function initSocket(httpServer) {
     updateGroupProfileImageServices,
     removeGroupMemberServices,
     authorizeSocketRoomServices,
+    authorizeDisputeStaffRoomServices,
     typingEventServices,
     markConversationReadServices,
     callSignalServices,
@@ -364,6 +367,26 @@ async function initSocket(httpServer) {
     socket.on('leaveDisputeDiscussion', ({ disputeId } = {}) => {
       if (!disputeId) return;
       socket.leave(`dispute:public:${disputeId}`);
+    });
+
+    // A staff console with a dispute open gets every message and state change on it here,
+    // whether or not the staff member is listed on the case's chat. Members are refused.
+    socket.on('joinDisputeStaffRoom', async (payload, callback) => {
+      const disputeId = payload?.disputeId ? String(payload.disputeId) : null;
+      try {
+        if (!isStaffSocket) throw new Error('Only staff can follow this dispute live.');
+        const room = await authorizeDisputeStaffRoomServices(disputeId, accountId);
+        await socket.join(room.room_id);
+        acknowledge(callback, room);
+      } catch (error) {
+        rejectEvent(socket, 'disputeStaffRoomJoin', callback, error, { disputeId });
+      }
+    });
+
+    socket.on('leaveDisputeStaffRoom', (payload) => {
+      const disputeId = payload?.disputeId ? String(payload.disputeId) : null;
+      if (!disputeId) return;
+      socket.leave(`dispute:staff:${disputeId}`);
     });
 
     const handleSendMessage = async (messagePayload = {}, callback) => {

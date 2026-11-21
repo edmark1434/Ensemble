@@ -59,8 +59,13 @@ const {
   DISPUTE_REOPEN_REASONS,
   DISPUTE_PAYOUT_DEFAULT_DAYS,
   DISPUTE_PAYOUT_MAX_DAYS,
+  escrowKeptLine,
 } = require('../lib/DisputeResolutions');
-const { listDisputePayouts, planReversalRoute } = require('./DisputeFinancialRepositories');
+const {
+  listDisputePayouts,
+  planReversalRoute,
+  pendingDisputeEscrow,
+} = require('./DisputeFinancialRepositories');
 const {
   milestonePaidOutSql,
   milestoneEscrowState,
@@ -4040,6 +4045,10 @@ async function updateDispute(disputeId, patch, staffSession) {
       throw new Error(`"${resolution.label}" needs a short note explaining what happened.`);
     }
     if (notes.length > 2000) throw new Error('Resolution notes are too long.');
+    // Escrow first: a case never closes with credits frozen unless staff chose to leave them
+    // with the contract, and only for outcomes where nobody forfeits them.
+    const frozen = await pendingDisputeEscrow(refreshed);
+    assertEscrowDecided(frozen, patch, resolution);
 
     // Guarded on status so a settle or second resolve landing at the same moment wins once.
     const closedNow = await pool.query(
@@ -4070,7 +4079,10 @@ async function updateDispute(disputeId, patch, staffSession) {
       metadata: { status: 'closed', outcome: resolution.key },
     });
 
-    const body = buildDisputeResolutionMessage(resolution, {
+    const ruled = frozen > 0
+      ? { ...resolution, finding: (names) => `${resolution.finding(names)} ${escrowKeptLine(frozen)}` }
+      : resolution;
+    const body = buildDisputeResolutionMessage(ruled, {
       disputer: refreshed.initiator_handle
         ? `@${refreshed.initiator_handle}`
         : refreshed.initiator_name || 'The disputer',
@@ -4109,6 +4121,8 @@ async function updateDispute(disputeId, patch, staffSession) {
     if (!actPerms.canAct) throw new Error('Assign yourself to this dispute before dismissing.');
     const notes = String(patch.resolution_notes || '').trim();
     if (notes.length > 2000) throw disputeDecisionError('Resolution notes are too long.');
+    // A dismissed claim leaves the escrow with the contract, and staff must say so.
+    assertEscrowDecided(await pendingDisputeEscrow(refreshed), patch, null);
     // Dismissing keeps the case's visibility. A private complaint that goes nowhere must not
     // land on both profiles and the public page just because it was closed.
     const dismissed = await pool.query(
@@ -4727,6 +4741,17 @@ async function getDisputeDetail(disputeId, staffSession = null) {
   const waiting = payouts.filter((p) => ['scheduled', 'failed'].includes(p.status));
   const closed = String(row.status || '').toLowerCase() === 'closed';
 
+  // Escrow the case still holds. The console decides it first; the decisions refuse otherwise.
+  let escrowPending = 0;
+  if (!closed) {
+    try {
+      escrowPending = await pendingDisputeEscrow(row);
+    } catch (err) {
+      console.error('Error loading dispute escrow:', err.message);
+      escrowPending = Number(row.credit_amount_involved || 0);
+    }
+  }
+
   // What happened to the contract after this case: on hold, the parties' continue-or-end
   // answers, or how that question was settled.
   let contractAfterCase = null;
@@ -4790,6 +4815,7 @@ async function getDisputeDetail(disputeId, staffSession = null) {
       defaultDays: DISPUTE_PAYOUT_DEFAULT_DAYS,
       maxDays: DISPUTE_PAYOUT_MAX_DAYS,
     },
+    escrowPending,
     contractAfterCase,
     // Drive the Resolve / Reopen prompts, so the console never hardcodes these lists.
     resolutionOptions: withPreview(
@@ -5073,6 +5099,118 @@ function decisionReason(patch) {
   return reason;
 }
 
+function creditCount(amount) {
+  return `${Number(amount || 0).toLocaleString('en-US')} credit${Number(amount) === 1 ? '' : 's'}`;
+}
+
+/**
+ * Escrow first. While a case still holds frozen escrow it may only close without a money
+ * ruling when staff explicitly leave the credits with the contract (`escrow: "keep"`), and
+ * only for an outcome where nobody forfeits them. A disputee who would not take part loses
+ * the escrow to the disputer, which is a Settle escrow ruling (`award: "disputer"`).
+ * @param {number} frozen credits the case still holds (`pendingDisputeEscrow`)
+ * @param {object} patch the request body
+ * @param {object|null} resolution the picked DISPUTE_RESOLUTIONS entry (null for dismiss)
+ */
+function assertEscrowDecided(frozen, patch, resolution) {
+  if (!(frozen > 0)) return;
+  if (resolution?.escrow === 'disputer') {
+    throw disputeDecisionError(
+      `${creditCount(frozen)} are still frozen. "${resolution.label}" sends them to the disputer, so settle the escrow: Resolve → Disputee did not cooperate.`
+    );
+  }
+  if (String(patch?.escrow || '').toLowerCase() !== 'keep') {
+    throw disputeDecisionError(
+      `Decide the escrow first: ${creditCount(frozen)} are still frozen. Settle them, or confirm they stay with the contract.`
+    );
+  }
+}
+
+/** Checks a dispute ban before anything changes, so a money ruling never lands without it. */
+async function assertDisputeBanAllowed(row, staff) {
+  if (!row?.for_account_id) {
+    throw disputeDecisionError('Invalid ban: this dispute has no respondent to sanction.');
+  }
+  if (String(row.sanction_type || '').toLowerCase() === 'ban') {
+    throw disputeDecisionError('Cannot ban again. This dispute already ended in a permanent ban. Reopen it first.');
+  }
+  const { assertCanSanctionTarget } = require('../lib/SuspendGuards');
+  await assertCanSanctionTarget({
+    actorStaffId: staff.staff_id,
+    targetAccountId: row.for_account_id,
+    action: 'ban',
+  });
+}
+
+/**
+ * Permanently ban a dispute's respondent and record it on the case: the case becomes public,
+ * `sanction_type = 'ban'`, and the ban ruling is posted in the discussion.
+ * `closeCase` also closes the case with the reason as its notes (the plain ban decision).
+ * After a money ruling the case is already closed and keeps the ruling's notes.
+ * Call `assertDisputeBanAllowed` first. Does not broadcast; the caller does.
+ */
+async function banDisputeRespondent(row, { reason, staff, staffSession, closeCase = false }) {
+  const disputeId = row.dispute_id;
+  const accountId = row.for_account_id;
+  const name = row.respondent_name || 'The respondent';
+  const message = buildDisputeSanctionMessage({
+    disputee: row.respondent_handle ? `@${row.respondent_handle}` : name,
+    reason,
+    disputeNumber: row.dispute_number || null,
+  });
+
+  const { updateAccountStatus } = require('./AdminUserTeamRepositories');
+  await updateAccountStatus(accountId, 'ban', staff.staff_id, {
+    reason,
+    duration: 'permanent',
+    punishmentId: 'ban_dispute_conviction',
+    disputeId,
+    disputeNumber: row.dispute_number || null,
+  });
+
+  if (closeCase) {
+    await pool.query(
+      `
+      UPDATE disputes
+      SET status = 'closed',
+          visibility = TRUE,
+          sanction_type = 'ban',
+          resolution_notes = $1,
+          resolved_at = NOW(),
+          updated_at = NOW()
+      WHERE dispute_id = $2
+      `,
+      [reason, disputeId]
+    );
+  } else {
+    await pool.query(
+      `UPDATE disputes SET visibility = TRUE, sanction_type = 'ban', updated_at = NOW() WHERE dispute_id = $1`,
+      [disputeId]
+    );
+  }
+
+  await recordAccountActivity({
+    accountId,
+    action: `Dispute ${row.dispute_number || disputeId} closed with a permanent ban`,
+    eventCode: 'DISPUTE_SANCTIONED',
+    referenceTable: 'disputes',
+    referencePrefix: 'DIS',
+    referenceId: disputeId,
+    actorStaffId: staff.staff_id,
+    metadata: { status: 'closed', sanctionType: 'ban', reason },
+  });
+
+  try {
+    await postDisputeDecisionMessage(row, staffSession, message, { asSystem: true });
+  } catch (err) {
+    const wrapped = new Error(
+      `${err.message || 'Could not post the discussion message.'} The account was still banned and the dispute was closed.`
+    );
+    wrapped.statusCode = /MongoDB/i.test(err.message || '') ? 503 : 500;
+    throw wrapped;
+  }
+}
+
 async function postDisputeDecisionMessage(
   row,
   staffSession,
@@ -5121,70 +5259,25 @@ async function convictDispute(disputeId, row, patch, staff, staffSession, perms)
     throw disputeDecisionError('Assign yourself to this dispute before you can ban.');
   }
   const reason = decisionReason(patch);
-  const accountId = row.for_account_id;
-  if (!accountId) {
-    throw disputeDecisionError('Invalid ban: this dispute has no respondent to sanction.');
-  }
-  if (String(row.sanction_type || '').toLowerCase() === 'ban') {
-    throw disputeDecisionError('Cannot ban again. This dispute already ended in a permanent ban. Reopen it first.');
-  }
   if (String(row.status || '').toLowerCase() === 'closed') {
     throw disputeDecisionError('This dispute is closed. Reopen it before deciding it again.');
   }
-
-  const handle = row.respondent_handle ? `@${row.respondent_handle}` : 'the respondent';
-  const name = row.respondent_name || 'The respondent';
-  const message = buildDisputeSanctionMessage({
-    disputee: row.respondent_handle ? `@${row.respondent_handle}` : name,
-    reason,
-    disputeNumber: row.dispute_number || null,
-  });
-
-  const { updateAccountStatus } = require('./AdminUserTeamRepositories');
-  await updateAccountStatus(accountId, 'ban', staff.staff_id, {
-    reason,
-    duration: 'permanent',
-    punishmentId: 'ban_dispute_conviction',
-    disputeId: row.dispute_id,
-    disputeNumber: row.dispute_number || null,
-  });
-
-  await pool.query(
-    `
-    UPDATE disputes
-    SET status = 'closed',
-        visibility = TRUE,
-        sanction_type = 'ban',
-        resolution_notes = $1,
-        resolved_at = NOW(),
-        updated_at = NOW()
-    WHERE dispute_id = $2
-    `,
-    [reason, disputeId]
-  );
+  // Escrow first: banning with credits still frozen would leave them in a contract with a
+  // banned party. Settle escrow returns them to the disputer and bans in one step.
+  const frozen = await pendingDisputeEscrow(row);
+  if (frozen > 0) {
+    throw disputeDecisionError(
+      `Settle the escrow before banning: ${creditCount(frozen)} are still frozen. Use Resolve → Disputee did not cooperate to return them to the disputer and ban in one step.`
+    );
+  }
+  await assertDisputeBanAllowed(row, staff);
 
   try {
-    await postDisputeDecisionMessage(row, staffSession, message, { asSystem: true });
-  } catch (err) {
-    const wrapped = new Error(
-      `${err.message || 'Could not post the discussion message.'} The account was still banned and the dispute was closed.`
-    );
-    wrapped.statusCode = /MongoDB/i.test(err.message || '') ? 503 : 500;
-    throw wrapped;
+    await banDisputeRespondent(row, { reason, staff, staffSession, closeCase: true });
+  } finally {
+    // The ban and the closed case are saved even if the ruling message could not be posted.
+    await emitDisputeState(disputeId);
   }
-
-  await recordAccountActivity({
-    accountId,
-    action: `Dispute ${row.dispute_number || disputeId} closed with a permanent ban`,
-    eventCode: 'DISPUTE_SANCTIONED',
-    referenceTable: 'disputes',
-    referencePrefix: 'DIS',
-    referenceId: disputeId,
-    actorStaffId: staff.staff_id,
-    metadata: { status: 'closed', sanctionType: 'ban', reason },
-  });
-
-  await emitDisputeState(disputeId);
   return getDisputeDetail(disputeId, staffSession);
 }
 
@@ -6676,6 +6769,8 @@ module.exports = {
   updateDispute,
   getDisputeDetail,
   addDisputeMessage,
+  assertDisputeBanAllowed,
+  banDisputeRespondent,
   setDisputeMessageAudience,
   fetchDisputesList,
   fetchReportsList,

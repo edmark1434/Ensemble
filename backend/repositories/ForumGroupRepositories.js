@@ -120,12 +120,25 @@ async function updateForumGroupMembers(groupId, updateData) {
     }
 }
 
-async function deleteForumGroupRepositories(groupId) {
+/**
+ * Soft delete from the member forum. `archivedBy` (`owner` or `staff`) decides
+ * whether Forum Control may reactivate it: staff never revive an owner's delete.
+ */
+async function deleteForumGroupRepositories(groupId, { archivedBy = 'owner', archivedByUserId = null } = {}) {
     try {
         const forumGroupsCollection = getForumDb().collection('forum_groups');
+        const now = new Date();
         const result = await forumGroupsCollection.updateOne(
             { _id: new ObjectId(groupId), status: 'active' },
-            { $set: { deleted_at: new Date(), status: 'inactive' } }
+            {
+                $set: {
+                    deleted_at: now,
+                    status: 'inactive',
+                    archived_by: archivedBy,
+                    archived_by_user_id: archivedByUserId,
+                    updated_at: now,
+                },
+            }
         );
         return result;
     }catch(err) {

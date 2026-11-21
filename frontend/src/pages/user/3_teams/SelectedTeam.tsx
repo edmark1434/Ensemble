@@ -39,6 +39,7 @@ import { TeamVideoProjectsTab } from "./team_components/TeamVideoProjectsTab";
 import { TeamContractsTab } from "./team_components/TeamContractsTab";
 import { TeamGalleryTab } from "./team_components/TeamGalleryTab";
 import api from "@/lib/axios";
+import socket from "@/lib/socket";
 import { uploadFileWithIntent } from "@/lib/uploadFile";
 import UserHeader from "@/components/nav/user_header";
 import SmartTabBar, { type SmartTabItem } from "@/components/ui/SmartTabBar";
@@ -85,6 +86,16 @@ type Team = {
   business_verified_at?: string;
   business_verification_status?: string;
   current_user_membership?: Membership;
+  /** Team account standing (TeamStandingServices.teamStandingSummary). */
+  standing?: {
+    status: string;
+    restricted: boolean;
+    endsAt: string | null;
+    leaderRestricted: boolean;
+    leaderStatus: string;
+    paused: string[];
+    message: string | null;
+  } | null;
 };
 type Member = {
   account_id: string;
@@ -300,6 +311,19 @@ export default function SelectedTeam() {
   useEffect(() => {
     void loadTeam(true);
   }, [loadTeam]);
+
+  // Staff changed the team's standing or wallet: reload so the banner and buttons match.
+  useEffect(() => {
+    if (!id) return;
+    const onTeamStanding = (payload: { teamId?: string }) => {
+      if (String(payload?.teamId || "") === String(id)) void loadTeam(false);
+    };
+    if (!socket.connected) socket.connect();
+    socket.on("team:standing_changed", onTeamStanding);
+    return () => {
+      socket.off("team:standing_changed", onTeamStanding);
+    };
+  }, [id, loadTeam]);
 
   const mutate = async (
     path: string,
@@ -677,6 +701,35 @@ export default function SelectedTeam() {
             </button>
           )}
         </div>
+
+        {team.standing?.message && (
+          <div
+            role="status"
+            className={`rounded-2xl border px-4 py-3 text-sm ${
+              team.standing.restricted && team.standing.status !== "Suspended"
+                ? "border-rose-200 bg-rose-50 text-rose-800 dark:border-rose-900/60 dark:bg-rose-950/40 dark:text-rose-200"
+                : "border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-200"
+            }`}
+          >
+            <div className="flex items-start gap-2">
+              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+              <div className="min-w-0">
+                <p className="font-semibold">
+                  {team.standing.restricted ? `Team ${team.standing.status.toLowerCase()}` : "Team activity limited"}
+                </p>
+                <p className="mt-0.5">{team.standing.message}</p>
+                {activeMember && team.standing.paused.length > 0 && (
+                  <p className="mt-1 text-xs opacity-80">Paused: {team.standing.paused.join(" · ")}.</p>
+                )}
+                {isTeamOwner && (
+                  <p className="mt-1 text-xs opacity-80">
+                    As the team leader you were notified with the reason. To dispute it, contact Support.
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Team Header Banner Card (Contained rounded card matching Workspace) */}
         <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-xs transition-all duration-300">

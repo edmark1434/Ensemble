@@ -45,6 +45,30 @@ function escapeMongoRegex(value) {
 /** Group member roles, strongest first — the Admin of a group is its owner. */
 const GROUP_ROLE_ORDER = { Admin: 0, Moderator: 1, Member: 2 };
 
+// Staff restore puts back what moderation took down. It never revives what a
+// member deleted themselves (same rule as owner-deleted projects).
+function discussionRestoreBlock(doc) {
+  if (doc?.removed_by === 'author') {
+    return 'The author deleted this discussion. Staff can only restore discussions that moderation removed.';
+  }
+  return null;
+}
+
+function groupReactivateBlock(group) {
+  if (group?.archived_by === 'owner') {
+    return 'The owner deleted this group. Staff can only reactivate groups that staff archived.';
+  }
+  return null;
+}
+
+function commentRestoreBlock(comment) {
+  if (!comment?.deleted_at) return null;
+  if (comment.removed_by === 'author') return 'The author deleted this comment.';
+  // Every removal before hide-and-restore overwrote the text with a placeholder.
+  if (!comment.removed_by) return 'Removed before restore was supported, so the original text was not kept.';
+  return null;
+}
+
 /** A discussion counts as removed when it is soft-deleted or marked removed. */
 const REMOVED_DISCUSSION_EXPR = {
   $or: [{ $ne: [{ $ifNull: ['$deleted_at', null] }, null] }, { $eq: ['$status', 'removed'] }],
@@ -320,8 +344,20 @@ async function getModeratorForumGroups({ search = '', status = 'all' } = {}) {
         lastActivityAt: latestDate(groupStats.lastActivityAt, group.created_at),
         createdAt: group.created_at || null,
         deletedAt: group.deleted_at || null,
+        ...groupArchiveState(group),
       };
     }),
+  };
+}
+
+function groupArchiveState(group) {
+  const archived = (group.status || 'active') !== 'active';
+  const block = archived ? groupReactivateBlock(group) : null;
+  return {
+    archivedBy: archived ? group.archived_by || null : null,
+    archiveReason: archived ? group.archive_reason || null : null,
+    canReactivate: archived && !block,
+    reactivateBlockedReason: block,
   };
 }
 
@@ -374,28 +410,51 @@ async function getModeratorForumGroupDetail(groupId) {
     lastActivityAt: latestDate(groupStats.lastActivityAt, group.created_at),
     createdAt: group.created_at || null,
     deletedAt: group.deleted_at || null,
+    ...groupArchiveState(group),
     members: roster,
     discussions: discussionDocs.map((doc) => mapDiscussionSummary(doc, identities, group)),
   };
 }
 
-async function setForumGroupStatus(groupId, status) {
+/**
+ * Archives or reactivates a group. Archiving is a soft delete: members,
+ * discussions and comments stay stored, so reactivating brings them all back.
+ *
+ * The filter only matches a group still in the opposite state (and, for a
+ * reactivation, one its owner did not delete), so a concurrent change returns
+ * false instead of being overwritten.
+ */
+async function setForumGroupStatus(groupId, status, { staffId = null, reason = null } = {}) {
   const db = forumDb();
   if (!db) throw new Error('MongoDB is not connected');
   const allowed = ['active', 'inactive'];
   if (!allowed.includes(status)) throw new Error(`Invalid group status: ${status}`);
 
-  await db.collection('forum_groups').updateOne(
-    { _id: new ObjectId(groupId) },
-    {
-      $set: {
-        status,
-        deleted_at: status === 'inactive' ? new Date() : null,
-        updated_at: new Date(),
-      },
-    }
-  );
-  return getModeratorForumGroups();
+  const now = new Date();
+  const update =
+    status === 'inactive'
+      ? {
+          $set: {
+            status,
+            deleted_at: now,
+            archived_by: 'staff',
+            archived_by_staff_id: staffId,
+            archive_reason: reason,
+            updated_at: now,
+          },
+        }
+      : {
+          $set: { status, deleted_at: null, restored_at: now, updated_at: now },
+          $unset: { archived_by: '', archived_by_user_id: '', archived_by_staff_id: '', archive_reason: '' },
+        };
+  const filter =
+    status === 'inactive'
+      ? // The desks show a group with no status as active.
+        { _id: new ObjectId(groupId), status: { $in: ['active', null] } }
+      : { _id: new ObjectId(groupId), status: { $nin: ['active', null] }, archived_by: { $ne: 'owner' } };
+
+  const result = await db.collection('forum_groups').updateOne(filter, update);
+  return result.matchedCount > 0;
 }
 
 function commentStats(comments) {
@@ -432,6 +491,10 @@ function mapDiscussionSummary(doc, identities, group = null) {
     createdAt: doc.created_at || null,
     updatedAt: doc.updated_at || null,
     removedAt: doc.deleted_at || null,
+    removedBy: removed ? doc.removed_by || null : null,
+    removalReason: removed ? doc.removal_reason || null : null,
+    canRestore: removed && !discussionRestoreBlock(doc),
+    restoreBlockedReason: removed ? discussionRestoreBlock(doc) : null,
     lastActivityAt: latestDate(counts.lastCommentAt, doc.updated_at, doc.created_at),
   };
 }
@@ -536,6 +599,10 @@ async function getModeratorForumDiscussionDetail(discussionId) {
         attachmentCount: Array.isArray(comment.attachments) ? comment.attachments.length : 0,
         isDeleted: Boolean(comment.deleted_at),
         deletedAt: comment.deleted_at || null,
+        removedBy: comment.deleted_at ? comment.removed_by || null : null,
+        removalReason: comment.deleted_at ? comment.removal_reason || null : null,
+        canRestore: Boolean(comment.deleted_at) && !commentRestoreBlock(comment),
+        restoreBlockedReason: commentRestoreBlock(comment),
         createdAt: comment.created_at || null,
         updatedAt: comment.updated_at || null,
       }))
@@ -543,52 +610,110 @@ async function getModeratorForumDiscussionDetail(discussionId) {
   };
 }
 
-// Remove or restore a whole discussion (soft delete keeps it queryable for audit).
-async function setForumDiscussionStatus(discussionId, changes = {}) {
+function conflictError(message) {
+  const error = new Error(message);
+  error.statusCode = 409;
+  return error;
+}
+
+/**
+ * Remove or restore a whole discussion, and set its lock and pin flags.
+ *
+ * Removal is a soft delete: `deleted_at` and `status` both mark it removed (the
+ * member forum checks both), and nothing in the document is cleared. Restore
+ * clears both, and only matches a discussion its author did not delete.
+ */
+async function setForumDiscussionStatus(discussionId, changes = {}, { staffId = null, reason = null } = {}) {
   const db = forumDb();
   if (!db) throw new Error('MongoDB is not connected');
-  const updates = { updated_at: new Date() };
+  const now = new Date();
+  const set = { updated_at: now };
+  const unset = {};
+  const filter = { _id: new ObjectId(discussionId) };
+
   if (changes.status != null) {
     if (!['active', 'removed'].includes(changes.status)) throw new Error(`Invalid discussion status: ${changes.status}`);
-    updates.deleted_at = changes.status === 'removed' ? new Date() : null;
+    if (changes.status === 'removed') {
+      Object.assign(set, {
+        deleted_at: now,
+        status: 'removed',
+        removed_by: 'staff',
+        removed_by_staff_id: staffId,
+        removal_reason: reason,
+      });
+      filter.deleted_at = null;
+      filter.status = { $ne: 'removed' };
+    } else {
+      Object.assign(set, { deleted_at: null, status: 'active', restored_at: now });
+      Object.assign(unset, { removed_by: '', removed_by_user_id: '', removed_by_staff_id: '', removal_reason: '' });
+      filter.$or = [{ deleted_at: { $ne: null } }, { status: 'removed' }];
+      filter.removed_by = { $ne: 'author' };
+    }
   }
-  if (changes.isLocked != null) updates.is_locked = Boolean(changes.isLocked);
-  if (changes.isSticky != null) updates.is_sticky = Boolean(changes.isSticky);
-  if (Object.keys(updates).length === 1) throw new Error('No moderation fields provided');
+  if (changes.isLocked != null) set.is_locked = Boolean(changes.isLocked);
+  if (changes.isSticky != null) set.is_sticky = Boolean(changes.isSticky);
+  if (Object.keys(set).length === 1) throw new Error('No moderation fields provided');
 
-  const result = await db.collection('forum_discussions').updateOne(
-    { _id: new ObjectId(discussionId) },
-    { $set: updates }
-  );
+  const update = Object.keys(unset).length ? { $set: set, $unset: unset } : { $set: set };
+  const result = await db.collection('forum_discussions').updateOne(filter, update);
   if (!result.matchedCount) {
-    const error = new Error('Discussion not found');
-    error.statusCode = 404;
-    throw error;
+    const exists = await db.collection('forum_discussions').countDocuments({ _id: filter._id }, { limit: 1 });
+    if (!exists) {
+      const error = new Error('Discussion not found');
+      error.statusCode = 404;
+      throw error;
+    }
+    throw conflictError('This discussion changed while you were working on it. Reload and try again.');
   }
   return getModeratorForumDiscussionDetail(discussionId);
 }
 
-// Soft-delete a comment inside a discussion (moderator action).
-async function removeForumDiscussionComment(discussionId, commentId) {
+/**
+ * Hide or restore one comment (staff action). Hiding never touches the text or
+ * attachments: member reads mask a hidden comment, and restore shows it again.
+ *
+ * The filter only matches the comment in the expected state (and, for restore,
+ * one hidden by moderation), so a concurrent change returns a conflict.
+ */
+async function setForumDiscussionCommentHidden(
+  discussionId,
+  commentId,
+  hidden,
+  { staffId = null, reason = null } = {}
+) {
   const db = forumDb();
   if (!db) throw new Error('MongoDB is not connected');
+  const now = new Date();
 
-  const result = await db.collection('forum_discussions').updateOne(
-    { _id: new ObjectId(discussionId), 'comments.comment_id': commentId },
-    {
-      $set: {
-        'comments.$.deleted_at': new Date(),
-        'comments.$.comment': '[removed by moderator]',
-        'comments.$.attachments': [],
-        'comments.$.updated_at': new Date(),
-        updated_at: new Date(),
-      },
-    }
-  );
+  const match = hidden
+    ? { comment_id: commentId, deleted_at: null }
+    : { comment_id: commentId, deleted_at: { $ne: null }, removed_by: { $nin: [null, 'author'] } };
+  const update = hidden
+    ? {
+        $set: {
+          'comments.$.deleted_at': now,
+          'comments.$.removed_by': 'staff',
+          'comments.$.removed_by_staff_id': staffId,
+          'comments.$.removal_reason': reason,
+          'comments.$.updated_at': now,
+          updated_at: now,
+        },
+      }
+    : {
+        $set: { 'comments.$.deleted_at': null, 'comments.$.updated_at': now, updated_at: now },
+        $unset: {
+          'comments.$.removed_by': '',
+          'comments.$.removed_by_user_id': '',
+          'comments.$.removed_by_staff_id': '',
+          'comments.$.removal_reason': '',
+        },
+      };
+
+  const result = await db
+    .collection('forum_discussions')
+    .updateOne({ _id: new ObjectId(discussionId), comments: { $elemMatch: match } }, update);
   if (!result.matchedCount) {
-    const error = new Error('Comment not found');
-    error.statusCode = 404;
-    throw error;
+    throw conflictError('This comment changed while you were working on it. Reload and try again.');
   }
   return getModeratorForumDiscussionDetail(discussionId);
 }
@@ -930,6 +1055,6 @@ module.exports = {
   getModeratorForumDiscussions,
   getModeratorForumDiscussionDetail,
   setForumDiscussionStatus,
-  removeForumDiscussionComment,
+  setForumDiscussionCommentHidden,
   getForumModerationStats,
 };

@@ -5,19 +5,25 @@ const {
   getModeratorForumDiscussions,
   getModeratorForumDiscussionDetail,
   setForumDiscussionStatus,
-  removeForumDiscussionComment,
+  setForumDiscussionCommentHidden,
 } = require('../repositories/ForumModeratorRepositories');
 const { updateForumGroupMember } = require('../repositories/ForumGroupRepositories');
+const { getForumDiscussionById: getPublicForumDiscussion } = require('../repositories/ForumDiscussionRepositories');
 const { recordAccountActivity } = require('../repositories/AccountActivityRepositories');
 const { resolveStaffForSession } = require('../lib/StaffSession');
 const { emitForumEvent } = require('../lib/WebSocket');
 
 /**
  * Forum content moderation shared by the admin console (Moderation →
- * Management → Forum) and the Forum Moderator desk. Both consoles get the same
- * validation, the same already-in-that-state guards and the same audit trail;
- * route-level middleware is what decides who may call in.
+ * Management → Forum) and the Forum Moderator desk (Forum Control). Both
+ * consoles get the same validation, the same already-in-that-state guards and
+ * the same audit trail; route-level middleware is what decides who may call in.
+ *
+ * Nothing here deletes forum content. Every removal is a hide that the same
+ * desk can undo; only content a member deleted themselves stays down.
  */
+
+const REASON_MAX_LENGTH = 500;
 
 function forumError(message, statusCode = 400) {
   const error = new Error(message);
@@ -29,6 +35,45 @@ function escapeRegex(value) {
   return String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+function cleanReason(body) {
+  const reason = String(body?.reason || '').trim();
+  return reason ? reason.slice(0, REASON_MAX_LENGTH) : null;
+}
+
+/** A moderation flag must be a real boolean: `"false"` used to lock a discussion. */
+function optionalBoolean(body, field) {
+  if (body?.[field] == null) return undefined;
+  if (typeof body[field] !== 'boolean') throw forumError(`${field} must be true or false`);
+  return body[field];
+}
+
+async function staffForSession(session) {
+  try {
+    return await resolveStaffForSession(session);
+  } catch (err) {
+    console.error('Could not resolve the staff member for a forum action:', err.message);
+    return null;
+  }
+}
+
+/** Realtime is best effort: the change is already saved and a reload shows it. */
+function broadcast(type, payload) {
+  try {
+    emitForumEvent(type, payload);
+  } catch (err) {
+    console.error(`Forum ${type} saved without realtime delivery:`, err.message);
+  }
+}
+
+/** The member-facing discussion (hidden comments masked), or null when members cannot see it. */
+async function publicDiscussion(discussionId) {
+  try {
+    return await getPublicForumDiscussion(discussionId);
+  } catch (err) {
+    console.error('Could not read the public discussion for a forum event:', err.message);
+    return null;
+  }
+}
 
 /**
  * Writes one forum moderation action to the account activity log.
@@ -44,11 +89,12 @@ async function logForumAction({
   referencePrefix,
   referenceId,
   session,
+  staff,
   metadata,
 }) {
   if (!accountId) return;
   try {
-    const staff = await resolveStaffForSession(session);
+    const actor = staff === undefined ? await resolveStaffForSession(session) : staff;
     await recordAccountActivity({
       accountId,
       action,
@@ -56,8 +102,8 @@ async function logForumAction({
       referenceTable,
       referencePrefix,
       referenceId,
-      actorStaffId: staff?.staff_id || null,
-      actorAccountId: staff?.account_id || session?.account_id || session?.accountId || null,
+      actorStaffId: actor?.staff_id || null,
+      actorAccountId: actor?.account_id || session?.account_id || session?.accountId || null,
       metadata,
     });
   } catch (err) {
@@ -84,9 +130,19 @@ async function setForumGroupVisibility(groupId, body, session) {
   if (before.status === status) {
     throw forumError(status === 'active' ? 'This group is already active' : 'This group is already archived', 409);
   }
+  if (status === 'active' && !before.canReactivate) {
+    throw forumError(before.reactivateBlockedReason || 'This group cannot be reactivated', 403);
+  }
 
-  await setForumGroupStatus(groupId, status);
+  const reason = cleanReason(body);
+  const staff = await staffForSession(session);
+  const changed = await setForumGroupStatus(groupId, status, { staffId: staff?.staff_id || null, reason });
+  if (!changed) {
+    throw forumError('This group changed while you were working on it. Reload and try again.', 409);
+  }
   const after = await getModeratorForumGroupDetail(groupId);
+
+  broadcast(status === 'inactive' ? 'group.deleted' : 'group.restored', { groupId: before.id });
 
   await logForumAction({
     accountId: before.owner?.accountId || null,
@@ -99,14 +155,16 @@ async function setForumGroupVisibility(groupId, body, session) {
     referencePrefix: 'GRP',
     referenceId: before.id,
     session,
+    staff,
     metadata: {
       groupId: before.id,
       groupName: before.name,
       previousStatus: before.status,
+      previousArchivedBy: before.archivedBy,
       status,
       memberCount: before.memberCount,
       discussionCount: before.discussionCount,
-      reason: String(body?.reason || '').trim() || null,
+      reason,
     },
   });
 
@@ -114,8 +172,8 @@ async function setForumGroupVisibility(groupId, body, session) {
 }
 
 async function banForumGroupMember(groupId, memberId, body, session) {
-  if (body?.isBanned == null) throw forumError('Say whether the member is banned');
-  const isBanned = Boolean(body.isBanned);
+  const isBanned = optionalBoolean(body, 'isBanned');
+  if (isBanned === undefined) throw forumError('Say whether the member is banned');
 
   const before = await getModeratorForumGroupDetail(groupId);
   if (!before) throw forumError('Group not found', 404);
@@ -131,11 +189,7 @@ async function banForumGroupMember(groupId, memberId, body, session) {
   });
   if (!result?.matchedCount) throw forumError('Group member not found', 404);
 
-  try {
-    emitForumEvent(isBanned ? 'group.member_banned' : 'group.member_unbanned', { groupId, memberId });
-  } catch (err) {
-    console.error('Forum member update saved without realtime delivery:', err.message);
-  }
+  broadcast(isBanned ? 'group.member_banned' : 'group.member_unbanned', { groupId, memberId });
 
   await logForumAction({
     accountId: member.accountId,
@@ -154,7 +208,7 @@ async function banForumGroupMember(groupId, memberId, body, session) {
       memberName: member.name,
       memberHandle: member.handle,
       groupRole: member.role,
-      reason: String(body?.reason || '').trim() || null,
+      reason: cleanReason(body),
     },
   });
 
@@ -173,29 +227,26 @@ async function getForumDiscussionForStaff(discussionId) {
   return getModeratorForumDiscussionDetail(discussionId);
 }
 
-/** The state changes this patch makes, as audit events. */
-function discussionChangeEvents(before, body) {
+/** The state changes this patch makes, as audit events. `changes` holds real changes only. */
+function discussionChangeEvents(changes) {
   const events = [];
-  if (body?.status != null) {
-    const status = String(body.status).toLowerCase();
-    if (status !== before.status) {
-      events.push(
-        status === 'removed'
-          ? { eventCode: 'FORUM_DISCUSSION_REMOVED', verb: 'Removed' }
-          : { eventCode: 'FORUM_DISCUSSION_RESTORED', verb: 'Restored' }
-      );
-    }
-  }
-  if (body?.isLocked != null && Boolean(body.isLocked) !== before.isLocked) {
+  if (changes.status != null) {
     events.push(
-      body.isLocked
+      changes.status === 'removed'
+        ? { eventCode: 'FORUM_DISCUSSION_REMOVED', verb: 'Removed' }
+        : { eventCode: 'FORUM_DISCUSSION_RESTORED', verb: 'Restored' }
+    );
+  }
+  if (changes.isLocked != null) {
+    events.push(
+      changes.isLocked
         ? { eventCode: 'FORUM_DISCUSSION_LOCKED', verb: 'Locked replies on' }
         : { eventCode: 'FORUM_DISCUSSION_UNLOCKED', verb: 'Unlocked replies on' }
     );
   }
-  if (body?.isSticky != null && Boolean(body.isSticky) !== before.isSticky) {
+  if (changes.isSticky != null) {
     events.push(
-      body.isSticky
+      changes.isSticky
         ? { eventCode: 'FORUM_DISCUSSION_PINNED', verb: 'Pinned' }
         : { eventCode: 'FORUM_DISCUSSION_UNPINNED', verb: 'Unpinned' }
     );
@@ -204,20 +255,58 @@ function discussionChangeEvents(before, body) {
 }
 
 async function setForumDiscussionState(discussionId, body, session) {
-  const changes = {};
-  if (body?.status != null) changes.status = String(body.status).toLowerCase();
-  if (body?.isLocked != null) changes.isLocked = Boolean(body.isLocked);
-  if (body?.isSticky != null) changes.isSticky = Boolean(body.isSticky);
-  if (!Object.keys(changes).length) throw forumError('No moderation fields provided');
+  const requested = {};
+  if (body?.status != null) {
+    const status = String(body.status).toLowerCase();
+    if (status !== 'active' && status !== 'removed') {
+      throw forumError('Set the discussion to active or removed');
+    }
+    requested.status = status;
+  }
+  const isLocked = optionalBoolean(body, 'isLocked');
+  const isSticky = optionalBoolean(body, 'isSticky');
+  if (isLocked !== undefined) requested.isLocked = isLocked;
+  if (isSticky !== undefined) requested.isSticky = isSticky;
+  if (!Object.keys(requested).length) throw forumError('No moderation fields provided');
 
   const before = await getModeratorForumDiscussionDetail(discussionId);
   if (!before) throw forumError('Discussion not found', 404);
 
-  const events = discussionChangeEvents(before, body);
-  const detail = await setForumDiscussionStatus(discussionId, changes);
+  // Only what actually changes: re-removing used to re-stamp the removal date.
+  const changes = {};
+  if (requested.status != null && requested.status !== before.status) changes.status = requested.status;
+  if (requested.isLocked != null && requested.isLocked !== before.isLocked) changes.isLocked = requested.isLocked;
+  if (requested.isSticky != null && requested.isSticky !== before.isSticky) changes.isSticky = requested.isSticky;
+  if (!Object.keys(changes).length) {
+    throw forumError('Nothing to change: the discussion is already in that state', 409);
+  }
+  if (changes.status === 'active' && !before.canRestore) {
+    throw forumError(before.restoreBlockedReason || 'This discussion cannot be restored', 403);
+  }
 
-  const reason = String(body?.reason || '').trim() || null;
-  for (const event of events) {
+  const reason = cleanReason(body);
+  const staff = await staffForSession(session);
+  const detail = await setForumDiscussionStatus(discussionId, changes, {
+    staffId: staff?.staff_id || null,
+    reason,
+  });
+
+  // Members see the committed result: removal drops the post from open feeds and
+  // pages, restore and lock/pin changes replace it in place.
+  const scope = { groupId: before.groupId, discussionId: before.id };
+  if (changes.status === 'removed') {
+    broadcast('discussion.deleted', scope);
+  } else {
+    const discussion = await publicDiscussion(before.id);
+    if (discussion) {
+      broadcast(changes.status === 'active' ? 'discussion.restored' : 'discussion.updated', {
+        ...scope,
+        discussion,
+      });
+    }
+  }
+
+  for (const event of discussionChangeEvents(changes)) {
     await logForumAction({
       accountId: before.author?.accountId || null,
       action: `${event.verb} discussion “${before.title}”`,
@@ -226,6 +315,7 @@ async function setForumDiscussionState(discussionId, body, session) {
       referencePrefix: 'DSC',
       referenceId: before.id,
       session,
+      staff,
       metadata: {
         discussionId: before.id,
         discussionTitle: before.title,
@@ -233,6 +323,7 @@ async function setForumDiscussionState(discussionId, body, session) {
         groupName: before.groupName,
         authorHandle: before.author?.handle || null,
         previousStatus: before.status,
+        previousRemovedBy: before.removedBy,
         wasLocked: before.isLocked,
         wasPinned: before.isSticky,
         commentCount: before.commentCount,
@@ -244,39 +335,77 @@ async function setForumDiscussionState(discussionId, body, session) {
   return detail;
 }
 
-async function removeForumComment(discussionId, commentId, session) {
+/**
+ * Hides (`hidden: true`) or restores (`hidden: false`) one comment. Hiding keeps
+ * the text and attachments; member reads show a placeholder until it is restored.
+ */
+async function setForumCommentVisibility(discussionId, commentId, body, session) {
+  const hidden = optionalBoolean(body, 'hidden');
+  if (hidden === undefined) throw forumError('Say whether the comment is hidden');
+
   const before = await getModeratorForumDiscussionDetail(discussionId);
   if (!before) throw forumError('Discussion not found', 404);
   const comment = before.comments.find((row) => String(row.commentId) === String(commentId));
   if (!comment) throw forumError('Comment not found', 404);
-  if (comment.isDeleted) throw forumError('This comment is already removed', 409);
+  if (hidden && comment.isDeleted) throw forumError('This comment is already removed', 409);
+  if (!hidden && !comment.isDeleted) throw forumError('This comment is not removed', 409);
+  if (!hidden && !comment.canRestore) {
+    throw forumError(comment.restoreBlockedReason || 'This comment cannot be restored', 403);
+  }
 
-  const detail = await removeForumDiscussionComment(discussionId, commentId);
+  const reason = cleanReason(body);
+  const staff = await staffForSession(session);
+  const detail = await setForumDiscussionCommentHidden(before.id, comment.commentId, hidden, {
+    staffId: staff?.staff_id || null,
+    reason,
+  });
 
+  const discussion = await publicDiscussion(before.id);
+  if (discussion) {
+    const kind = comment.replyToCommentId ? 'reply' : 'comment';
+    broadcast(`${kind}.${hidden ? 'deleted' : 'updated'}`, {
+      groupId: before.groupId,
+      discussionId: before.id,
+      commentId: comment.commentId,
+      discussion,
+    });
+  }
+
+  const author = comment.author?.name || 'a member';
   await logForumAction({
     accountId: comment.author?.accountId || null,
-    action: `Removed a comment by ${comment.author?.name || 'a member'} in “${before.title}”`,
-    eventCode: 'FORUM_COMMENT_REMOVED',
+    action: hidden
+      ? `Removed a comment by ${author} in “${before.title}”`
+      : `Restored a comment by ${author} in “${before.title}”`,
+    eventCode: hidden ? 'FORUM_COMMENT_REMOVED' : 'FORUM_COMMENT_RESTORED',
     referenceTable: 'forum_discussions',
     referencePrefix: 'DSC',
     referenceId: before.id,
     session,
+    staff,
     metadata: {
       discussionId: before.id,
       discussionTitle: before.title,
       groupId: before.groupId,
       groupName: before.groupName,
-      commentId: String(commentId),
+      commentId: String(comment.commentId),
       authorHandle: comment.author?.handle || null,
-      // The removed text is kept so a reviewer can judge the call afterwards.
-      removedComment: String(comment.comment || '').slice(0, 500) || null,
+      // A snapshot of the text, so the log still reads on its own.
+      comment: String(comment.comment || '').slice(0, 500) || null,
+      previousRemovedBy: comment.removedBy,
       likeCount: comment.likeCount,
       replyCount: comment.replyCount,
       postedAt: comment.createdAt || null,
+      reason,
     },
   });
 
   return detail;
+}
+
+/** Kept for the `DELETE …/comments/:commentId` routes: it hides, it does not delete. */
+async function removeForumComment(discussionId, commentId, session, body = {}) {
+  return setForumCommentVisibility(discussionId, commentId, { ...body, hidden: true }, session);
 }
 
 module.exports = {
@@ -287,5 +416,6 @@ module.exports = {
   listForumDiscussionsForStaff,
   getForumDiscussionForStaff,
   setForumDiscussionState,
+  setForumCommentVisibility,
   removeForumComment,
 };

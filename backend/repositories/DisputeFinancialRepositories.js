@@ -101,6 +101,19 @@ async function remainingEscrowCredits(client, disputeId, contractId) {
   return remainingContractEscrowCredits(client, { disputeId, contractId });
 }
 
+/**
+ * Escrow a dispute still holds for its contract: what must be settled (or knowingly left with
+ * the contract) before the case may close. 0 when there is no contract, the case is
+ * conduct-only (filed after the contract ended), or a money ruling already decided it.
+ * @param {{ dispute_id: string, contract_id?: string|null, contract_ended_at_filing?: boolean,
+ *   financial_resolution_at?: Date|null }} dispute
+ */
+async function pendingDisputeEscrow(dispute, db = pool) {
+  if (!dispute?.dispute_id || !dispute.contract_id) return 0;
+  if (dispute.contract_ended_at_filing || dispute.financial_resolution_at) return 0;
+  return Math.max(0, await remainingEscrowCredits(db, dispute.dispute_id, dispute.contract_id));
+}
+
 async function loadContractParties(client, contractId) {
   const result = await client.query(
     `
@@ -241,6 +254,7 @@ async function closeDisputeFinancial(client, {
   clientCredits = 0,
   freelancerCredits = 0,
   reversedTransactionId = null,
+  resolutionOutcome = null,
 }) {
   await client.query(
     `
@@ -255,6 +269,7 @@ async function closeDisputeFinancial(client, {
         financial_client_credits = $5,
         financial_freelancer_credits = $6,
         financial_reversed_transaction_id = $7,
+        resolution_outcome = $8,
         updated_at = NOW()
     WHERE dispute_id = $1
     `,
@@ -266,8 +281,33 @@ async function closeDisputeFinancial(client, {
       clientCredits,
       freelancerCredits,
       reversedTransactionId,
+      resolutionOutcome,
     ]
   );
+}
+
+/**
+ * Credits of approved milestones still in this contract's escrow, capped at what escrow holds.
+ * They belong to the freelancer in every settlement (see `loadSettlementMilestones`).
+ */
+async function approvedMilestoneFloor(client, contractId, remaining) {
+  const result = await client.query(
+    `
+    SELECT cm.status, cm.credits, ${milestonePaidOutSql('cm')} AS paid_out
+    FROM contract_milestones cm
+    WHERE cm.contract_id = $1
+    FOR UPDATE OF cm
+    `,
+    [contractId]
+  );
+  const approvedTotal = result.rows.reduce(
+    (sum, m) =>
+      milestoneEscrowState({ status: m.status, paidOut: m.paid_out }) === 'approved'
+        ? sum + Math.max(0, Number(m.credits || 0))
+        : sum,
+    0
+  );
+  return Math.min(remaining, approvedTotal);
 }
 
 async function insertPayout(client, payout) {
@@ -693,17 +733,30 @@ async function loadSettlementMilestones(client, {
  * Every remaining credit must be allocated, so nothing is left stranded in escrow.
  * Staff split it by amount, by picking the milestones the freelancer is paid for, or both.
  */
+/**
+ * Settle a dispute's frozen escrow and close the case.
+ * `awardToDisputer`: ignore the given split and send every credit to the disputer's side of the
+ * contract (the disputee would not take part). Approved milestones still go to the freelancer.
+ * `resolutionOutcome`: the DisputeResolutions key recorded with the ruling, if any.
+ */
 async function settleEscrow({
   disputeId,
   staffId,
-  clientCredits,
-  freelancerCredits,
+  clientCredits: requestedClientCredits,
+  freelancerCredits: requestedFreelancerCredits,
   resolutionNotes,
   releaseAt,
   immediate = false,
-  splitMethod = 'amount',
-  milestoneIds = [],
+  splitMethod: requestedSplitMethod = 'amount',
+  milestoneIds: requestedMilestoneIds = [],
+  awardToDisputer = false,
+  resolutionOutcome = null,
 }) {
+  let clientCredits = requestedClientCredits;
+  let freelancerCredits = requestedFreelancerCredits;
+  let splitMethod = requestedSplitMethod;
+  let milestoneIds = requestedMilestoneIds;
+  let awardedRole = null;
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -727,7 +780,6 @@ async function settleEscrow({
     }
 
     const remaining = await remainingEscrowCredits(client, disputeId, dispute.contract_id);
-    const total = clientCredits + freelancerCredits;
     if (remaining <= 0) {
       throw domainError(
         'No escrow credits remain on this contract. Record an outcome or reverse a transaction instead.',
@@ -735,6 +787,25 @@ async function settleEscrow({
         'NO_ESCROW'
       );
     }
+    if (awardToDisputer) {
+      // Worked out here, under the lock, so the split matches what escrow holds right now.
+      awardedRole = partyRole(parties, dispute.by_account_id);
+      if (!awardedRole) {
+        throw domainError(
+          'The disputer is neither the client nor the freelancer on this contract, so the escrow cannot go to them automatically. Split it by ruling instead.',
+          409,
+          'DISPUTER_NOT_A_PARTY'
+        );
+      }
+      const floor = awardedRole === 'client'
+        ? await approvedMilestoneFloor(client, dispute.contract_id, remaining)
+        : remaining;
+      freelancerCredits = floor;
+      clientCredits = remaining - floor;
+      splitMethod = 'amount';
+      milestoneIds = [];
+    }
+    const total = clientCredits + freelancerCredits;
     if (total !== remaining) {
       throw domainError(
         `Split all ${remaining.toLocaleString()} escrow credits between the client and the freelancer (${total.toLocaleString()} assigned).`,
@@ -843,6 +914,7 @@ async function settleEscrow({
       resolutionNotes,
       clientCredits,
       freelancerCredits,
+      resolutionOutcome,
     });
 
     if (immediate) {
@@ -858,6 +930,8 @@ async function settleEscrow({
       kind: 'escrow_settle',
       clientCredits,
       freelancerCredits,
+      awardedRole,
+      resolutionOutcome,
       splitMethod,
       milestones,
       immediate,
@@ -1501,6 +1575,7 @@ module.exports = {
   domainError,
   compensatingType,
   remainingEscrowCredits,
+  pendingDisputeEscrow,
   planReversalRoute,
   settleEscrow,
   reverseTransaction,

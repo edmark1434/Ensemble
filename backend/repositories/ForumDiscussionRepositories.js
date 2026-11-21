@@ -20,6 +20,49 @@ function activeDiscussionFilter(filter = {}) {
     };
 }
 
+/**
+ * Who took a comment or discussion down. Only an author's own delete wipes
+ * content; every other removal hides it so staff can restore it.
+ */
+const REMOVED_BY = Object.freeze({
+    author: 'author',
+    discussionOwner: 'discussion_owner',
+    groupModerator: 'group_moderator',
+    staff: 'staff',
+});
+
+const MODERATION_FIELDS = ['removed_by', 'removed_by_user_id', 'removed_by_staff_id', 'removal_reason'];
+
+function withoutModerationFields(doc) {
+    const copy = { ...doc };
+    for (const field of MODERATION_FIELDS) delete copy[field];
+    return copy;
+}
+
+/**
+ * Member-facing shape of a comment. A hidden comment keeps its text in the
+ * database for staff review, so member reads and socket payloads must never
+ * carry it: they get a placeholder and no attachments.
+ */
+function publicForumComment(comment) {
+    if (!comment || typeof comment !== 'object') return comment;
+    const copy = withoutModerationFields(comment);
+    if (!comment.deleted_at) return copy;
+    const removedByModeration = comment.removed_by && comment.removed_by !== REMOVED_BY.author;
+    return {
+        ...copy,
+        comment: removedByModeration ? '[removed by moderator]' : '[deleted]',
+        attachments: [],
+    };
+}
+
+function publicForumDiscussion(doc) {
+    if (!doc || typeof doc !== 'object') return doc;
+    const copy = withoutModerationFields(doc);
+    if (Array.isArray(doc.comments)) copy.comments = doc.comments.map(publicForumComment);
+    return copy;
+}
+
 // Engagement weights: a save is the strongest signal of value, a comment shows
 // effort, and a like is a one-tap reaction.
 const FEED_WEIGHTS = { like: 1, comment: 3, save: 4 };
@@ -160,7 +203,8 @@ async function getPaginatedForumDiscussions({
             { $limit: limit + 1 }
         );
 
-        const rows = await forumDiscussionsCollection.aggregate(pipeline).toArray();
+        const rows = (await forumDiscussionsCollection.aggregate(pipeline).toArray())
+            .map(publicForumDiscussion);
         const hasMore = rows.length > limit;
         return {
             discussions: hasMore ? rows.slice(0, limit) : rows,
@@ -186,10 +230,11 @@ async function createForumDiscussionRepositories(discussionPayload = {}) {
 async function getForumDiscussionByGroupId(groupId) {
     try {
         const forumDiscussionsCollection = db.collection('forum_discussions');
-        return await forumDiscussionsCollection
+        const rows = await forumDiscussionsCollection
             .find(activeDiscussionFilter({ forum_group_id: groupId }))
             .sort({ created_at: -1 })
             .toArray();
+        return rows.map(publicForumDiscussion);
     } catch (err) {
         console.error('Error fetching forum discussion by group ID:', err);
         throw err;
@@ -199,9 +244,9 @@ async function getForumDiscussionByGroupId(groupId) {
 async function getForumDiscussionById(discussionId) {
     try {
         const forumDiscussionsCollection = db.collection('forum_discussions');
-        return await forumDiscussionsCollection.findOne(
+        return publicForumDiscussion(await forumDiscussionsCollection.findOne(
             activeDiscussionFilter({ _id: new ObjectId(discussionId) })
-        );
+        ));
     } catch (err) {
         console.error('Error fetching forum discussion by ID:', err);
         throw err;
@@ -211,10 +256,11 @@ async function getForumDiscussionById(discussionId) {
 async function getForumDiscussionsByUserId(userId) {
     try {
         const forumDiscussionsCollection = db.collection('forum_discussions');
-        return await forumDiscussionsCollection
+        const rows = await forumDiscussionsCollection
             .find(activeDiscussionFilter({ user_id: userId }))
             .sort({ created_at: -1 })
             .toArray();
+        return rows.map(publicForumDiscussion);
     } catch (err) {
         console.error('Error fetching forum discussions by user ID:', err);
         throw err;
@@ -276,23 +322,37 @@ async function addForumDiscussionCommentRepository(discussionId, commentPayload 
     }
 }
 
-async function softDeleteForumDiscussionComment(discussionId, commentId) {
+/**
+ * Takes a comment down from the member forum.
+ *
+ * An author deleting their own comment wipes its text and files. Anyone else
+ * (the discussion's author, a group moderator) only hides it: the content is
+ * kept so Forum Control can review and restore it.
+ */
+async function softDeleteForumDiscussionComment(discussionId, commentId, {
+    removedBy = REMOVED_BY.author,
+    removedByUserId = null,
+} = {}) {
     try {
         const forumDiscussionsCollection = db.collection('forum_discussions');
+        const now = new Date();
+        const fields = {
+            'comments.$.deleted_at': now,
+            'comments.$.updated_at': now,
+            'comments.$.removed_by': removedBy,
+            'comments.$.removed_by_user_id': removedByUserId,
+            updated_at: now,
+        };
+        if (removedBy === REMOVED_BY.author) {
+            fields['comments.$.comment'] = '[deleted]';
+            fields['comments.$.attachments'] = [];
+        }
         const result = await forumDiscussionsCollection.updateOne(
             activeDiscussionFilter({
                 _id: new ObjectId(discussionId),
-                'comments.comment_id': commentId,
+                comments: { $elemMatch: { comment_id: commentId, deleted_at: null } },
             }),
-            {
-                $set: {
-                    'comments.$.comment': '[deleted]',
-                    'comments.$.attachments': [],
-                    'comments.$.deleted_at': new Date(),
-                    'comments.$.updated_at': new Date(),
-                    updated_at: new Date(),
-                },
-            }
+            { $set: fields }
         );
         return result.modifiedCount > 0;
     } catch (err) {
@@ -321,22 +381,30 @@ async function getForumDiscussionSavedByUserId(userId) {
             .find(activeDiscussionFilter({ 'saves.user_id': userId }))
             .sort({created_at: -1})
             .toArray();
-        return result;
+        return result.map(publicForumDiscussion);
     }catch(err){
         console.error('Error fetching forum discussions saved by user ID:', err);
         throw err;
     }
 }
 
-async function deleteForumDiscussion(discussionId) {
+/** Soft delete from the member forum. `removedBy` decides whether staff may restore it. */
+async function deleteForumDiscussion(discussionId, {
+    removedBy = REMOVED_BY.author,
+    removedByUserId = null,
+} = {}) {
     try {
         const forumDiscussionsCollection = db.collection('forum_discussions');
+        const now = new Date();
         const result = await forumDiscussionsCollection.updateOne(
             activeDiscussionFilter({ _id: new ObjectId(discussionId) }),
             {
                 $set: {
-                    deleted_at: new Date(),
-                    updated_at: new Date(),
+                    deleted_at: now,
+                    status: 'removed',
+                    removed_by: removedBy,
+                    removed_by_user_id: removedByUserId,
+                    updated_at: now,
                 },
             }
         );
@@ -348,6 +416,9 @@ async function deleteForumDiscussion(discussionId) {
 }
 
 module.exports = {
+    REMOVED_BY,
+    publicForumDiscussion,
+    publicForumComment,
     createForumDiscussionRepositories,
     getPaginatedForumDiscussions,
     getForumDiscussionByGroupId,

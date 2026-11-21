@@ -164,8 +164,15 @@ export type DisputeDetail = {
   payouts?: DisputePayout[];
   payoutState?: DisputePayoutState;
   payoutPolicy?: DisputePayoutPolicy;
+  /**
+   * Credits this open case still holds in escrow. Resolve decides them first; while it is above
+   * 0 the server refuses to close or ban without a money ruling (or an explicit "keep").
+   */
+  escrowPending?: number;
   /** What happened to the contract after this case (hold, the parties' continue-or-end answers). */
   contractAfterCase?: DisputeContractAfterCase | null;
+  /** Set when a money ruling went through but a follow-up step (the ban) did not. */
+  warning?: string;
 };
 
 /**

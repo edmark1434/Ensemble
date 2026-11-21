@@ -288,6 +288,20 @@ async function announceStandingLift({ accountId, previousStatus, nextStatus = 'A
     action: 'expired',
     reason: `Your ${penalty} has ended.`,
   });
+  // A team account has no inbox: its Owners and Admins hear that the team is back.
+  try {
+    const { describeTeamAccount, notifyTeamManagers } = require('../services/TeamStandingServices');
+    const team = await describeTeamAccount(accountId);
+    if (team.isTeam) {
+      await notifyTeamManagers(accountId, {
+        message: `Team ${team.name}'s ${penalty} has ended. All team features are available again.`,
+        prefix: 'TEAM_RESTORED',
+        event: 'standing_changed',
+      });
+    }
+  } catch (err) {
+    console.warn('Team standing lift notice skipped:', err.message);
+  }
 }
 
 async function liftExpiredSuspension(accountId) {

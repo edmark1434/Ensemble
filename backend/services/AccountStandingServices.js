@@ -9,7 +9,9 @@ async function notifyAccountWarned(accountId, warningData = {}) {
 
   const warnType = String(warningData.type || 'Account warning').trim();
   const warnReason = warningData.reason ? String(warningData.reason).trim() : '';
-  const message = `Warning issued: ${warnType}${warnReason ? ` — ${warnReason}` : ''}`;
+  // A warning staff aimed at a team lands on its leader; say so, or it reads as personal conduct.
+  const viaTeam = warningData.viaTeamName ? ` (issued to you as the leader of Team ${warningData.viaTeamName})` : '';
+  const message = `Warning issued: ${warnType}${warnReason ? ` — ${warnReason}` : ''}${viaTeam}`;
 
   let notification = null;
   try {

@@ -1,4 +1,5 @@
 const {
+    REMOVED_BY,
     createForumDiscussionRepositories,
     getPaginatedForumDiscussions,
     getForumDiscussionByGroupId: getForumDiscussionByGroupIdRepository,
@@ -444,6 +445,19 @@ async function requireDiscussionManager(discussion, session) {
     throw new Error('Not authorized to modify this discussion');
 }
 
+/**
+ * Who is taking content down, from the member forum. Only the content's own
+ * author gets a wiping delete; anyone else is moderating it.
+ */
+function removalSource({ actorId, contentAuthorId, discussionAuthorId, session }) {
+    if (String(contentAuthorId) === String(actorId)) return REMOVED_BY.author;
+    if (isStaffModerator(session)) return REMOVED_BY.staff;
+    if (discussionAuthorId != null && String(discussionAuthorId) === String(actorId)) {
+        return REMOVED_BY.discussionOwner;
+    }
+    return REMOVED_BY.groupModerator;
+}
+
 async function createForumDiscussionServices(discussionPayload, session = {}) {
     const actorId = getActorId(session);
     if (!actorId) {
@@ -636,6 +650,8 @@ async function updateForumDiscussionServices(discussionId, payload = {}, session
 
     if (changesContent) {
         await requireDiscussionManager(discussion, session);
+        // An archived group freezes its posts, and a banned member cannot rewrite theirs.
+        await requireActiveGroupInteraction(discussion.forum_group_id, actorId);
     }
     if (payload.likes || payload.saves) {
         await requireActiveGroupInteraction(discussion.forum_group_id, actorId);
@@ -994,7 +1010,15 @@ async function updateForumDiscussionCommentsServices(payload = {}, session = {})
             return { success: true, action: 'soft-deleted' };
         }
 
-        const deleted = await softDeleteForumDiscussionComment(discussionId, commentId);
+        const deleted = await softDeleteForumDiscussionComment(discussionId, commentId, {
+            removedBy: removalSource({
+                actorId,
+                contentAuthorId: commentToUpdate.user_id,
+                discussionAuthorId: discussion.user_id,
+                session,
+            }),
+            removedByUserId: actorId,
+        });
         const updatedDiscussion = deleted
             ? await getForumDiscussionByIdRepository(discussionId)
             : discussion;
@@ -1011,6 +1035,14 @@ async function updateForumDiscussionCommentsServices(payload = {}, session = {})
     }
 
     const updateDoc = { $set: { 'comments.$.updated_at': new Date() } };
+
+    if (commentToUpdate.deleted_at && (payload.likes || payload.attachments != null)) {
+        throw new Error('This comment was removed');
+    }
+    if (payload.comment || payload.attachments != null) {
+        // Same rule as posting: no edits in an archived group or while banned from it.
+        await requireActiveGroupInteraction(discussion.forum_group_id, actorId);
+    }
 
     if (payload.comment) {
         if (!await canManageComment(discussion, commentToUpdate, session)) {
@@ -1185,8 +1217,11 @@ async function deleteForumDiscussionServices(discussionId, session = {}) {
     if (!discussion) {
         return false;
     }
-    await requireDiscussionManager(discussion, session);
-    const deleted = await deleteForumDiscussion(discussionId);
+    const actorId = await requireDiscussionManager(discussion, session);
+    const deleted = await deleteForumDiscussion(discussionId, {
+        removedBy: removalSource({ actorId, contentAuthorId: discussion.user_id, session }),
+        removedByUserId: actorId,
+    });
     if (deleted) {
         emitForumEvent('discussion.deleted', {
             groupId: String(discussion.forum_group_id),

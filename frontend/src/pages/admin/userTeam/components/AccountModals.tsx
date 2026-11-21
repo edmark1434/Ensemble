@@ -8,6 +8,7 @@ import {
   handleAccountActionError,
   rescindWarning,
   setAccountVerification,
+  transferTeamOwnership,
   unfreezeAccount,
   warnAccount,
   type MeritPenaltyRow,
@@ -17,6 +18,8 @@ import type {
   AdminVerificationDetails,
   PlatformTeam,
   PlatformUserAccount,
+  TeamLeader,
+  TeamWalletSummary,
   VerificationDetail,
 } from '../userTeamTypes';
 import { getBusinessDocumentLabel } from '@/pages/user/9_verification/businessVerificationConfig';
@@ -281,11 +284,47 @@ export function UnfreezeAccountModal({
   );
 }
 
+/** Higher is stricter; a leader already at the same or a stricter standing is left alone. */
+const STANDING_SEVERITY: Record<string, number> = { active: 0, deactivated: 0, suspended: 1, locked: 2, banned: 3 };
+const SANCTION_RESULT: Record<string, string> = { ban: 'banned', suspend: 'suspended', lock: 'locked' };
+const LIFT_FROM: Record<string, string | null> = { unban: 'banned', unsuspend: 'suspended', unlock: 'locked', restore: null };
+
+/** What the team leader option does for this action, or null when it does not apply. */
+function teamLeaderOption(
+  action: string,
+  leader: TeamLeader | null | undefined
+): { kind: 'apply' | 'lift' | 'skip' | 'none'; note: string } | null {
+  if (action === 'timeout' || action === 'clear_timeout') return null;
+  const target = SANCTION_RESULT[action];
+  if (target) {
+    if (!leader) return { kind: 'none', note: 'This team has no active leader, so only the team is changed.' };
+    const leaderStatus = String(leader.status || 'Active').toLowerCase();
+    if ((STANDING_SEVERITY[leaderStatus] ?? 0) >= STANDING_SEVERITY[target]) {
+      return { kind: 'skip', note: `${leader.name} is already ${leaderStatus}, so their account stays as it is.` };
+    }
+    return { kind: 'apply', note: '' };
+  }
+  if (action in LIFT_FROM) {
+    if (!leader) return null;
+    const from = LIFT_FROM[action];
+    const leaderStatus = String(leader.status || 'Active').toLowerCase();
+    if (leader.penaltyLinkedToTeam && (!from || leaderStatus === from)) return { kind: 'lift', note: '' };
+    if (leaderStatus !== 'active') {
+      return {
+        kind: 'skip',
+        note: `${leader.name} is ${leaderStatus}, but that was not set together with this team. Change it from the Users tab if it should end too.`,
+      };
+    }
+  }
+  return null;
+}
+
 export function ConfirmStatusModal({
   entityName,
   action,
   onClose,
   onConfirm,
+  team,
 }: {
   entityName: string;
   action: 'ban' | 'suspend' | 'restore' | 'lock' | 'unban' | 'unsuspend' | 'unlock' | 'timeout' | 'clear_timeout';
@@ -296,11 +335,19 @@ export function ConfirmStatusModal({
     reason: string;
     punishmentId?: string;
     customDuration?: boolean;
+    includeLeader?: boolean;
   }) => Promise<void>;
+  /** Team targets: the team acts as one account, its leader carries personal penalties. */
+  team?: { leader: TeamLeader | null };
 }) {
   const [saving, setSaving] = useState(false);
   const [reason, setReason] = useState('');
   const [reasonError, setReasonError] = useState('');
+  const isTeam = Boolean(team);
+  const leader = team?.leader ?? null;
+  const leaderOption = isTeam ? teamLeaderOption(action, leader) : null;
+  const [includeLeader, setIncludeLeader] = useState(true);
+  const teamTimeoutWithoutLeader = isTeam && (action === 'timeout' || action === 'clear_timeout') && !leader;
   const choosesCatalog = action === 'ban' || action === 'suspend' || action === 'timeout';
   const choosesDuration = choosesCatalog || action === 'lock';
   const [punishmentId, setPunishmentId] = useState('');
@@ -364,11 +411,41 @@ export function ConfirmStatusModal({
       tone: 'bg-emerald-500/90 hover:bg-emerald-500',
     },
   }[action];
+  const teamTitles: Record<typeof action, string> = {
+    ban: 'Ban team',
+    suspend: 'Suspend team',
+    restore: 'Restore team',
+    unban: 'Remove team ban',
+    unsuspend: 'Remove team suspension',
+    unlock: 'Remove team lock',
+    lock: 'Lock team',
+    timeout: 'Timeout team leader',
+    clear_timeout: 'Remove leader timeout',
+  };
+  const teamDescriptions: Record<typeof action, string> = {
+    ban: 'The team cannot take new work, move team credits, change its roster or edit itself. Its open jobs, gigs and listings close and pending proposals are withdrawn. Live contracts and the team wallet stay for staff to resolve. Members can still leave.',
+    suspend: 'While suspended the team cannot take new work, move team credits, change its roster or settings, or transfer ownership. Live contract work (tasks, video projects) can continue so clients are not stranded.',
+    lock: 'Investigation hold: every team action stops until staff lift it. Members can still read the team, leave it and report.',
+    timeout: 'Teams never post in the forums, so the timeout goes on the leader’s personal account and is listed on the team’s record. Other products stay open.',
+    clear_timeout: 'Ends the forum timeout on the leader’s account.',
+    restore: 'The team gets its normal features back.',
+    unban: 'The team gets its normal features back. Closed jobs, gigs and listings stay closed; the team reposts them.',
+    unsuspend: 'The team gets its normal features back.',
+    unlock: 'The team gets its normal features back.',
+  };
+  const isLeaderTimeout = isTeam && (action === 'timeout' || action === 'clear_timeout');
+  const title = isTeam ? teamTitles[action] : labels.title;
+  const subtitle = isLeaderTimeout
+    ? leader
+      ? `${leader.name} (leader of ${entityName}) will be ${labels.result}`
+      : `${entityName} has no active leader`
+    : `${entityName} will be set to ${labels.result}`;
+  const sendsLeader = Boolean(leaderOption && (leaderOption.kind === 'apply' || leaderOption.kind === 'lift'));
 
   return (
     <ModalShell
-      title={labels.title}
-      subtitle={`${entityName} will be set to ${labels.result}`}
+      title={title}
+      subtitle={subtitle}
       onClose={onClose}
       footer={
         <div className="flex justify-end gap-2">
@@ -383,6 +460,7 @@ export function ConfirmStatusModal({
             type="button"
             disabled={
               saving
+              || teamTimeoutWithoutLeader
               || !reason.trim()
               || (choosesCatalog && !punishmentId)
               || (choosesDuration && customDuration && timing.duration === 'temporary' && !timing.endsAt)
@@ -404,6 +482,7 @@ export function ConfirmStatusModal({
                   reason: reason.trim(),
                   punishmentId: choosesCatalog ? punishmentId : undefined,
                   customDuration: choosesCatalog ? customDuration : undefined,
+                  includeLeader: isTeam && !isLeaderTimeout ? sendsLeader && includeLeader : undefined,
                 });
                 onClose();
               } catch (err) {
@@ -419,7 +498,43 @@ export function ConfirmStatusModal({
         </div>
       }
     >
-      <p className="text-sm text-zinc-300">
+      {isTeam ? (
+        <p className="text-sm text-zinc-300">{teamDescriptions[action]}</p>
+      ) : null}
+      {isTeam && leaderOption ? (
+        <div className="mt-4 rounded-xl border border-white/[0.08] bg-white/[0.02] p-3">
+          {leaderOption.kind === 'apply' || leaderOption.kind === 'lift' ? (
+            <label className="flex cursor-pointer items-start gap-3 text-sm text-zinc-200">
+              <input
+                type="checkbox"
+                checked={includeLeader}
+                onChange={(event) => setIncludeLeader(event.target.checked)}
+                className="mt-0.5 h-4 w-4 rounded border-white/20 bg-transparent accent-rose-500"
+              />
+              <span>
+                <span className="font-medium text-white">
+                  {leaderOption.kind === 'apply'
+                    ? `Also ${labels.verb} the team leader, ${leader?.name}`
+                    : `Also lift ${leader?.name}'s ${String(leader?.status || '').toLowerCase()} (it was set together with this team)`}
+                </span>
+                <span className="mt-0.5 block text-xs text-zinc-500">
+                  {leaderOption.kind === 'apply'
+                    ? 'The leader answers for the team. Their personal account gets the same penalty and length, and the reason tells them it came with the team.'
+                    : 'Their personal account returns to normal with the team.'}
+                </span>
+              </span>
+            </label>
+          ) : (
+            <p className="text-xs text-zinc-400">{leaderOption.note}</p>
+          )}
+        </div>
+      ) : null}
+      {teamTimeoutWithoutLeader ? (
+        <p className="mt-3 rounded-xl border border-rose-500/25 bg-rose-500/[0.06] px-3 py-2 text-xs text-rose-200">
+          This team has no active leader to time out. Lock the team or assign an owner first.
+        </p>
+      ) : null}
+      <p className={`text-sm text-zinc-300 ${isTeam ? 'hidden' : ''}`}>
         {action === 'ban'
           ? 'They can sign in only to file an appeal and view their tickets and disputes. Their open jobs, gigs and marketplace listings close, their pending proposals, orders and unsigned offers are withdrawn, and fees and offer escrow are refunded. Live contracts stay for staff to resolve.'
           : action === 'suspend'
@@ -504,17 +619,21 @@ export function BulkConfirmModal({
   onClose,
   onConfirm,
   requireReason = false,
+  leaderOption,
 }: {
   count: number;
   actionLabel: string;
   resultLabel: string;
   tone?: string;
   onClose: () => void;
-  onConfirm: (reason?: string) => Promise<void>;
+  onConfirm: (reason?: string, options?: { includeLeader?: boolean }) => Promise<void>;
   requireReason?: boolean;
+  /** Team bulk actions: offer to apply the same action to each team's leader. */
+  leaderOption?: { label: string; hint: string };
 }) {
   const [saving, setSaving] = useState(false);
   const [reason, setReason] = useState('');
+  const [includeLeader, setIncludeLeader] = useState(true);
 
   return (
     <ModalShell
@@ -537,7 +656,9 @@ export function BulkConfirmModal({
               if (requireReason && !reason.trim()) return;
               setSaving(true);
               try {
-                await onConfirm(requireReason ? reason.trim() : undefined);
+                await onConfirm(requireReason ? reason.trim() : undefined, {
+                  includeLeader: leaderOption ? includeLeader : undefined,
+                });
                 onClose();
               } catch (err) {
                 handleAccountActionError(err);
@@ -556,6 +677,20 @@ export function BulkConfirmModal({
         This runs the same action on every highlighted row. Accounts that fail individually will be
         reported without blocking the rest.
       </p>
+      {leaderOption ? (
+        <label className="mt-4 flex cursor-pointer items-start gap-3 rounded-xl border border-white/[0.08] bg-white/[0.02] p-3 text-sm text-zinc-200">
+          <input
+            type="checkbox"
+            checked={includeLeader}
+            onChange={(event) => setIncludeLeader(event.target.checked)}
+            className="mt-0.5 h-4 w-4 rounded border-white/20 bg-transparent accent-rose-500"
+          />
+          <span>
+            <span className="font-medium text-white">{leaderOption.label}</span>
+            <span className="mt-0.5 block text-xs text-zinc-500">{leaderOption.hint}</span>
+          </span>
+        </label>
+      ) : null}
       {requireReason ? (
         <label className="mt-4 block text-sm text-zinc-300">
           Reason
@@ -573,22 +708,125 @@ export function BulkConfirmModal({
   );
 }
 
+function standingTone(status: string | null | undefined) {
+  const s = String(status || '').toLowerCase();
+  if (s === 'banned' || s === 'locked') return 'border-rose-500/30 bg-rose-500/10 text-rose-200';
+  if (s === 'suspended') return 'border-amber-500/30 bg-amber-500/10 text-amber-200';
+  if (s === 'active') return 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200';
+  return 'border-white/10 text-zinc-300';
+}
+
+function attentionTone(tone: string) {
+  if (tone === 'danger') return 'border-rose-500/30 bg-rose-500/10 text-rose-200';
+  if (tone === 'warning') return 'border-amber-500/30 bg-amber-500/10 text-amber-200';
+  return 'border-sky-500/30 bg-sky-500/10 text-sky-200';
+}
+
+function leaderPenaltyEnd(leader: TeamLeader) {
+  const s = String(leader.status || '').toLowerCase();
+  const end = s === 'suspended' ? leader.suspensionEndsAt : s === 'banned' ? leader.banEndsAt : s === 'locked' ? leader.lockEndsAt : null;
+  if (s === 'active') return null;
+  return end ? `until ${formatDateTime(end)}` : s === 'banned' ? 'permanently' : 'until lifted';
+}
+
+/** The team's leader: the person who answers for the team and carries its warnings. */
+function TeamLeaderCard({ leader, onTransfer }: { leader: TeamLeader | null | undefined; onTransfer?: () => void }) {
+  if (!leader) {
+    return (
+      <div className="mt-4 rounded-xl border border-rose-500/25 bg-rose-500/[0.06] px-4 py-3 text-sm text-rose-200">
+        <p className="font-semibold">No active leader</p>
+        <p className="mt-1 text-xs text-rose-200/80">
+          Nobody answers for this team, so it cannot take new work or pay out credits. Assign an owner, or lock the team.
+        </p>
+        {onTransfer && (
+          <button
+            type="button"
+            onClick={onTransfer}
+            className="mt-2 rounded-lg border border-white/10 px-3 py-1 text-xs text-white hover:bg-white/[0.05]"
+          >
+            Assign an owner
+          </button>
+        )}
+      </div>
+    );
+  }
+  const restricted = ['banned', 'locked', 'suspended'].includes(String(leader.status).toLowerCase());
+  return (
+    <div className="mt-4 rounded-xl border border-white/[0.08] bg-white/[0.02] p-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-3">
+          <ProfileAvatar path={leader.avatarPath} name={leader.name} />
+          <div className="min-w-0">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-zinc-600">Team leader (Owner)</p>
+            <p className="truncate font-semibold text-white">{leader.name}</p>
+            <p className="truncate text-xs text-zinc-500">
+              {leader.username ? `@${leader.username}` : '—'}
+              {leader.email ? ` · ${leader.email}` : ''}
+            </p>
+          </div>
+        </div>
+        <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
+          <span className={`rounded-full border px-2 py-0.5 ${standingTone(leader.status)}`}>
+            {leader.status}
+            {restricted ? ` ${leaderPenaltyEnd(leader) || ''}` : ''}
+          </span>
+          {leader.merit != null && (
+            <span className="rounded-full border border-white/10 px-2 py-0.5 text-zinc-300">
+              Merit {leader.merit} · {meritBandLabel(leader.merit)}
+            </span>
+          )}
+          {leader.forumTimeout && (
+            <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-amber-200">Forum timeout</span>
+          )}
+          {leader.penaltyLinkedToTeam && (
+            <span className="rounded-full border border-sky-500/30 bg-sky-500/10 px-2 py-0.5 text-sky-200">Penalty set with this team</span>
+          )}
+        </div>
+      </div>
+      {leader.meritPenalties?.length ? (
+        <div className="mt-2">
+          <StaffPunishmentChips penalties={leader.meritPenalties} />
+        </div>
+      ) : null}
+      <p className="mt-3 text-xs text-zinc-500">
+        Warnings and forum timeouts aimed at this team go to the leader. Ban, suspend and lock apply to the team and,
+        unless staff untick it, to the leader too.
+      </p>
+      {restricted && ['banned', 'locked'].includes(String(leader.status).toLowerCase()) && (
+        <p className="mt-2 rounded-lg border border-rose-500/25 bg-rose-500/[0.06] px-3 py-2 text-xs text-rose-200">
+          The leader is {String(leader.status).toLowerCase()}: the team cannot take new work or pay out credits until ownership moves or the penalty ends.
+          {onTransfer ? (
+            <button type="button" onClick={onTransfer} className="ml-2 underline hover:text-white">
+              Transfer ownership
+            </button>
+          ) : null}
+        </p>
+      )}
+    </div>
+  );
+}
+
 export function TeamOverviewModal({
   team,
   onClose,
   onOpenCredit,
   onOpenVerification,
   onOpenHistory,
+  onOpenTransfer,
 }: {
   team: PlatformTeam;
   onClose: () => void;
   onOpenCredit?: () => void;
   onOpenVerification?: () => void;
   onOpenHistory?: () => void;
+  /** Admin / Support: move ownership (shown when the leader is restricted or missing). */
+  onOpenTransfer?: () => void;
 }) {
   const { profile, loading, error, reload } = useAccountProfile(team.accountId);
-  const owner = profile?.team?.owner;
-  const merit = profile?.standing?.merit ?? team.history?.merit ?? DEFAULT_MERIT;
+  const leader = team.leader ?? null;
+  const contractual = String(team.teamType || 'standard') === 'contractual';
+  const wallet = team.wallet;
+  const viaTeam = team.history?.violations?.length ?? 0;
 
   return (
     <ModalShell
@@ -604,7 +842,7 @@ export function TeamOverviewModal({
               onClick={onOpenCredit}
               className="rounded-xl border border-white/[0.1] px-4 py-2.5 text-sm text-white hover:bg-white/[0.05]"
             >
-              Credits & wallet
+              Team wallet
             </button>
           )}
           {onOpenVerification && (
@@ -613,7 +851,7 @@ export function TeamOverviewModal({
               onClick={onOpenVerification}
               className="rounded-xl border border-white/[0.1] px-4 py-2.5 text-sm text-white hover:bg-white/[0.05]"
             >
-              Verification & documents
+              Business verification
             </button>
           )}
           {onOpenHistory && (
@@ -622,7 +860,16 @@ export function TeamOverviewModal({
               onClick={onOpenHistory}
               className="rounded-xl border border-white/[0.1] px-4 py-2.5 text-sm text-white hover:bg-white/[0.05]"
             >
-              Violations & disputes
+              Warnings & disputes
+            </button>
+          )}
+          {onOpenTransfer && !contractual && (
+            <button
+              type="button"
+              onClick={onOpenTransfer}
+              className="rounded-xl border border-white/[0.1] px-4 py-2.5 text-sm text-white hover:bg-white/[0.05]"
+            >
+              {leader ? 'Transfer ownership' : 'Assign an owner'}
             </button>
           )}
         </div>
@@ -636,24 +883,31 @@ export function TeamOverviewModal({
           {team.handle && <p className="text-sm text-zinc-400">@{team.handle}</p>}
           {team.tagline && <p className="mt-1 text-sm italic text-zinc-500">“{team.tagline}”</p>}
           <div className="mt-2 flex flex-wrap gap-2 text-xs">
-            <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-emerald-200">
-              Merit {merit}
+            <span className={`rounded-full border px-2 py-0.5 ${standingTone(team.status)}`}>Team {team.status}</span>
+            <span className="rounded-full border border-white/10 px-2 py-0.5 text-zinc-300">
+              {contractual ? 'Contract workspace' : 'Business team'}
             </span>
-            <span className="rounded-full border border-white/10 px-2 py-0.5 text-zinc-300">{team.status}</span>
             <span className="rounded-full border border-white/10 px-2 py-0.5 text-zinc-300">
               {team.verificationStatus}
             </span>
             <span className="rounded-full border border-white/10 px-2 py-0.5 text-zinc-300">
               {team.memberCount} member{team.memberCount === 1 ? '' : 's'}
             </span>
-            {team.forumTimeout && (
-              <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-amber-200">
-                Forum timeout
-              </span>
-            )}
           </div>
         </div>
       </div>
+
+      {team.attention?.length ? (
+        <div className="mt-4 flex flex-wrap gap-2">
+          {team.attention.map((flag) => (
+            <span key={flag.id} className={`rounded-full border px-2.5 py-1 text-xs ${attentionTone(flag.tone)}`}>
+              {flag.label}
+            </span>
+          ))}
+        </div>
+      ) : null}
+
+      {!contractual && <TeamLeaderCard leader={leader} onTransfer={onOpenTransfer} />}
 
       {team.description && (
         <div className="mt-4">
@@ -673,17 +927,6 @@ export function TeamOverviewModal({
       <p className="mt-6 text-xs font-semibold uppercase tracking-wide text-zinc-600">Account</p>
       <dl className="mt-2 grid gap-4 text-sm sm:grid-cols-2">
         <div>
-          <dt className="text-zinc-500">Owner</dt>
-          <dd className="text-white">
-            {owner?.name || team.leaderName}
-            {owner?.username && <span className="ml-2 text-xs text-zinc-500">@{owner.username}</span>}
-          </dd>
-        </div>
-        <div>
-          <dt className="text-zinc-500">Owner contact</dt>
-          <dd className="text-zinc-300">{owner?.email || team.leaderEmail || '—'}</dd>
-        </div>
-        <div>
           <dt className="text-zinc-500">Date created</dt>
           <dd className="text-zinc-300">{formatDateTime(team.createdAt)}</dd>
         </div>
@@ -695,9 +938,11 @@ export function TeamOverviewModal({
         </div>
         <div>
           <dt className="text-zinc-500">Platform Merit</dt>
-          <dd className="text-white">
-            {merit}
-            <span className="ml-2 text-xs text-zinc-500">{meritBandLabel(merit)} · 100 minus active warnings</span>
+          <dd className="text-zinc-300">
+            None — teams have no merit.
+            <span className="ml-1 text-xs text-zinc-500">
+              {viaTeam} warning{viaTeam === 1 ? '' : 's'} issued through this team (carried by the leader).
+            </span>
           </dd>
         </div>
         <div>
@@ -712,13 +957,36 @@ export function TeamOverviewModal({
           </dd>
         </div>
         <div>
-          <dt className="text-zinc-500">Violations / disputes</dt>
+          <dt className="text-zinc-500">Disputes</dt>
           <dd className="text-zinc-300">
-            {team.history?.totalViolations ?? 0} violation(s) · {team.history?.openDisputes ?? 0} open of{' '}
-            {team.history?.totalDisputes ?? 0} dispute(s)
+            {team.history?.openDisputes ?? 0} open of {team.history?.totalDisputes ?? 0} dispute(s)
           </dd>
         </div>
+        <div>
+          <dt className="text-zinc-500">Team contact</dt>
+          <dd className="text-zinc-300">{leader?.email || team.leaderEmail || '—'} <span className="text-xs text-zinc-500">(the leader; teams have no mailbox)</span></dd>
+        </div>
       </dl>
+
+      {wallet && (
+        <>
+          <p className="mt-6 text-xs font-semibold uppercase tracking-wide text-zinc-600">Team wallet</p>
+          <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
+            {[
+              ['Spendable', wallet.available, 'text-white'],
+              ['Held by staff', wallet.held, wallet.held > 0 ? 'text-amber-300' : 'text-zinc-500'],
+              ['In escrow', wallet.escrow, 'text-white'],
+              ['Owed to members', wallet.contractReserved, 'text-sky-300'],
+              ['Free to pay out', wallet.unreserved, 'text-emerald-300'],
+            ].map(([label, value, tone]) => (
+              <div key={String(label)} className="rounded-lg bg-white/[0.03] px-3 py-2">
+                <p className="text-[10px] uppercase text-zinc-600">{label}</p>
+                <p className={`font-semibold tabular-nums ${tone}`}>{Number(value).toLocaleString()}</p>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
 
       <ProfileDetailsState loading={loading} error={error} onRetry={() => void reload()} />
       {profile && (
@@ -739,6 +1007,165 @@ export function TeamOverviewModal({
   );
 }
 
+const PREVIOUS_OWNER_ROLES: { value: 'Member' | 'Admin' | 'Removed'; label: string; hint: string }[] = [
+  { value: 'Member', label: 'Member', hint: 'Stays on the team without management rights.' },
+  { value: 'Admin', label: 'Team Admin', hint: 'Keeps managing members, but cannot pay out or delete the team.' },
+  { value: 'Removed', label: 'Remove from team', hint: 'Leaves the team entirely.' },
+];
+
+/**
+ * Admin / Support: move a team's ownership. Used when the leader is banned, locked or gone, or
+ * the team asks for it. The new owner must be an active member in good standing.
+ */
+export function TransferTeamOwnershipModal({
+  team,
+  onClose,
+  onChanged,
+}: {
+  team: PlatformTeam;
+  onClose: () => void;
+  onChanged?: () => void | Promise<void>;
+}) {
+  const { profile, loading, error, reload } = useAccountProfile(team.accountId);
+  const [newOwnerAccountId, setNewOwnerAccountId] = useState('');
+  const [previousOwnerRole, setPreviousOwnerRole] = useState<'Member' | 'Admin' | 'Removed'>('Member');
+  const [reason, setReason] = useState('');
+  const [saving, setSaving] = useState(false);
+  const currentOwnerId = team.leader?.accountId ? String(team.leader.accountId) : null;
+  const candidates = (profile?.team?.members || []).filter(
+    (m) => String(m.status).toLowerCase() === 'active' && String(m.accountId) !== currentOwnerId
+  );
+  const picked = candidates.find((m) => String(m.accountId) === newOwnerAccountId) || null;
+  const pickedRestricted = picked && picked.accountStatus && picked.accountStatus.toLowerCase() !== 'active';
+  const canSubmit = Boolean(picked) && !pickedRestricted && reason.trim().length >= 5 && !saving;
+
+  return (
+    <ModalShell
+      title={team.leader ? `Transfer ownership of ${team.name}` : `Assign an owner to ${team.name}`}
+      subtitle={team.leader ? `Current leader: ${team.leader.name} (${team.leader.status})` : 'This team has no active leader'}
+      onClose={onClose}
+      footer={
+        <div className="flex justify-end gap-2">
+          <button type="button" onClick={onClose} className="rounded-xl border border-white/[0.1] px-4 py-2 text-sm text-white">
+            Cancel
+          </button>
+          <button
+            type="button"
+            disabled={!canSubmit}
+            onClick={async () => {
+              if (!picked) return;
+              setSaving(true);
+              try {
+                await transferTeamOwnership(team.accountId, {
+                  newOwnerAccountId: String(picked.accountId),
+                  previousOwnerRole,
+                  reason: reason.trim(),
+                });
+                await onChanged?.();
+                onClose();
+              } catch (err) {
+                handleAccountActionError(err);
+              } finally {
+                setSaving(false);
+              }
+            }}
+            className="rounded-xl bg-sky-500 px-4 py-2 text-sm font-semibold text-black hover:bg-sky-400 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            {saving ? 'Transferring…' : 'Make owner'}
+          </button>
+        </div>
+      }
+    >
+      <p className="text-sm text-zinc-300">
+        The new owner leads the team from now on: they pay out the team wallet, answer for its warnings and get its
+        notices. Both the new and the previous owner are told, with your reason.
+      </p>
+      <ProfileDetailsState loading={loading} error={error} onRetry={() => void reload()} />
+      {profile && (
+        <>
+          <p className="mt-5 text-xs font-semibold uppercase tracking-wide text-zinc-600">New owner</p>
+          {candidates.length === 0 ? (
+            <p className="mt-2 rounded-xl border border-dashed border-white/[0.08] px-4 py-5 text-center text-sm text-zinc-500">
+              No other active members. Lock the team instead, or wait for a member to join.
+            </p>
+          ) : (
+            <ul className="mt-2 space-y-2">
+              {candidates.map((m) => {
+                const restricted = m.accountStatus && m.accountStatus.toLowerCase() !== 'active';
+                return (
+                  <li key={m.accountId}>
+                    <label
+                      className={`flex items-center gap-3 rounded-xl border px-4 py-3 ${
+                        restricted ? 'cursor-not-allowed border-white/[0.05] opacity-50' : 'cursor-pointer border-white/[0.08] hover:border-white/20'
+                      } ${newOwnerAccountId === String(m.accountId) ? 'border-sky-400/50 bg-sky-400/[0.06]' : 'bg-white/[0.02]'}`}
+                    >
+                      <input
+                        type="radio"
+                        name="new-owner"
+                        disabled={Boolean(restricted)}
+                        checked={newOwnerAccountId === String(m.accountId)}
+                        onChange={() => setNewOwnerAccountId(String(m.accountId))}
+                        className="h-4 w-4 accent-sky-500"
+                      />
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-sm font-medium text-white">{m.name}</span>
+                        <span className="block truncate text-xs text-zinc-500">
+                          {m.username ? `@${m.username}` : '—'} · {m.role}
+                        </span>
+                      </span>
+                      {restricted ? (
+                        <span className="rounded-full border border-rose-500/20 bg-rose-500/10 px-2 py-0.5 text-[10px] text-rose-200">
+                          Account {m.accountStatus}
+                        </span>
+                      ) : null}
+                    </label>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </>
+      )}
+      {team.leader && (
+        <>
+          <p className="mt-5 text-xs font-semibold uppercase tracking-wide text-zinc-600">{team.leader.name} becomes</p>
+          <div className="mt-2 grid gap-2 sm:grid-cols-3">
+            {PREVIOUS_OWNER_ROLES.map((option) => (
+              <label
+                key={option.value}
+                className={`cursor-pointer rounded-xl border px-3 py-2 text-sm ${
+                  previousOwnerRole === option.value ? 'border-sky-400/50 bg-sky-400/[0.06] text-white' : 'border-white/[0.08] text-zinc-300'
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="previous-owner-role"
+                  checked={previousOwnerRole === option.value}
+                  onChange={() => setPreviousOwnerRole(option.value)}
+                  className="sr-only"
+                />
+                <span className="block font-medium">{option.label}</span>
+                <span className="block text-xs text-zinc-500">{option.hint}</span>
+              </label>
+            ))}
+          </div>
+        </>
+      )}
+      <label className="mt-5 block text-sm text-zinc-300">
+        Reason (both owners see it)
+        <textarea
+          value={reason}
+          onChange={(event) => setReason(event.target.value)}
+          rows={3}
+          maxLength={1000}
+          placeholder="e.g. The previous owner is banned; the team asked for its Admin to take over (ticket TCK-1234)."
+          className="mt-1 w-full rounded-xl border border-white/10 bg-transparent px-3 py-2 text-sm text-white"
+        />
+      </label>
+    </ModalShell>
+  );
+}
+
 export function CreditActivityModal({
   title,
   accountId,
@@ -748,6 +1175,7 @@ export function CreditActivityModal({
   totalRevenue,
   onClose,
   onChanged,
+  teamWallet,
 }: {
   title: string;
   accountId: string;
@@ -757,7 +1185,10 @@ export function CreditActivityModal({
   totalRevenue?: number;
   onClose: () => void;
   onChanged?: () => void;
+  /** Team wallets: escrow and the part of the balance owed to members from contract payouts. */
+  teamWallet?: TeamWalletSummary;
 }) {
+  const isTeamWallet = Boolean(teamWallet);
   const [saving, setSaving] = useState(false);
   const isFrozen = frozenBalance > 0;
   const [holdOpen, setHoldOpen] = useState(false);
@@ -781,7 +1212,12 @@ export function CreditActivityModal({
 
   return (
     <ModalShell
-      title={`${title} — Credits`}
+      title={isTeamWallet ? `${title} — Team wallet` : `${title} — Credits`}
+      subtitle={
+        isTeamWallet
+          ? 'The team’s own wallet. Members add to it; only the Owner pays out. Holds and adjustments notify the team’s Owners and Admins.'
+          : undefined
+      }
       onClose={onClose}
       footer={
         <div className="flex flex-wrap justify-end gap-2">
@@ -824,11 +1260,12 @@ export function CreditActivityModal({
       {holdOpen && (
         <div className="mb-5 space-y-3 rounded-xl border border-amber-500/25 bg-amber-500/[0.05] p-4">
           <p className="text-xs text-zinc-400">
-            Holds all or part of the available balance. The member is notified with this reason and the release time,
-            and can appeal. An accepted appeal releases the credits within 24 hours.
+            {isTeamWallet
+              ? 'Holds all or part of the team’s spendable balance, so it cannot be spent or paid out to members. The team’s Owners and Admins are told this reason and the release time; they contact Support to dispute it.'
+              : 'Holds all or part of the available balance. The member is notified with this reason and the release time, and can appeal. An accepted appeal releases the credits within 24 hours.'}
           </p>
           <label className="block text-xs font-medium text-zinc-300">
-            Reason the member will see
+            {isTeamWallet ? 'Reason the team will see' : 'Reason the member will see'}
             <textarea
               value={holdForm.reason}
               onChange={(e) => holdForm.setReason(e.target.value)}
@@ -867,11 +1304,37 @@ export function CreditActivityModal({
         </div>
         {totalRevenue != null && (
           <div>
-            <p className="text-zinc-500">Total revenue</p>
+            <p className="text-zinc-500">{isTeamWallet ? 'Listing value' : 'Total revenue'}</p>
             <p className="text-xl font-bold text-emerald-300">{totalRevenue.toLocaleString()}</p>
           </div>
         )}
       </div>
+      {teamWallet && (
+        <div className="mb-5 grid grid-cols-2 gap-2 sm:grid-cols-4">
+          <div className="rounded-lg bg-white/[0.03] px-3 py-2">
+            <p className="text-[10px] uppercase text-zinc-600">In escrow</p>
+            <p className="font-semibold tabular-nums text-white">{teamWallet.escrow.toLocaleString()}</p>
+            <p className="mt-0.5 text-[10px] text-zinc-500">Funding the team’s own jobs</p>
+          </div>
+          <div className="rounded-lg bg-white/[0.03] px-3 py-2">
+            <p className="text-[10px] uppercase text-zinc-600">Owed to members</p>
+            <p className="font-semibold tabular-nums text-sky-300">{teamWallet.contractReserved.toLocaleString()}</p>
+            <p className="mt-0.5 text-[10px] text-zinc-500">Contract payouts not yet distributed</p>
+          </div>
+          <div className="rounded-lg bg-white/[0.03] px-3 py-2">
+            <p className="text-[10px] uppercase text-zinc-600">Free to pay out</p>
+            <p className="font-semibold tabular-nums text-emerald-300">{teamWallet.unreserved.toLocaleString()}</p>
+            <p className="mt-0.5 text-[10px] text-zinc-500">Spendable minus owed</p>
+          </div>
+          <div className="rounded-lg bg-white/[0.03] px-3 py-2">
+            <p className="text-[10px] uppercase text-zinc-600">Wallet</p>
+            <p className={`font-semibold ${teamWallet.inactive ? 'text-rose-300' : 'text-white'}`}>
+              {teamWallet.inactive ? 'Inactive' : 'Active'}
+            </p>
+            <p className="mt-0.5 text-[10px] text-zinc-500">{teamWallet.walletId ? `WAL-${teamWallet.walletId.slice(0, 8)}` : 'Not created yet'}</p>
+          </div>
+        </div>
+      )}
       <h3 className="mb-4 text-sm font-semibold text-zinc-400">Credits & economy activity feed</h3>
       <ul className="space-y-3">
         {activity.length === 0 && <li className="text-sm text-zinc-500">No credit transactions yet.</li>}
@@ -888,7 +1351,17 @@ export function CreditActivityModal({
           return (
             <li key={item.id} className="flex items-center justify-between gap-4 rounded-xl bg-white/[0.03] px-4 py-3">
               <div className="min-w-0">
-                <p className="text-sm font-medium text-white">{item.type}</p>
+                <p className="text-sm font-medium text-white">
+                  {item.type}
+                  {item.counterparty ? (
+                    <span className="font-normal text-zinc-400">
+                      {' '}
+                      · {item.amount > 0 ? 'from' : 'to'} {item.counterparty.isTeam ? 'Team ' : ''}
+                      {item.counterparty.name}
+                      {item.counterparty.handle ? ` (@${item.counterparty.handle})` : ''}
+                    </span>
+                  ) : null}
+                </p>
                 <p className="text-xs text-zinc-500">
                   {item.label} · {item.timeAgo}
                   {tone === 'hold' && item.amount < 0 && (
@@ -1591,10 +2064,15 @@ export function HistoryModal({
   canLiftPoints = false,
   showPunishments = false,
   meritPenalties,
+  forTeam = false,
+  leader = null,
 }: {
   entityName: string;
   accountId?: string;
   history: PlatformTeam['history'];
+  /** Team record: warnings issued through the team (carried by its leaders), no team merit. */
+  forTeam?: boolean;
+  leader?: TeamLeader | null;
   /** Running automatic punishments, shown next to merit (members only). */
   meritPenalties?: MeritPenaltyLike[] | null;
   onClose: () => void;
@@ -1614,23 +2092,44 @@ export function HistoryModal({
       : history.activeDispute
         ? [history.activeDispute]
         : [];
-  const displayedMerit = Number.isFinite(Number(history.merit))
-    ? Number(history.merit)
-    : meritFromWarnings(history.violations);
+  const displayedMerit =
+    history.merit != null && Number.isFinite(Number(history.merit))
+      ? Number(history.merit)
+      : meritFromWarnings(history.violations);
+  const activeViaTeam = history.violations.filter((v) => isActiveWarning(v)).length;
 
   return (
     <ModalShell title={`${entityName} history`} subtitle={history.summaryLabel} onClose={onClose}>
       <div className="mb-6 grid gap-3 sm:grid-cols-4">
-        <div className="rounded-xl bg-white/[0.03] p-4">
-          <p className="text-xs text-zinc-500">Platform Merit</p>
-          <p className="text-2xl font-bold text-white">{displayedMerit}</p>
-          <p className="mt-1 text-[10px] uppercase tracking-wide text-zinc-500">{meritBandLabel(displayedMerit)}</p>
-          {showPunishments ? (
-            <div className="mt-2">
-              <StaffPunishmentChips penalties={meritPenalties} showNone />
-            </div>
-          ) : null}
-        </div>
+        {forTeam ? (
+          <div className="rounded-xl bg-white/[0.03] p-4">
+            <p className="text-xs text-zinc-500">Leader merit</p>
+            <p className="text-2xl font-bold text-white">{leader?.merit ?? '—'}</p>
+            <p className="mt-1 text-[10px] uppercase tracking-wide text-zinc-500">
+              {leader ? `${leader.name} · ${leader.merit != null ? meritBandLabel(leader.merit) : leader.status}` : 'No active leader'}
+            </p>
+            <p className="mt-2 text-[11px] text-zinc-500">
+              Teams have no merit. {activeViaTeam} active warning{activeViaTeam === 1 ? '' : 's'} issued through this team
+              {history.activeWarningPoints ? ` (${history.activeWarningPoints} pts)` : ''}.
+            </p>
+            {leader?.meritPenalties?.length ? (
+              <div className="mt-2">
+                <StaffPunishmentChips penalties={leader.meritPenalties} />
+              </div>
+            ) : null}
+          </div>
+        ) : (
+          <div className="rounded-xl bg-white/[0.03] p-4">
+            <p className="text-xs text-zinc-500">Platform Merit</p>
+            <p className="text-2xl font-bold text-white">{displayedMerit}</p>
+            <p className="mt-1 text-[10px] uppercase tracking-wide text-zinc-500">{meritBandLabel(displayedMerit)}</p>
+            {showPunishments ? (
+              <div className="mt-2">
+                <StaffPunishmentChips penalties={meritPenalties} showNone />
+              </div>
+            ) : null}
+          </div>
+        )}
         <div className="rounded-xl bg-white/[0.03] p-4">
           <p className="text-xs text-zinc-500">Total violations</p>
           <p className="text-2xl font-bold text-white">{history.totalViolations}</p>
@@ -1693,14 +2192,27 @@ export function HistoryModal({
 
       <div className="grid gap-6 lg:grid-cols-2">
         <div>
-          <h3 className="mb-3 text-sm font-semibold text-white">Violation history</h3>
+          <h3 className="mb-3 text-sm font-semibold text-white">
+            {forTeam ? 'Warnings issued through this team' : 'Violation history'}
+          </h3>
           <ul className="space-y-3">
             {history.violations.length === 0 && (
-              <p className="text-sm text-zinc-500">No violations on record.</p>
+              <p className="text-sm text-zinc-500">
+                {forTeam ? 'No warnings have been issued through this team.' : 'No violations on record.'}
+              </p>
             )}
             {history.violations.map((v) => (
               <li key={v.id} className="rounded-lg bg-white/[0.03] p-3 text-sm">
                 <p className="font-medium text-white">{v.type}</p>
+                {forTeam && v.issuedToName ? (
+                  <p className="mt-0.5 text-xs text-sky-300">
+                    Issued to leader {v.issuedToName}
+                    {v.issuedToHandle ? ` (@${v.issuedToHandle})` : ''}
+                    {leader && v.accountId && String(v.accountId) !== String(leader.accountId) ? ' · former leader' : ''}
+                  </p>
+                ) : !forTeam && v.viaTeamName ? (
+                  <p className="mt-0.5 text-xs text-sky-300">As leader of Team {v.viaTeamName}</p>
+                ) : null}
                 <p className="mt-1 text-zinc-500">{v.reason}</p>
                 <p className="mt-2 text-xs text-zinc-600">
                   By: {v.by} · {v.points} warning points
@@ -1720,14 +2232,15 @@ export function HistoryModal({
                       ? ' · points lifted'
                       : v.active === false ? ' · inactive' : ''}
                 </p>
-                {accountId && v.violationId && isActiveWarning(v) ? (
+                {(v.accountId || accountId) && v.violationId && isActiveWarning(v) ? (
                   <button
                     type="button"
                     disabled={rescindingId === v.violationId}
                     onClick={async () => {
                       setRescindingId(v.violationId || null);
                       try {
-                        await rescindWarning(accountId, v.violationId || '');
+                        // A team's warnings sit on the leader's account: rescind them there.
+                        await rescindWarning(String(v.accountId || accountId), v.violationId || '');
                         await onChanged?.();
                       } catch (err) {
                         handleAccountActionError(err);
@@ -1827,19 +2340,25 @@ export function WarnAccountModal({
   accountId,
   onClose,
   onChanged,
+  team,
 }: {
   entityName: string;
   accountId: string;
   onClose: () => void;
   onChanged?: () => void;
+  /** Team targets: teams have no Platform Merit, so the warning lands on the team leader. */
+  team?: { leader: TeamLeader | null };
 }) {
   const [warningId, setWarningId] = useState('harassment');
   const [reason, setReason] = useState('');
   const [saving, setSaving] = useState(false);
+  const leader = team?.leader ?? null;
+  const blocked = Boolean(team) && !leader;
 
   return (
     <ModalShell
-      title={`Warn ${entityName}`}
+      title={team ? `Warn the leader of ${entityName}` : `Warn ${entityName}`}
+      subtitle={team && leader ? `Issued to ${leader.name}${leader.username ? ` (@${leader.username})` : ''}` : undefined}
       onClose={onClose}
       footer={
         <div className="flex justify-end gap-2">
@@ -1852,9 +2371,9 @@ export function WarnAccountModal({
           </button>
           <button
             type="button"
-            disabled={saving || !reason.trim() || !warningId}
+            disabled={saving || blocked || !reason.trim() || !warningId}
             onClick={async () => {
-              if (!reason.trim() || !warningId) return;
+              if (blocked || !reason.trim() || !warningId) return;
               setSaving(true);
               try {
                 await warnAccount(accountId, {
@@ -1871,11 +2390,30 @@ export function WarnAccountModal({
             }}
             className="rounded-xl bg-amber-500/90 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
           >
-            {saving ? 'Issuing…' : 'Issue warning'}
+            {saving ? 'Issuing…' : team ? 'Warn the leader' : 'Issue warning'}
           </button>
         </div>
       }
     >
+      {team ? (
+        blocked ? (
+          <p className="mb-4 rounded-xl border border-rose-500/25 bg-rose-500/[0.06] px-4 py-3 text-sm text-rose-200">
+            This team has no active leader to warn. Lock the team, or assign an owner with Transfer ownership first.
+          </p>
+        ) : (
+          <div className="mb-4 rounded-xl border border-amber-500/25 bg-amber-500/[0.05] px-4 py-3 text-sm text-amber-100">
+            <p>
+              Teams have no Platform Merit, so this warning goes on{' '}
+              <span className="font-semibold text-white">{leader?.name}</span>’s personal record
+              {leader?.merit != null ? ` (merit ${leader.merit} now)` : ''} and is listed on the team’s record.
+            </p>
+            <p className="mt-1 text-xs text-amber-200/80">
+              The leader is told it came with the team. If another member did it, warn that member from the Users tab
+              instead. The automatic punishment ladder applies to the leader as usual.
+            </p>
+          </div>
+        )
+      ) : null}
       <WarningPresetFields
         desk="admin"
         warningId={warningId}

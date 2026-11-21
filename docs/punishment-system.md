@@ -63,7 +63,7 @@ Staff may skip rungs for severe harm (threats, theft, impersonation, CSAM, payme
 |---|---|---|
 | Guest | No | Browse only. |
 | User account (enthusiast / freelancer / client — same account) | Yes | One standing covers every role. |
-| Team account | Team can be locked/banned as an account | Acting **user** still needs to be allowed to perform the action. A Frozen or banned member cannot post a team job. |
+| Team account | Team can be suspended/locked/banned as an account; warnings and forum timeouts go to its **leader** | Acting **user** still needs to be allowed to perform the action. A Frozen or banned member cannot post a team job. See §8.10. |
 | Staff | Staff/team ban/lock clears their session | Staff `performanceScore` on moderation is workload, not this system. |
 
 Subscriptions (Free / Premium / Business) never skip a punishment.
@@ -352,12 +352,30 @@ Listing fees: charge only when the listing is actually accepted into pending/pub
 
 **Routes:** `/teams`, `/teams/:id`, `/teams/join/:code`, `/teams/:id/business-verification`, `/teams/:id/tasks/:contractId`, `/team-project/:id`
 
-- Teams have no warning ring. A team account can still be locked or banned.
-- Every mutating team action checks the **acting user**.
-- A banned **owner**: staff must transfer or lock the team. Other members should not be able to post jobs “as” a banned owner’s identity.
-- Suspended/Ban/Lock cannot work on team projects, including existing ones.
+- Teams have no warning ring and never post in the forums. The team's **leader** (its first active Owner) answers for it:
+  - A **warning** staff aim at a team is issued to the leader's personal account (merit, automatic punishments and appeals as usual). `violations.team_account_id` names the team, so the team's record lists it even after ownership moves. The leader is told it came with the team. No leader → 409 `TEAM_NO_LEADER`.
+  - A **forum timeout** on a team goes to the leader.
+  - **Ban / suspend / lock** change the team account. "Also apply to the team leader" is on by default: the leader gets the same named punishment and length, with the reason saying it came with the team. A leader already at the same or a stricter standing is left alone; a leader staff may not act on (self, staff) stops the whole action before anything changes, so staff untick the option instead. The leader's activity row carries `viaTeamAccountId`.
+  - **Lifting** the team (unban / unsuspend / unlock / restore) also lifts the leader's penalty when it was applied together with this team and is still the leader's latest standing change. Other leader penalties stay; change them from the Users tab.
+- **Team standing gate** (`services/TeamStandingServices.js`). Teams have no session, so `CheckSession` never sees their standing; every team write checks it:
 
-**Staff:** Admin/Support manage teams; Jobs desk for team-posted jobs.
+| Team action | Active | Suspended | Locked / Banned | Leader banned, locked or missing |
+|---|---|---|---|---|
+| Read team, members, reviews; leave (non-owner); decline invite; report; team chat | OK | OK | OK | OK |
+| Edit team, delete team, transfer ownership (member side) | OK | **NO** | **NO** | OK |
+| Join, accept invite, invite, approve / role / suspend / restore / remove members (deny is OK) | OK | **NO** | **NO** | OK |
+| Add funds, distribute funds, contract fund distributions | OK | **NO** | **NO** | **NO** |
+| Post team jobs / gigs, team proposals, subcontract hires | OK | **NO** | **NO** | **NO** |
+| Live work: team tasks, contract workspace tasks, video projects | OK | OK | **NO** | OK |
+
+  Errors are 403 `TEAM_SUSPENDED` / `TEAM_LOCKED` / `TEAM_BANNED` / `TEAM_LEADER_RESTRICTED`. A penalty whose end date passed counts as over before the minute job records it. Contractual (project) workspaces are client-led and skip the leader rule.
+- The team page shows a banner while the team or its leader is restricted (`standing` on `GET /api/teams/:id`), refreshed by `team:standing_changed`.
+- A team account has no inbox: status changes, holds, staff credit adjustments and the end of a timed penalty notify the team's active **Owners and Admins** (and push `team:standing_changed` to active members).
+- Every mutating team action still checks the **acting user** (Suspended/Ban/Lock members cannot work on team projects, including existing ones).
+- A banned **owner**: Admin / Support use **Transfer ownership** (`POST /api/admin/teams/:accountId/transfer-ownership`, `{ newOwnerAccountId, previousOwnerRole: Admin|Member|Removed, reason }`). The new owner must be an active member whose own account is Active; both owners are told; `TEAM_OWNERSHIP_TRANSFERRED` is recorded on the team.
+- **Team wallet:** the team's own Account Wallet. Members (Owner, Admin, Leader roles) add to it; only the Owner distributes. Staff holds and adjustments work as on member wallets. The desk shows spendable, held, escrow, credits owed to members from contract payouts, and free-to-pay-out.
+
+**Staff:** Admin/Support manage teams (full ladder, wallet, verification, ownership transfer); specialist moderators may warn the leader and suspend/lock the team; Jobs desk for team-posted jobs. The Teams desk flags teams with a restricted or missing leader, held credits and open disputes.
 
 ### 8.11 Projects and video editor
 
@@ -523,7 +541,8 @@ merit drops to 30
 
 Implementation rules (enforced in code):
 
-- Every standing action — warn, timeout, suspend, lock, ban, restore, pardon, rescind, credit adjustment — refuses to act on the actor's own account, and only an Admin may act on another staff account (`assertCanSanctionTarget` in `backend/lib/SuspendGuards.js`).
+- Every standing action — warn, timeout, suspend, lock, ban, restore, pardon, rescind, credit adjustment — refuses to act on the actor's own account, and only an Admin may act on another staff account (`assertCanSanctionTarget` in `backend/lib/SuspendGuards.js`). For a team target the same check runs on the team leader before anything changes when the action reaches the leader.
+- Team targets go through `services/TeamSanctionServices.js` from `warnAccount` and `updateAccountStatus`, so every path (Users desk, report decisions, dispute conviction bans) treats a team the same way (§8.10).
 - Status changes must match the current standing: unsuspend only lifts a suspension, unlock a lock, unban a ban. A banned account can only be changed by Admin or Support, so a specialist moderator cannot lift a ban through unsuspend/unlock or a suspension.
 - The automatic suspension never writes Suspended over a ban or lock, and never shortens a suspension already running.
 - Every ban (Users desk, dispute conviction, report sanction) runs `closeBannedAccountListings` (`backend/services/BanCleanupServices.js`) after the ban is saved: see §9 for what closes. Each item is its own transaction; failures are reported in the staff response and the `ACCOUNT_BAN_CLEANUP` activity row and never undo the ban. Lifting the ban does not reopen anything — the member reposts, or reopens a closed gig. Locks and suspensions do not run it.

@@ -64,6 +64,13 @@
 - Both paths use existing S3 credentials and only delete keys under `uploads/<owner_user_id>/`. Objects shared by another non-deleted media asset remain. If S3 deletion fails, the database deletion rolls back: manual deletion can be retried, and expired uploads are retried by the existing retention job. See `docs/upload-storage-cleanup.md` for S3 versioning behavior.
 - `projects.trashed_at` provides the same 30-day recoverable lifecycle. Active lists exclude trash; the owner's Trash list excludes expired and permanently deleted entries. Restore clears `trashed_at`; Delete forever and the ten-minute retention job set `deleted_at`, retaining project history and membership records. Project deletion does not delete reusable uploaded media. Frozen projects cannot be trashed, restored, permanently deleted, or expired by the job. Moderation restore does not revive owner-deleted projects.
 
+## Forum removal (MongoDB)
+
+- Forum content is never hard-deleted. `forum_discussions` and their `comments[]` use `deleted_at`; a removed discussion also has `status: 'removed'` (member reads check both). `forum_groups` use `status: 'inactive'` plus `deleted_at`.
+- `removed_by` (discussions, comments) is `author`, `discussion_owner`, `group_moderator` or `staff`; `archived_by` (groups) is `owner` or `staff`. Staff removals also store `removed_by_staff_id` / `archived_by_staff_id` and `removal_reason` / `archive_reason`. Restore clears them.
+- Only an author deleting their own comment wipes its text and attachments. Every other removal keeps the content, and member reads and forum socket payloads mask it (`publicForumDiscussion` in `ForumDiscussionRepositories.js`).
+- Forum Control and Admin → Management → Forum restore only what moderation removed: never an author-deleted discussion or comment, or an owner-deleted group. Comments removed before `removed_by` existed had their text overwritten and cannot be restored. Older discussions and groups without the field can still be restored.
+
 ## Credit holds and deactivation
 
 - `wallets.frozen_at`, `frozen_until`, `frozen_reason`, `frozen_by_staff_id` (FK `staff`, `ON DELETE SET NULL`) describe a staff credit hold on `frozen_balance_credits`. `frozen_until` NULL means until staff review. A partial index on `frozen_until` serves the release job. A second hold adds to the held amount and its reason/date replace the old ones. Releasing clears all four columns.

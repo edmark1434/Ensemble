@@ -220,6 +220,11 @@ export type DisputeResolutionOption = {
   label: string;
   hint: string;
   requiresNote?: boolean;
+  /**
+   * Disputes only: what the outcome does with escrow the case still holds. `keep` leaves it with
+   * the contract; `disputer` sends it to the disputer (Settle escrow, award "disputer").
+   */
+  escrow?: "keep" | "disputer";
   /** The exact message the server posts for this choice (without staff notes). */
   preview?: string;
 };

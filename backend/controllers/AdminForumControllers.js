@@ -96,16 +96,37 @@ async function patchAdminForumDiscussion(req, res) {
   }
 }
 
+/** Hides the comment. Kept for older clients; it never deletes anything. */
 async function deleteAdminForumComment(req, res) {
   try {
     const data = await forum.removeForumComment(
       req.params.discussionId,
       req.params.commentId,
-      req.session
+      req.session,
+      req.body || {}
     );
-    res.status(200).json({ success: true, data, message: 'Comment removed' });
+    res.status(200).json({ success: true, data, message: 'Comment hidden. It can be restored.' });
   } catch (err) {
     sendError(res, err, 'Failed to remove comment');
+  }
+}
+
+/** `{ hidden: true | false, reason }` hides or restores one comment. */
+async function patchAdminForumComment(req, res) {
+  try {
+    const data = await forum.setForumCommentVisibility(
+      req.params.discussionId,
+      req.params.commentId,
+      req.body || {},
+      req.session
+    );
+    res.status(200).json({
+      success: true,
+      data,
+      message: req.body?.hidden ? 'Comment hidden. It can be restored.' : 'Comment restored',
+    });
+  } catch (err) {
+    sendError(res, err, 'Failed to update comment');
   }
 }
 
@@ -118,4 +139,5 @@ module.exports = {
   getAdminForumDiscussion,
   patchAdminForumDiscussion,
   deleteAdminForumComment,
+  patchAdminForumComment,
 };

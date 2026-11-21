@@ -253,16 +253,37 @@ async function patchGroupMember(req, res) {
   }
 }
 
+/** Hides the comment. Kept for older clients; it never deletes anything. */
 async function deleteComment(req, res) {
   try {
     const data = await forumContent.removeForumComment(
       req.params.id,
       req.params.commentId,
-      req.session
+      req.session,
+      req.body || {}
     );
-    res.status(200).json({ success: true, data, message: 'Comment removed' });
+    res.status(200).json({ success: true, data, message: 'Comment hidden. It can be restored.' });
   } catch (err) {
     sendForumContentError(res, err, 'Failed to remove comment');
+  }
+}
+
+/** `{ hidden: true | false, reason }` hides or restores one comment. */
+async function patchComment(req, res) {
+  try {
+    const data = await forumContent.setForumCommentVisibility(
+      req.params.id,
+      req.params.commentId,
+      req.body || {},
+      req.session
+    );
+    res.status(200).json({
+      success: true,
+      data,
+      message: req.body?.hidden ? 'Comment hidden. It can be restored.' : 'Comment restored',
+    });
+  } catch (err) {
+    sendForumContentError(res, err, 'Failed to update comment');
   }
 }
 
@@ -417,6 +438,7 @@ module.exports = {
   getDiscussion,
   patchDiscussion,
   deleteComment,
+  patchComment,
   getRestrictions,
   postViolation,
   patchRestriction,
