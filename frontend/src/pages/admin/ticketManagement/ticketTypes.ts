@@ -678,6 +678,10 @@ export type CaseAppeal = {
         createdAt: string | null;
       }
     | null;
+  /** Marketplace appeals: the listing the member picked, if any. */
+  listing?: CaseListing | null;
+  /** Jobs appeals: the job or gig the member picked, if any. */
+  posting?: CasePosting | null;
   record: {
     warnings: {
       id: string;
@@ -806,6 +810,22 @@ export type CaseMarketplace = {
   relatedTickets: CaseTicketRef[];
 };
 
+/**
+ * What a gig order bought: the package (tier) and the add-ons the client picked. Add-on prices
+ * and extra days are the ones the order was placed with; the package price is the tier's
+ * current price (sellers can edit tiers later).
+ */
+export type CaseGigOrder = {
+  requestId: string;
+  tierTitle: string | null;
+  tierCredits: number | null;
+  tierDeliveryDays: number | null;
+  tierRevisions: number | null;
+  addons: { id: string; name: string; priceCredits: number; additionalDays: number }[];
+  addonCredits: number;
+  addonDays: number;
+};
+
 export type CaseContract = {
   id: string;
   title: string;
@@ -817,8 +837,12 @@ export type CaseContract = {
   deadlineAt: string | null;
   createdAt: string | null;
   requesterRole: 'client' | 'freelancer' | null;
+  /** The requester is on the contract through a team they own. */
+  requesterViaTeam?: boolean;
   client: CaseAccountSummary | null;
   freelancer: CaseAccountSummary | null;
+  /** Gig orders only; null for job contracts. */
+  gigOrder?: CaseGigOrder | null;
   milestones: { id: string; index: number; name: string; status: string; credits: number; deadlineAt: string | null; startedAt: string | null }[];
   milestoneTotals: { count: number; credits: number; completed: number };
   disputes: { id: string; number: string; title: string; status: string; public: boolean; filedByRequester: boolean; openedAt: string }[];

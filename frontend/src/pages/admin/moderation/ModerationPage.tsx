@@ -681,7 +681,7 @@ function CasesPreview({
         <div>
           <h2 className="text-sm font-semibold text-white">Pending cases</h2>
           <p className="text-xs text-zinc-500">
-            Reports, disputes, listings, and identity — open from Pending cases
+            Reports, disputes, listings, and identity or business verification — open from Pending cases
           </p>
         </div>
         <button type="button" onClick={onViewAll} className="text-xs text-rose-400 hover:underline">
@@ -690,7 +690,7 @@ function CasesPreview({
       </div>
       <CasesTableBody
         cases={preview}
-        emptyLabel="No open reports, listing reviews, or identity checks."
+        emptyLabel="No open reports, listing reviews, or verification checks."
         onView={() => onViewAll()}
       />
     </section>
@@ -800,7 +800,7 @@ function CasesTab({
             },
             {
               id: 'identity' as const,
-              label: 'Identity verification',
+              label: 'Identity & business verification',
               count: identityCases.length,
               icon: ShieldAlert,
             },

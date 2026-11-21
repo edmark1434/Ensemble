@@ -258,8 +258,10 @@ async function reportsList(whereSql, params, limit = 10) {
 }
 
 /** Other tickets that name the same record (contract, listing, order, project) in their form. */
-async function ticketsReferencing(entityId, excludeTicketId) {
-  if (!entityId) return [];
+async function ticketsReferencing(entityIds, excludeTicketId) {
+  // One record can be named by several ids (a listing by its listing id or its asset id).
+  const ids = [...new Set((Array.isArray(entityIds) ? entityIds : [entityIds]).filter(Boolean).map(String))];
+  if (!ids.length) return [];
   const result = await pool.query(
     `
     SELECT t.ticket_id, t.ticket_number, t.type, t.status, t.created_at,
@@ -272,12 +274,12 @@ async function ticketsReferencing(entityId, excludeTicketId) {
       AND jsonb_typeof(t.form_answers) = 'array'
       AND EXISTS (
         SELECT 1 FROM jsonb_array_elements(t.form_answers) answer
-        WHERE answer->>'id' = $1
+        WHERE answer->>'id' = ANY($1::text[])
       )
     ORDER BY t.created_at DESC
     LIMIT 10
     `,
-    [String(entityId), excludeTicketId || null]
+    [ids, excludeTicketId || null]
   );
   return result.rows.map((row) => ({
     id: row.ticket_id,
@@ -287,6 +289,81 @@ async function ticketsReferencing(entityId, excludeTicketId) {
     requester: row.requester_handle ? `@${row.requester_handle}` : row.requester_name,
     createdAt: row.created_at,
   }));
+}
+
+/**
+ * The accounts the requester acts as on Jobs & Gigs and the marketplace: their own and teams
+ * they own. A contract, posting or listing held by one of those teams is the requester's too.
+ */
+async function requesterActorIds(accountId) {
+  if (!accountId) return [];
+  const own = String(accountId);
+  try {
+    const { getAuthorizedActorAccountIds } = require('./MarketplaceActorRepositories');
+    const ids = await getAuthorizedActorAccountIds(accountId);
+    return [...new Set([own, ...(ids || []).map(String)])];
+  } catch (err) {
+    console.warn('Ticket case actor accounts skipped:', err.message);
+    return [own];
+  }
+}
+
+/**
+ * What each gig order bought, keyed by contract id: the package (tier) and the add-ons the
+ * client picked. A gig edit retires add-on rows and inserts new ones instead of changing them,
+ * so an order's add-ons keep the price and extra days it was placed with. Tier rows are edited
+ * in place, so the package price is the current one. Job contracts have no entry.
+ */
+async function gigOrdersForContracts(contractIds) {
+  const ids = [...new Set((contractIds || []).map(String).filter((id) => UUID_RE.test(id)))];
+  const byContract = new Map();
+  if (!ids.length) return byContract;
+  const result = await pool.query(
+    `
+    SELECT DISTINCT ON (gc.contract_id)
+           gc.contract_id, gr.gig_request_id,
+           gt.title AS tier_title, gt.rate_credits AS tier_credits,
+           gt.delivery_days AS tier_days, gt.no_of_revisions_max AS tier_revisions,
+           COALESCE((
+             SELECT json_agg(json_build_object(
+               'id', ga.gig_addon_id,
+               'name', ga.name,
+               'priceCredits', ga.price_credits,
+               'additionalDays', ga.additional_days
+             ) ORDER BY ga.name ASC, ga.gig_addon_id ASC)
+             FROM gig_request_addons gra
+             JOIN gig_addons ga ON ga.gig_addon_id = gra.gig_addon_id
+             WHERE gra.gig_request_id = gr.gig_request_id
+           ), '[]'::json) AS addons
+    FROM gig_contracts gc
+    JOIN gig_requests gr ON gr.gig_request_id = gc.gig_request_id
+    LEFT JOIN gig_tiers gt ON gt.gig_tier_id = gr.gig_tier_id
+    WHERE gc.contract_id = ANY($1::uuid[])
+    ORDER BY gc.contract_id, gr.created_at ASC, gr.gig_request_id ASC
+    `,
+    [ids]
+  );
+  for (const row of result.rows) {
+    const addons = (Array.isArray(row.addons) ? row.addons : [])
+      .filter((addon) => addon && addon.id)
+      .map((addon) => ({
+        id: String(addon.id),
+        name: String(addon.name || 'Add-on'),
+        priceCredits: num(addon.priceCredits),
+        additionalDays: num(addon.additionalDays),
+      }));
+    byContract.set(String(row.contract_id), {
+      requestId: String(row.gig_request_id),
+      tierTitle: row.tier_title || null,
+      tierCredits: row.tier_credits == null ? null : num(row.tier_credits),
+      tierDeliveryDays: row.tier_days == null ? null : num(row.tier_days),
+      tierRevisions: row.tier_revisions == null ? null : num(row.tier_revisions),
+      addons,
+      addonCredits: addons.reduce((sum, addon) => sum + addon.priceCredits, 0),
+      addonDays: addons.reduce((sum, addon) => sum + addon.additionalDays, 0),
+    });
+  }
+  return byContract;
 }
 
 /* ------------------------------------------------------------------ */
@@ -607,8 +684,11 @@ async function appealContext(row, form, notes) {
   const accountId = row.account_id;
   const area = AREA_APPEALS[row.type] || null;
   const caseAnswer = answerOf(form, 'case_id');
+  // Marketplace and jobs appeals may name the listing, job or gig the action was on.
+  const itemAnswer = area === 'marketplace' || area === 'jobs' ? answerOf(form, 'listing') : { value: '', id: null };
+  const itemId = itemAnswer.id || uuidIn(itemAnswer.value);
   const { describeAppealTarget } = require('../services/PenaltyAppealServices');
-  const [record, appeals, caseRef, actions, reports, target] = await Promise.all([
+  const [record, appeals, caseRef, actions, reports, target, listing, posting] = await Promise.all([
     section(notes, 'Punishment record', () => punishmentRecord(accountId)),
     section(notes, 'Appeal history', () => appealHistory(accountId, row.ticket_id)),
     section(notes, 'Referenced case', () => referencedCase(caseAnswer.value, accountId)),
@@ -618,7 +698,18 @@ async function appealContext(row, form, notes) {
     row.appeal_target_type
       ? section(notes, 'Appealed penalty', () => describeAppealTarget(row))
       : Promise.resolve(null),
+    area === 'marketplace' && itemId
+      ? section(notes, 'Listing', async () => {
+          const listingId = await resolveListingId({ id: itemId, value: '' });
+          return listingId ? listingSummary(listingId) : null;
+        })
+      : Promise.resolve(null),
+    area === 'jobs' && itemId ? section(notes, 'Posting', () => postingSummary(itemId)) : Promise.resolve(null),
   ]);
+  const itemFailed = notes.some((note) => note === 'Listing could not be loaded.' || note === 'Posting could not be loaded.');
+  if (itemId && !listing && !posting && !itemFailed) {
+    notes.push('The listing, job or gig named in this appeal was not found.');
+  }
   return {
     area: area || 'account',
     // Only "Appeal an account penalty" has the accept / deny flow; area appeals are resolved by acting on the item.
@@ -630,6 +721,9 @@ async function appealContext(row, form, notes) {
     reasonGiven: answerOf(form, 'why_reverse', 'explanation').value || null,
     evidence: answerOf(form, 'evidence').value || null,
     referencedCase: caseRef,
+    // The item the member picked (marketplace / jobs appeals only).
+    listing: listing || null,
+    posting: posting || null,
     record,
     appeals,
     areaActions: actions,
@@ -745,16 +839,17 @@ async function buyerStats(accountId) {
   return { purchases: num(row.purchases), refunded: num(row.refunded), spentCredits: num(row.spent) };
 }
 
-async function sellerListings(accountId) {
+/** Listings the requester submitted, as themselves or as a team they own. */
+async function sellerListings(actorIds) {
   const result = await pool.query(
     `
     SELECT listing_id, listing_number, title, status, price_credits, rejection_reason, created_at
     FROM marketplace_listings
-    WHERE submitted_by_account_id = $1
+    WHERE submitted_by_account_id = ANY($1::uuid[])
     ORDER BY created_at DESC
     LIMIT 8
     `,
-    [accountId]
+    [actorIds]
   );
   return result.rows.map((row) => ({
     id: row.listing_id,
@@ -779,7 +874,9 @@ async function resolveListingId(answer) {
 async function marketplaceContext(row, form, notes) {
   const accountId = row.account_id;
   const orderAnswer = answerOf(form, 'order');
+  // `listing` is the listing / asset picker; the other keys are answers from older forms.
   const listingAnswer = answerOf(form, 'listing', 'listing_or_seller', 'review_link');
+  const sellerAnswer = answerOf(form, 'seller_username');
   const assetId = orderAnswer.id || uuidIn(orderAnswer.value);
 
   const listingId = await section(notes, 'Listing', async () => {
@@ -787,22 +884,37 @@ async function marketplaceContext(row, form, notes) {
     return resolveListingId(listingAnswer);
   });
   const sellerSide = ['Seller verification', 'Listing review', 'Appeal a marketplace action'].includes(row.type);
-  const reportedText = row.type === 'Report a listing or seller' && !listingId ? listingAnswer.value : null;
+  // The current report form names the seller in its own field; on older forms one field held
+  // a listing link or a seller username, so text that matched no listing was read as a seller.
+  const currentReportForm = form.some((item) => item.key === 'report_target');
+  const reportedText = row.type === 'Report a listing or seller'
+    ? currentReportForm
+      ? sellerAnswer.value || null
+      : !listingId ? listingAnswer.value || null : null
+    : null;
+  const actorIds = await requesterActorIds(accountId);
 
-  const [listing, purchase, buyer, ownListings, reported, related] = await Promise.all([
+  const [listing, purchase, buyer, ownListings, reported] = await Promise.all([
     listingId ? section(notes, 'Listing', () => listingSummary(listingId)) : Promise.resolve(null),
     assetId ? section(notes, 'Purchase', () => purchaseSummary(accountId, assetId)) : Promise.resolve(null),
     sellerSide ? Promise.resolve(null) : section(notes, 'Buyer history', () => buyerStats(accountId)),
-    sellerSide ? section(notes, 'Seller listings', () => sellerListings(accountId)) : Promise.resolve(null),
+    sellerSide ? section(notes, 'Seller listings', () => sellerListings(actorIds)) : Promise.resolve(null),
     reportedText ? section(notes, 'Reported seller', () => accountFromText(reportedText)) : Promise.resolve(null),
-    section(notes, 'Related tickets', () => ticketsReferencing(assetId || listingId, row.ticket_id)),
   ]);
+  // Other tickets may name the same item by its listing id (listing picker) or asset id.
+  const related = await section(notes, 'Related tickets', () =>
+    ticketsReferencing([assetId, listingId, listing?.marketAssetId, listing?.asset?.id], row.ticket_id)
+  );
 
   if (purchase && !purchase.licenses.length) {
     notes.push('The requester has no license for the asset named in this ticket.');
   }
-  if (listing && sellerSide && listing.seller.accountId && String(listing.seller.accountId) !== String(accountId)) {
+  const sellerIsRequester = Boolean(listing?.seller.accountId && actorIds.includes(String(listing.seller.accountId)));
+  if (listing && sellerSide && listing.seller.accountId && !sellerIsRequester) {
     notes.push('The listing in this ticket belongs to another seller.');
+  }
+  if (listing && row.type === 'Report a listing or seller' && sellerIsRequester) {
+    notes.push('The requester reported a listing they sell.');
   }
   return {
     role: sellerSide ? 'seller' : 'buyer',
@@ -820,11 +932,13 @@ async function marketplaceContext(row, form, notes) {
 /* Jobs & Gigs                                                         */
 /* ------------------------------------------------------------------ */
 
-async function contractSummary(contractId, requesterId) {
+/** `requesterIds`: the requester's own account first, then teams they own. */
+async function contractSummary(contractId, requesterIds) {
   const { getContractWithParties } = require('./ContractRepositories');
   const contract = await getContractWithParties(contractId);
   if (!contract) return null;
-  const [extra, milestones, disputes, transactions, parties] = await Promise.all([
+  const requesterId = requesterIds[0] || null;
+  const [extra, milestones, disputes, transactions, parties, gigOrders] = await Promise.all([
     pool.query(`SELECT payment_type, created_at FROM contracts WHERE contract_id = $1`, [contractId]),
     pool.query(
       `
@@ -838,13 +952,13 @@ async function contractSummary(contractId, requesterId) {
     pool.query(
       `
       SELECT d.dispute_id, d.dispute_number, d.title, d.status, d.opened_at, d.visibility,
-             (d.by_account_id = $2) AS filed_by_requester
+             (d.by_account_id = ANY($2::uuid[])) AS filed_by_requester
       FROM disputes d
       WHERE d.contract_id = $1 AND d.deleted_at IS NULL
       ORDER BY d.opened_at DESC NULLS LAST
       LIMIT 10
       `,
-      [contractId, requesterId]
+      [contractId, requesterIds]
     ),
     pool.query(
       `
@@ -861,6 +975,10 @@ async function contractSummary(contractId, requesterId) {
       [contractId]
     ),
     Promise.all([accountSummary(contract.client_account_id), accountSummary(contract.freelancer_account_id)]),
+    gigOrdersForContracts([contractId]).catch((err) => {
+      console.warn('Ticket case gig order skipped:', err.message);
+      return new Map();
+    }),
   ]);
   const milestoneRows = milestones.rows.map((m) => ({
     id: m.contract_milestone_id,
@@ -871,12 +989,17 @@ async function contractSummary(contractId, requesterId) {
     deadlineAt: m.deadline_at || null,
     startedAt: m.started_at || null,
   }));
-  const requesterRole =
-    String(contract.client_account_id) === String(requesterId)
-      ? 'client'
-      : String(contract.freelancer_account_id) === String(requesterId)
-        ? 'freelancer'
-        : null;
+  // A team the requester owns counts as the requester (they act as it on Jobs & Gigs).
+  const isRequester = (id) => id != null && requesterIds.includes(String(id));
+  const requesterRole = isRequester(contract.client_account_id)
+    ? 'client'
+    : isRequester(contract.freelancer_account_id)
+      ? 'freelancer'
+      : null;
+  const requesterViaTeam = Boolean(
+    requesterRole
+      && String(requesterRole === 'client' ? contract.client_account_id : contract.freelancer_account_id) !== String(requesterId)
+  );
   return {
     id: contract.contract_id,
     title: contract.contract_title,
@@ -888,8 +1011,12 @@ async function contractSummary(contractId, requesterId) {
     deadlineAt: contract.deadline_at || null,
     createdAt: extra.rows[0]?.created_at || null,
     requesterRole,
+    // True when the requester is on this contract through a team they own.
+    requesterViaTeam,
     client: parties[0],
     freelancer: parties[1],
+    // Gig orders: the package and add-ons the client ordered. Null for job contracts.
+    gigOrder: gigOrders.get(String(contract.contract_id)) || null,
     milestones: milestoneRows,
     milestoneTotals: {
       count: milestoneRows.length,
@@ -1003,24 +1130,37 @@ async function jobsContext(row, form, notes) {
   const accountId = row.account_id;
   const contractAnswer = answerOf(form, 'contract_or_order');
   const contractId = contractAnswer.id || uuidIn(contractAnswer.value);
+  // `listing` is the job / gig picker (own postings, or any posting on a report).
   const postingAnswer = answerOf(form, 'listing', 'review_link');
   const postingId = postingAnswer.id || uuidIn(postingAnswer.value);
-  const reportedAnswer = answerOf(form, 'link_or_username');
+  // `reported_username` on the current report form; `link_or_username` on older ones.
+  const reportedAnswer = answerOf(form, 'reported_username', 'link_or_username');
   const reportedId = uuidIn(reportedAnswer.value);
+  const actorIds = await requesterActorIds(accountId);
 
-  const [contract, posting, reportedPosting, reportedMember, activity, related] = await Promise.all([
-    contractId ? section(notes, 'Contract', () => contractSummary(contractId, accountId)) : Promise.resolve(null),
+  const [contract, posting, reportedPosting, reportedMember, activity] = await Promise.all([
+    contractId ? section(notes, 'Contract', () => contractSummary(contractId, actorIds)) : Promise.resolve(null),
     postingId ? section(notes, 'Posting', () => postingSummary(postingId)) : Promise.resolve(null),
     reportedId ? section(notes, 'Reported posting', () => postingSummary(reportedId)) : Promise.resolve(null),
     reportedAnswer.value ? section(notes, 'Reported member', () => accountFromText(reportedAnswer.value)) : Promise.resolve(null),
     section(notes, 'Jobs activity', () => jobsActivity(accountId)),
-    section(notes, 'Related tickets', () => ticketsReferencing(contractId || postingId, row.ticket_id)),
   ]);
-  if (contractId && !contract) notes.push('The contract named in this ticket was not found.');
+  // A typed contract answer may be a pasted job or gig link rather than a contract.
+  const typedPosting = contractId && !contract && !contractAnswer.id && !postingId
+    ? await section(notes, 'Posting', () => postingSummary(contractId))
+    : null;
+  const related = await section(notes, 'Related tickets', () =>
+    ticketsReferencing([contractId, postingId], row.ticket_id)
+  );
+  if (contractId && !contract && !typedPosting) notes.push('The contract named in this ticket was not found.');
   if (contract && !contract.requesterRole) notes.push('The requester is not a party to this contract.');
+  const shownPosting = posting || reportedPosting || typedPosting;
+  if (shownPosting && row.type === 'Report a listing or user' && actorIds.includes(String(shownPosting.owner.accountId))) {
+    notes.push('The requester reported a job or gig they posted.');
+  }
   return {
     contract,
-    posting: posting || reportedPosting,
+    posting: shownPosting,
     reportedMember: reportedPosting ? null : reportedMember,
     proposalId: answerOf(form, 'proposal_id').value || null,
     desiredOutcome: answerOf(form, 'desired_outcome', 'request').value || null,
@@ -1515,5 +1655,6 @@ module.exports = {
   getTicketCaseContext,
   getDisputePartyStanding,
   getReportedAccountContext,
+  gigOrdersForContracts,
   ticketsReferencing,
 };

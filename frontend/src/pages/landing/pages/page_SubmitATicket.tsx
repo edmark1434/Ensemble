@@ -45,13 +45,16 @@ const TICKET_PATH = "/support/ticket";
 const LOGIN_PATH = `/login?redirect=${encodeURIComponent(TICKET_PATH)}`;
 const MANUAL_PICK = "__manual__";
 
+/** Field definitions come from `backend/lib/TicketFormFields.js` (see the picker notes there). */
 interface TicketField {
   key: string;
   label: string;
   kind: "text" | "select" | "multiselect" | "checkbox" | "textarea";
   required?: boolean;
   options?: string[];
-  picker?: "project" | "order" | "listing" | "contract" | "job" | "team";
+  picker?: "project" | "order" | "listing" | "contract" | "job" | "team" | "asset" | "posting";
+  /** `others`: the search leaves out what the member posted (reports). */
+  pickerScope?: "others";
   when?: { key: string; equals?: string; oneOf?: string[] };
 }
 
@@ -60,10 +63,70 @@ interface PickerOption {
   label: string;
 }
 
-interface TeamSuggestion {
+interface SearchSuggestion {
   id: string;
   label: string;
-  handle?: string | null;
+  detail?: string | null;
+}
+
+type SearchPickerKind = "team" | "asset" | "posting";
+
+interface SearchPickerConfig {
+  url: string;
+  /** `kind` for `GET /api/users/ticket-search`. */
+  kind?: string;
+  placeholder: string;
+  hint: string;
+  emptyHint: string;
+  noMatch: string;
+  unavailable: string;
+  chosenHint: string;
+  required: string;
+  /** The member may type a name or paste a link instead when the record is not found. */
+  allowTyping: boolean;
+}
+
+/** Search pickers: the member types, then chooses one of the server's suggestions. */
+const SEARCH_PICKERS: Record<SearchPickerKind, SearchPickerConfig> = {
+  team: {
+    url: "/api/users/ticket-teams",
+    placeholder: "Type a team name",
+    hint: "Type a team name, then choose it from the list.",
+    emptyHint: "Type a team name to search.",
+    noMatch: "No teams match that name.",
+    unavailable: "Team search is unavailable.",
+    chosenHint: "Tagged team. Remove it to choose a different one.",
+    required: "Choose a team from the suggestions.",
+    allowTyping: false,
+  },
+  asset: {
+    url: "/api/users/ticket-search",
+    kind: "asset",
+    placeholder: "Asset name, seller, or link",
+    hint: "Search by asset name or seller, or paste the asset's link, then choose it from the list.",
+    emptyHint: "Type an asset name or a seller to search.",
+    noMatch: "No assets match that search.",
+    unavailable: "Asset search is unavailable. You can type the name or paste the link instead.",
+    chosenHint: "Chosen asset. Remove it to pick a different one.",
+    required: "Choose the asset from the suggestions, or type it instead.",
+    allowTyping: true,
+  },
+  posting: {
+    url: "/api/users/ticket-search",
+    kind: "posting",
+    placeholder: "Job or gig title, poster, or link",
+    hint: "Search by title or poster, or paste the job or gig's link, then choose it from the list.",
+    emptyHint: "Type a job or gig title, or the poster's name, to search.",
+    noMatch: "No jobs or gigs match that search.",
+    unavailable: "Job and gig search is unavailable. You can type the title or paste the link instead.",
+    chosenHint: "Chosen job or gig. Remove it to pick a different one.",
+    required: "Choose the job or gig from the suggestions, or type it instead.",
+    allowTyping: true,
+  },
+};
+
+function searchPickerOf(field: TicketField): SearchPickerKind | null {
+  return field.picker === "team" || field.picker === "asset" || field.picker === "posting" ? field.picker : null;
 }
 
 interface TicketTypeDetail {
@@ -192,11 +255,21 @@ function readApiError(err: unknown) {
   };
 }
 
-/** Client-side check before any upload starts. The server repeats every rule. */
-function validateTicket(fields: TicketField[], values: Record<string, string>, subject: string, description: string) {
+/**
+ * Client-side check before any upload starts. The server repeats every rule.
+ * `answerOf` is the value that would be sent; `searching` tells whether a search picker is
+ * waiting for a suggestion to be chosen (rather than typed).
+ */
+function validateTicket(
+  fields: TicketField[],
+  answerOf: (field: TicketField) => string,
+  searching: (field: TicketField) => SearchPickerKind | null,
+  subject: string,
+  description: string
+) {
   const errors: FieldErrors = {};
   for (const field of fields) {
-    const value = (values[field.key] || "").trim();
+    const value = answerOf(field);
     const required = field.required !== false;
     if (field.kind === "checkbox") {
       if (required && value !== "yes") errors[field.key] = "Tick this box to continue.";
@@ -204,8 +277,9 @@ function validateTicket(fields: TicketField[], values: Record<string, string>, s
     }
     if (!value) {
       if (!required) continue;
-      errors[field.key] = field.picker === "team"
-        ? "Choose a team from the suggestions."
+      const search = searching(field);
+      errors[field.key] = search
+        ? SEARCH_PICKERS[search].required
         : field.kind === "select" || field.kind === "multiselect"
           ? "Choose an option."
           : "This field is required.";
@@ -242,18 +316,27 @@ function FieldError({ id, message }: { id: string; message?: string }) {
   );
 }
 
-function TeamTagField({
+/**
+ * Search-and-choose field for team, asset and job-or-gig pickers. The chosen suggestion is
+ * kept by the form (`selected` / `onSelect`), so it survives the field being hidden and shown
+ * again by an earlier answer.
+ */
+function SearchTagField({
   inputId,
-  value,
-  onChange,
+  config,
+  scope,
+  selected,
+  onSelect,
   required,
   disabled,
   invalid,
   describedBy,
 }: {
   inputId: string;
-  value: string;
-  onChange: (next: string) => void;
+  config: SearchPickerConfig;
+  scope?: "others";
+  selected: SearchSuggestion | null;
+  onSelect: (next: SearchSuggestion | null) => void;
   required: boolean;
   disabled: boolean;
   invalid: boolean;
@@ -265,14 +348,9 @@ function TeamTagField({
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [options, setOptions] = useState<TeamSuggestion[]>([]);
-  const [selected, setSelected] = useState<TeamSuggestion | null>(null);
+  const [options, setOptions] = useState<SearchSuggestion[]>([]);
   const [activeIndex, setActiveIndex] = useState(0);
   const [searchError, setSearchError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!value) setSelected(null);
-  }, [value]);
 
   useEffect(() => {
     if (!focusAfterClear.current || selected) return;
@@ -296,18 +374,34 @@ function TeamTagField({
     setSearchError(null);
     const handle = window.setTimeout(async () => {
       try {
-        const response = await api.get("/api/users/ticket-teams", {
-          params: { q: query.trim() },
+        const response = await api.get(config.url, {
+          params: {
+            q: query.trim(),
+            ...(config.kind ? { kind: config.kind } : {}),
+            ...(scope ? { scope } : {}),
+          },
           signal: controller.signal,
         });
         if (controller.signal.aborted) return;
-        const rows = Array.isArray(response.data?.data) ? response.data.data : [];
-        setOptions(rows);
+        const rows: unknown[] = Array.isArray(response.data?.data) ? response.data.data : [];
+        // Teams come back with `handle`; assets and jobs with `detail`.
+        const suggestions = rows.flatMap((row) => {
+          const item = row as { id?: unknown; label?: unknown; detail?: unknown; handle?: unknown };
+          if (!item?.id) return [];
+          const detail = typeof item.detail === "string" && item.detail
+            ? item.detail
+            : typeof item.handle === "string" && item.handle
+              ? `@${item.handle}`
+              : null;
+          return [{ id: String(item.id), label: String(item.label || item.id), detail }];
+        });
+        setOptions(suggestions);
         setActiveIndex(0);
-      } catch {
+      } catch (err) {
         if (controller.signal.aborted) return;
         setOptions([]);
-        setSearchError("Team search is unavailable.");
+        const info = readApiError(err);
+        setSearchError(info.status === 400 && info.message ? info.message : config.unavailable);
       } finally {
         if (!controller.signal.aborted) setLoading(false);
       }
@@ -316,31 +410,29 @@ function TeamTagField({
       controller.abort();
       window.clearTimeout(handle);
     };
-  }, [open, query, selected]);
+  }, [open, query, selected, config, scope]);
 
-  const choose = (option: TeamSuggestion) => {
-    setSelected(option);
+  const choose = (option: SearchSuggestion) => {
     setQuery("");
     setOpen(false);
-    onChange(option.id);
+    onSelect(option);
   };
 
   const clear = () => {
     focusAfterClear.current = true;
-    setSelected(null);
     setQuery("");
     setOpen(true);
-    onChange("");
+    onSelect(null);
   };
 
-  if (selected && value) {
+  if (selected) {
     return (
       <div>
         <div className={`${inputClass(false)} flex items-center justify-between gap-3`}>
           <span className="min-w-0 truncate">
             <span className="font-semibold">{selected.label}</span>
-            {selected.handle ? (
-              <span className="ml-2 font-normal text-gray-500 dark:text-zinc-400">@{selected.handle}</span>
+            {selected.detail ? (
+              <span className="ml-2 font-normal text-gray-500 dark:text-zinc-400">{selected.detail}</span>
             ) : null}
           </span>
           <button
@@ -353,7 +445,7 @@ function TeamTagField({
             <X className="h-4 w-4" />
           </button>
         </div>
-        <p className="mt-1.5 text-xs text-gray-500 dark:text-zinc-500">Tagged team. Remove it to choose a different one.</p>
+        <p className="mt-1.5 text-xs text-gray-500 dark:text-zinc-500">{config.chosenHint}</p>
       </div>
     );
   }
@@ -366,8 +458,8 @@ function TeamTagField({
       : searchError
         ? searchError
         : query.trim()
-          ? "No teams match that name."
-          : "Type a team name to search.";
+          ? config.noMatch
+          : config.emptyHint;
 
   return (
     <div ref={rootRef}>
@@ -386,13 +478,12 @@ function TeamTagField({
           aria-describedby={describedBy}
           disabled={disabled}
           autoComplete="off"
-          placeholder="Type a team name"
+          placeholder={config.placeholder}
           value={query}
           onFocus={() => setOpen(true)}
           onChange={(event) => {
             setQuery(event.target.value);
             setOpen(true);
-            if (value) onChange("");
           }}
           onKeyDown={(event) => {
             if (event.key === "ArrowDown") {
@@ -430,15 +521,15 @@ function TeamTagField({
                   onMouseDown={(event) => event.preventDefault()}
                   onClick={() => choose(option)}
                   onMouseEnter={() => setActiveIndex(index)}
-                  className={`flex w-full items-baseline gap-2 px-3 py-2 text-left text-sm ${
+                  className={`flex w-full min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5 px-3 py-2 text-left text-sm ${
                     index === activeIndex
                       ? "bg-gray-100 text-gray-900 dark:bg-white/10 dark:text-white"
                       : "text-gray-800 dark:text-zinc-200"
                   }`}
                 >
-                  <span className="truncate font-medium">{option.label}</span>
-                  {option.handle ? (
-                    <span className="shrink-0 text-gray-500 dark:text-zinc-500">@{option.handle}</span>
+                  <span className="min-w-0 truncate font-medium">{option.label}</span>
+                  {option.detail ? (
+                    <span className="min-w-0 truncate text-xs text-gray-500 dark:text-zinc-500">{option.detail}</span>
                   ) : null}
                 </button>
               </li>
@@ -446,7 +537,7 @@ function TeamTagField({
           </ul>
         )}
       </div>
-      <p className="mt-1.5 text-xs text-gray-500 dark:text-zinc-500">Type a team name, then choose it from the list.</p>
+      <p className="mt-1.5 text-xs text-gray-500 dark:text-zinc-500">{config.hint}</p>
     </div>
   );
 }
@@ -513,6 +604,8 @@ const PageSubmitATicket: React.FC = () => {
   const [description, setDescription] = useState("");
   const [fieldValues, setFieldValues] = useState<Record<string, string>>({});
   const [manualPickers, setManualPickers] = useState<Record<string, boolean>>({});
+  /** The suggestion chosen in each search picker (team, asset, job or gig), by field key. */
+  const [searchChoices, setSearchChoices] = useState<Record<string, SearchSuggestion>>({});
   const [errors, setErrors] = useState<FieldErrors>({});
   const [draftRestored, setDraftRestored] = useState(false);
 
@@ -578,11 +671,11 @@ const PageSubmitATicket: React.FC = () => {
     setSubgroup(target.subgroup || "");
     setTicketType(target.label);
     if (!draft) return;
-    // Team tags are not restored: the picker needs the chosen suggestion, not only its id.
+    // Search pickers (team, asset, job or gig) are not restored: they need the chosen suggestion, not only its id.
     const restorable = draft.ticketType === target.label
       ? Object.fromEntries(
           Object.entries(draft.fieldValues).filter(([key]) =>
-            (target.fields || []).some((field) => field.key === key && field.picker !== "team")
+            (target.fields || []).some((field) => field.key === key && !searchPickerOf(field))
           )
         )
       : {};
@@ -626,6 +719,7 @@ const PageSubmitATicket: React.FC = () => {
   const resetAnswers = () => {
     setFieldValues({});
     setManualPickers({});
+    setSearchChoices({});
     setErrors((current) => {
       const next: FieldErrors = {};
       if (current.subject) next.subject = current.subject;
@@ -665,6 +759,39 @@ const PageSubmitATicket: React.FC = () => {
     clearError(key);
   };
 
+  /** A search picker waiting for a suggestion (not switched to typing). */
+  const searchingFor = (field: TicketField): SearchPickerKind | null => {
+    const kind = searchPickerOf(field);
+    if (!kind) return null;
+    return SEARCH_PICKERS[kind].allowTyping && manualPickers[field.key] ? null : kind;
+  };
+
+  /** What is sent for a field: a search picker sends its chosen suggestion's id. */
+  const answerOf = (field: TicketField) =>
+    searchingFor(field) ? searchChoices[field.key]?.id || "" : (fieldValues[field.key] || "").trim();
+
+  const setSearchChoice = (key: string, choice: SearchSuggestion | null) => {
+    setSearchChoices((current) => {
+      const next = { ...current };
+      if (choice) next[key] = choice;
+      else delete next[key];
+      return next;
+    });
+    setFieldValue(key, choice?.id || "");
+  };
+
+  /** Switch a picker between choosing (list or search) and typing it; the answer starts over. */
+  const setPickerTyping = (key: string, typing: boolean) => {
+    setManualPickers((current) => ({ ...current, [key]: typing }));
+    setSearchChoices((current) => {
+      if (!current[key]) return current;
+      const next = { ...current };
+      delete next[key];
+      return next;
+    });
+    setFieldValue(key, "");
+  };
+
   const discardDraft = () => {
     setSubject("");
     setDescription("");
@@ -700,7 +827,7 @@ const PageSubmitATicket: React.FC = () => {
       setError("Choose a ticket type.");
       return;
     }
-    const found = validateTicket(visibleFields, fieldValues, subject, description);
+    const found = validateTicket(visibleFields, answerOf, searchingFor, subject, description);
     setErrors(found);
     setError(null);
     setDuplicate(null);
@@ -731,7 +858,7 @@ const PageSubmitATicket: React.FC = () => {
       setProgress("Sending your ticket…");
       const fields = Object.fromEntries(
         visibleFields
-          .map((field) => [field.key, (fieldValues[field.key] || "").trim()] as const)
+          .map((field) => [field.key, answerOf(field)] as const)
           .filter(([, value]) => value)
       );
       const fromState = (location.state as { from?: unknown } | null)?.from;
@@ -863,17 +990,23 @@ const PageSubmitATicket: React.FC = () => {
       );
     }
 
-    const listName = field.picker ? PICKER_LISTS[field.picker] : "";
+    const listName = field.picker ? PICKER_LISTS[field.picker] || "" : "";
     const pickerOptions = listName ? pickers[listName] || [] : [];
-    const manual = Boolean(manualPickers[field.key]);
+    const searchKind = searchPickerOf(field);
+    const searchConfig = searchKind ? SEARCH_PICKERS[searchKind] : null;
+    // A typed answer, or a restored one that is no longer in the list, shows as text.
+    const manual = Boolean(manualPickers[field.key])
+      || (pickerOptions.length > 0 && value !== "" && !pickerOptions.some((option) => option.id === value));
     let control: React.ReactNode;
 
-    if (field.picker === "team") {
+    if (searchConfig && searchingFor(field)) {
       control = (
-        <TeamTagField
+        <SearchTagField
           inputId={id}
-          value={value}
-          onChange={(next) => setFieldValue(field.key, next)}
+          config={searchConfig}
+          scope={field.pickerScope}
+          selected={searchChoices[field.key] || null}
+          onSelect={(choice) => setSearchChoice(field.key, choice)}
           required={required}
           disabled={submitting}
           invalid={Boolean(message)}
@@ -890,8 +1023,7 @@ const PageSubmitATicket: React.FC = () => {
           aria-describedby={describedBy}
           onChange={(event) => {
             if (event.target.value === MANUAL_PICK) {
-              setManualPickers((current) => ({ ...current, [field.key]: true }));
-              setFieldValue(field.key, "");
+              setPickerTyping(field.key, true);
               return;
             }
             setFieldValue(field.key, event.target.value);
@@ -968,13 +1100,21 @@ const PageSubmitATicket: React.FC = () => {
         {pickerOptions.length > 0 && manual ? (
           <button
             type="button"
-            onClick={() => {
-              setManualPickers((current) => ({ ...current, [field.key]: false }));
-              setFieldValue(field.key, "");
-            }}
-            className="mt-1.5 text-xs font-semibold text-gray-600 hover:underline dark:text-zinc-400"
+            disabled={submitting}
+            onClick={() => setPickerTyping(field.key, false)}
+            className="mt-1.5 text-xs font-semibold text-gray-600 hover:underline disabled:opacity-60 dark:text-zinc-400"
           >
             Choose from your list instead
+          </button>
+        ) : null}
+        {searchConfig?.allowTyping ? (
+          <button
+            type="button"
+            disabled={submitting}
+            onClick={() => setPickerTyping(field.key, !manualPickers[field.key])}
+            className="mt-1.5 text-xs font-semibold text-gray-600 hover:underline disabled:opacity-60 dark:text-zinc-400"
+          >
+            {manualPickers[field.key] ? "Search instead" : "Can't find it? Type the name or paste a link instead"}
           </button>
         ) : null}
         <FieldError id={errorId} message={message} />

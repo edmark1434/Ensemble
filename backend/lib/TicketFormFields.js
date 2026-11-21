@@ -34,6 +34,15 @@ function whenOneOf(key, oneOf) {
   return { when: { key, oneOf } };
 }
 
+/**
+ * Pickers name the record a ticket is about. List pickers (`project`, `listing`, `order`,
+ * `contract`, `job`) offer the member's own records, including ones posted as a team they own
+ * (`GET /api/users/ticket-context`). Search pickers find a record by name or pasted link:
+ * `team` (`/ticket-teams`), and `asset` / `posting` (`/ticket-search`) for marketplace assets
+ * and jobs or gigs. `pickerScope: 'others'` leaves out what the member posted (reports).
+ * The member may still type a name or link when the record is not listed (not for `team`).
+ * The server stores the record's name and id, and refuses an id the member cannot pick.
+ */
 const project = [text('project', 'Project', { picker: 'project' })];
 const listing = [text('listing', 'Listing', { picker: 'listing' })];
 const order = [text('order', 'Order', { picker: 'order' })];
@@ -210,17 +219,25 @@ const TICKET_FORM_FIELDS = Object.freeze({
     select('contacted_seller', 'Have you contacted the seller?', ['Yes', 'No']),
   ],
   'Report a listing or seller': [
-    text('listing_or_seller', 'Listing link or seller username'),
+    select('report_target', 'What are you reporting?', ['A listing', 'A seller']),
+    text('listing', 'Listing', {
+      picker: 'asset',
+      pickerScope: 'others',
+      ...whenEquals('report_target', 'A listing'),
+    }),
+    text('seller_username', "Seller's username", whenEquals('report_target', 'A seller')),
     select('reason', 'Reason', ['Scam', 'Misleading', 'Prohibited', 'Stolen asset']),
     area('evidence', 'Evidence', { required: false }),
   ],
   'Asset reviews': [
-    text('review_link', 'Review link'),
+    text('listing', 'Asset the review is on', { picker: 'asset' }),
+    optionalText('reviewer_username', "Reviewer's username"),
     select('reason', 'Reason', ['Fake', 'Abusive', 'Unfair']),
     area('explanation', 'Explanation'),
   ],
   'Appeal a marketplace action': [
     text('case_id', 'Case ID'),
+    optionalText('listing', 'Listing the action was on, if any', { picker: 'listing' }),
     area('explanation', 'Explanation'),
   ],
   'Job and gig listings': [
@@ -254,17 +271,25 @@ const TICKET_FORM_FIELDS = Object.freeze({
     select('other_party_agreed', 'Has the other party agreed?', ['Yes', 'No', 'Not asked']),
   ],
   'Report a listing or user': [
-    text('link_or_username', 'Link or username'),
+    select('report_target', 'What are you reporting?', ['A job or gig', 'A user']),
+    text('listing', 'Job or gig', {
+      picker: 'posting',
+      pickerScope: 'others',
+      ...whenEquals('report_target', 'A job or gig'),
+    }),
+    text('reported_username', "User's username", whenEquals('report_target', 'A user')),
     text('reason', 'Reason'),
     area('evidence', 'Evidence', { required: false }),
   ],
+  // Job and gig reviews are left on a contract, so the contract names the review.
   'Gig reviews': [
-    text('review_link', 'Review link'),
+    text('contract_or_order', 'Contract or order the review is on', { picker: 'contract' }),
     text('reason', 'Reason'),
     area('explanation', 'Explanation'),
   ],
   'Appeal a jobs action': [
     text('case_id', 'Case ID'),
+    optionalText('listing', 'Job or gig the action was on, if any', { picker: 'job' }),
     area('explanation', 'Explanation'),
   ],
 });

@@ -7,6 +7,7 @@ import type {
   DisputePayoutState,
 } from "./moderatorTypes";
 import { DisputePayoutsList } from "./DisputePayoutUi";
+import GigOrderSummary from "./GigOrderSummary";
 import { StaffStandingSummary, StatusPill, caseWhen } from "./StaffStandingSummary";
 
 function when(value?: string | null) {
@@ -262,6 +263,7 @@ export default function DisputeCaseFilePanel({
                 Starts {when(contract.startsAt)} · Deadline {when(contract.deadlineAt)} · Revision{" "}
                 {contract.revisionPriceCredits.toLocaleString()} credits
               </p>
+              {contract.gigOrder ? <GigOrderSummary order={contract.gigOrder} rateCredits={contract.rateCredits} /> : null}
               {contract.milestones.length === 0 ? (
                 <p className="text-xs text-zinc-500">No milestones recorded.</p>
               ) : (

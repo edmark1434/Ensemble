@@ -7,6 +7,7 @@ import type {
   TicketMessage,
   TicketActivity,
   CaseAccountSummary,
+  CaseGigOrder,
   CaseTicketRef,
 } from "@/pages/admin/ticketManagement/ticketTypes";
 
@@ -46,6 +47,8 @@ export type DisputeCaseContract = {
   freelancerName: string;
   freelancerHandle: string;
   milestones: DisputeCaseMilestone[];
+  /** Gig orders: the package and add-ons the client ordered. Null for job contracts. */
+  gigOrder?: CaseGigOrder | null;
 };
 
 export type DisputeCaseTransaction = {

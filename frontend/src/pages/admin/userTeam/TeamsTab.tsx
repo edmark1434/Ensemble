@@ -205,7 +205,6 @@ export default function TeamsTab({
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [verificationFilter, setVerificationFilter] = useState(defaultVerificationFilter);
-  const [typeFilter, setTypeFilter] = useState('all');
   const [attentionFilter, setAttentionFilter] = useState('all');
   const [sortBy, setSortBy] = useState('newest');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -234,7 +233,7 @@ export default function TeamsTab({
 
   const q = search.trim().toLowerCase();
   const filtersActive =
-    Boolean(q) || statusFilter !== 'all' || verificationFilter !== 'all' || typeFilter !== 'all' || attentionFilter !== 'all';
+    Boolean(q) || statusFilter !== 'all' || verificationFilter !== 'all' || attentionFilter !== 'all';
   const teams = useMemo(() => {
     if (!data) return [];
     let result = data.teams;
@@ -260,9 +259,6 @@ export default function TeamsTab({
     if (verificationFilter !== 'all') {
       result = result.filter((t) => t.verificationStatus.toLowerCase() === verificationFilter);
     }
-    if (typeFilter !== 'all') {
-      result = result.filter((t) => String(t.teamType || 'standard') === typeFilter);
-    }
     if (attentionFilter !== 'all') {
       result = result.filter((t) => matchesAttention(t, attentionFilter));
     }
@@ -287,7 +283,7 @@ export default function TeamsTab({
           return time(b.createdAt) - time(a.createdAt);
       }
     });
-  }, [data, q, statusFilter, verificationFilter, typeFilter, attentionFilter, sortBy]);
+  }, [data, q, statusFilter, verificationFilter, attentionFilter, sortBy]);
 
   const statusOptions = useMemo(
     () => uniqueOptions((data?.teams ?? []).map((t) => t.status)),
@@ -483,15 +479,6 @@ export default function TeamsTab({
                 value: verificationFilter,
                 options: verificationOptions,
               },
-              {
-                id: 'type',
-                label: 'Type',
-                value: typeFilter,
-                options: [
-                  { value: 'standard', label: 'Business team' },
-                  { value: 'contractual', label: 'Contract workspace' },
-                ],
-              },
               { id: 'attention', label: 'Attention', value: attentionFilter, options: ATTENTION_FILTERS },
             ]}
             sort={{
@@ -509,14 +496,12 @@ export default function TeamsTab({
             onFilterChange={(id, value) => {
               if (id === 'status') setStatusFilter(value);
               if (id === 'verification') setVerificationFilter(value);
-              if (id === 'type') setTypeFilter(value);
               if (id === 'attention') setAttentionFilter(value);
             }}
             onSortChange={setSortBy}
             onClear={() => {
               setStatusFilter('all');
               setVerificationFilter('all');
-              setTypeFilter('all');
               setAttentionFilter('all');
               setSortBy('newest');
             }}
@@ -560,7 +545,6 @@ export default function TeamsTab({
               {teams.map((team) => {
                 const accountId = String(team.accountId);
                 const isChecked = selectedIds.has(accountId);
-                const contractual = String(team.teamType || 'standard') === 'contractual';
                 const leader = team.leader ?? null;
                 const available = team.wallet?.available ?? team.walletBalance;
                 const held = team.wallet?.held ?? team.frozenBalance ?? 0;
@@ -584,10 +568,7 @@ export default function TeamsTab({
                     </td>
                     <td className="max-w-[260px] px-4 py-3">
                       <p className="font-medium text-white">{team.name}</p>
-                      <p className="text-[10px] text-zinc-600">
-                        {team.handle ? `@${team.handle} · ` : ''}
-                        {contractual ? 'Contract workspace' : 'Business team'}
-                      </p>
+                      {team.handle && <p className="text-[10px] text-zinc-600">@{team.handle}</p>}
                       {team.attention?.length ? (
                         <div className="mt-1 flex flex-wrap gap-1">
                           {team.attention.map((flag) => (
@@ -622,7 +603,7 @@ export default function TeamsTab({
                           </div>
                         </>
                       ) : (
-                        <span className="text-xs text-rose-300">{contractual ? 'Client-led' : 'No active leader'}</span>
+                        <span className="text-xs text-rose-300">No active leader</span>
                       )}
                     </td>
                     <td className="px-4 py-3 tabular-nums">{team.memberCount}</td>

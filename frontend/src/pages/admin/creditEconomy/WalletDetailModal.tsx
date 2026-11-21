@@ -148,7 +148,8 @@ export default function WalletDetailModal({
     setProfileError('');
     try {
       if (wallet.accountType === 'Team') {
-        const res = await staffGet('/api/admin/teams-management');
+        // Contract workspaces hold wallets too, so this look-up asks for them.
+        const res = await staffGet('/api/admin/teams-management', { include: 'contractual' });
         const teams: PlatformTeam[] = res.data?.data?.teams || [];
         const team = teams.find((t) => String(t.accountId) === String(wallet.accountId));
         if (team) setProfileTeam(team);

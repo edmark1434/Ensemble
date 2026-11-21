@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { AlertTriangle, FileWarning, Gavel, Info, Loader2 } from 'lucide-react';
 import { BTN, EmptyNote, Fact, PanelSection, Pill } from '@/pages/moderator/shared/staffCaseUi';
+import GigOrderSummary from '@/pages/moderator/shared/GigOrderSummary';
 import { StaffPunishmentChips } from '@/components/account/MeritStatus';
 import {
   StaffStandingSummary,
@@ -359,6 +360,17 @@ function AppealCase({ appeal, requester }: { appeal: CaseAppeal; requester: Case
           )
         ) : null}
       </PanelSection>
+
+      {appeal.listing ? (
+        <PanelSection title="Listing the member picked">
+          <ListingCard listing={appeal.listing} />
+        </PanelSection>
+      ) : null}
+      {appeal.posting ? (
+        <PanelSection title="Job or gig the member picked">
+          <PostingCard posting={appeal.posting} />
+        </PanelSection>
+      ) : null}
 
       {appeal.decidable && !appeal.decision && target ? (
         <PanelSection title="What each decision does">
@@ -783,7 +795,16 @@ function ContractCard({ contract }: { contract: CaseContract }) {
         <StatusPill status={contract.status} />
       </div>
       <dl className="mt-3 grid gap-2 sm:grid-cols-4">
-        <Fact label="Requester is" value={contract.requesterRole ? caseLabel(contract.requesterRole) : <span className="text-amber-300">Not a party</span>} />
+        <Fact
+          label="Requester is"
+          value={
+            contract.requesterRole ? (
+              `${caseLabel(contract.requesterRole)}${contract.requesterViaTeam ? ' (via their team)' : ''}`
+            ) : (
+              <span className="text-amber-300">Not a party</span>
+            )
+          }
+        />
         <Fact label="Started" value={caseDay(contract.startsAt)} />
         <Fact label="Deadline" value={caseDay(contract.deadlineAt)} />
         <Fact
@@ -800,6 +821,12 @@ function ContractCard({ contract }: { contract: CaseContract }) {
           <StaffStandingSummary account={contract.freelancer} label="Freelancer" compact />
         </div>
       </div>
+
+      {contract.gigOrder ? (
+        <div className="mt-3">
+          <GigOrderSummary order={contract.gigOrder} rateCredits={contract.rateCredits} />
+        </div>
+      ) : null}
 
       {contract.milestones.length ? (
         <div className="mt-3">

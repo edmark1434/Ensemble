@@ -33,7 +33,7 @@ function staffIdFromSession(session) {
 
 async function getAdminTeamsManagement(req, res) {
   try {
-    const data = await getTeamsManagement();
+    const data = await getTeamsManagement({ includeContractual: req.query?.include === 'contractual' });
     res.status(200).json({ success: true, data });
   } catch (err) {
     console.error('Error fetching team management:', err);

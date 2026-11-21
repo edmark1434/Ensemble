@@ -1082,7 +1082,11 @@ function teamAttention({ teamType, leader, wallet, history, verificationStatus, 
   return flags;
 }
 
-async function fetchTeamsFromDatabase({ enrich = true } = {}) {
+/**
+ * Contract workspaces (`team_type = 'contractual'`) are job/gig scaffolding, not team accounts,
+ * so the Team accounts list leaves them out unless a caller asks for them (wallet look-ups).
+ */
+async function fetchTeamsFromDatabase({ enrich = true, includeContractual = false } = {}) {
   const teamsResult = await pool.query(`
     SELECT
       t.team_id,
@@ -1136,8 +1140,9 @@ async function fetchTeamsFromDatabase({ enrich = true } = {}) {
     ) w ON TRUE
     WHERE a.deleted_at IS NULL
       AND t.deleted_at IS NULL
+      AND ($1::boolean OR COALESCE(t.team_type, 'standard') <> 'contractual')
     ORDER BY a.created_at DESC
-  `);
+  `, [Boolean(includeContractual)]);
 
   if (!teamsResult.rows.length) return [];
 
@@ -1379,9 +1384,9 @@ function computeUserStats(users) {
   };
 }
 
-async function getTeamsManagement() {
+async function getTeamsManagement({ includeContractual = false } = {}) {
   await markExpiredVerificationsForReverification();
-  const teams = await fetchTeamsFromDatabase();
+  const teams = await fetchTeamsFromDatabase({ includeContractual });
   return {
     stats: computeTeamStats(teams),
     teams,

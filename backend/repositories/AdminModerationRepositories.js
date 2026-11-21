@@ -1391,6 +1391,27 @@ async function assignMyselfToPendingCase(caseId, body, session) {
     return { id, source, assignedStaffId: staffId, status: 'Open' };
   }
 
+  if (source === 'identity' && kind === 'business') {
+    // The team's submission already owns a session; assigning only names the handler.
+    const result = await pool.query(
+      `UPDATE verification_sessions avs
+       SET verified_by_account_id = (SELECT account_id FROM staff WHERE staff_id = $1 LIMIT 1),
+           updated_at = NOW()
+       FROM teams t
+       INNER JOIN verifications v ON v.account_id = t.account_id
+       WHERE t.account_id::text = $2
+         AND t.deleted_at IS NULL
+         AND COALESCE(t.team_type, 'standard') <> 'contractual'
+         AND avs.verification_session_id = v.verification_session_id
+         AND COALESCE(v.is_verified, FALSE) = FALSE
+         AND LOWER(COALESCE(avs.verification_status, '')) IN ('pending', 'pending review', 'resubmitted')
+       RETURNING t.account_id`,
+      [staffId, id]
+    );
+    if (!result.rows.length) throw new Error('No open business verification found for this team');
+    return { id: caseId, source, assignedStaffId: staffId, accountId: result.rows[0].account_id, status: 'Open' };
+  }
+
   if (source === 'identity') {
     const userRes = await pool.query(
       `SELECT u.user_id, u.account_id
