@@ -186,30 +186,29 @@ export const ActiveMilestoneTimerCard: React.FC<ActiveMilestoneTimerCardProps> =
         </div>
 
         {isCompleted ? (
-          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-900 border border-emerald-300 dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-800">
+          <span className="inline-flex shrink-0 whitespace-nowrap items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-900 border border-emerald-300 dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-800">
             <CheckCircle2 className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
             <span>Completed</span>
           </span>
         ) : isWaiting ? (
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-sky-100 text-sky-950 border border-sky-300 dark:bg-sky-950/60 dark:text-sky-200 dark:border-sky-800">
+          <span className="inline-flex shrink-0 whitespace-nowrap items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-sky-100 text-sky-950 border border-sky-300 dark:bg-sky-950/60 dark:text-sky-200 dark:border-sky-800">
             <span>Awaiting Signature</span>
           </span>
         ) : isEnded ? (
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-zinc-100 text-zinc-800 border border-zinc-300 dark:bg-white/5 dark:text-zinc-300 dark:border-white/15">
+          <span className="inline-flex shrink-0 whitespace-nowrap items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-zinc-100 text-zinc-800 border border-zinc-300 dark:bg-white/5 dark:text-zinc-300 dark:border-white/15">
             <span>Contract Ended</span>
           </span>
         ) : paused ? (
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-950 border border-amber-300 dark:bg-amber-950/60 dark:text-amber-200 dark:border-amber-800">
+          <span className="inline-flex shrink-0 whitespace-nowrap items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-950 border border-amber-300 dark:bg-amber-950/60 dark:text-amber-200 dark:border-amber-800">
             <span>Paused · On hold</span>
           </span>
         ) : timeLeft.isExpired ? (
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-950 border border-rose-300 dark:bg-rose-950/60 dark:text-rose-200 dark:border-rose-800">
+          <span className="inline-flex shrink-0 whitespace-nowrap items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-950 border border-rose-300 dark:bg-rose-950/60 dark:text-rose-200 dark:border-rose-800">
             <AlertCircle className="w-3 h-3 text-rose-600 dark:text-rose-400" />
             <span>Deadline Passed</span>
           </span>
         ) : (
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-blue-900 border border-blue-300 dark:bg-blue-950/60 dark:text-blue-300 dark:border-blue-800 shadow-2xs">
-            <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
+          <span className="inline-flex shrink-0 whitespace-nowrap items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-blue-900 border border-blue-300 dark:bg-blue-950/60 dark:text-blue-300 dark:border-blue-800 shadow-2xs">
             <span>{activeMilestone.status || "In Progress"}</span>
           </span>
         )}

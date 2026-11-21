@@ -219,19 +219,36 @@ export default function DisputeDesk({
   onUpdatedRef.current = onUpdated;
   const openIdRef = useRef(selectedId);
   openIdRef.current = selectedId;
+  // The open case changed while its modal was up: re-read the queue once the modal closes.
+  const staleOpenRef = useRef(false);
+  useEffect(() => {
+    if (selectedId != null || !staleOpenRef.current) return;
+    staleOpenRef.current = false;
+    onUpdatedRef.current();
+  }, [selectedId]);
   useEffect(() => {
     let timer: number | undefined;
     const onState = (payload: { disputeId?: string } | null) => {
       if (!payload?.disputeId) return;
-      if (openIdRef.current != null && String(openIdRef.current) === String(payload.disputeId)) return;
+      if (openIdRef.current != null && String(openIdRef.current) === String(payload.disputeId)) {
+        staleOpenRef.current = true;
+        return;
+      }
       window.clearTimeout(timer);
       timer = window.setTimeout(() => onUpdatedRef.current(), 600);
     };
+    // Any dispute filed, answered or moved anywhere, including ones this staff member never opened.
+    const onStaffCase = (payload: { kind?: string; id?: string } | null) => {
+      if (payload?.kind !== 'dispute' || !payload.id) return;
+      onState({ disputeId: String(payload.id) });
+    };
     if (!socket.connected) socket.connect();
     socket.on('disputeUpdated', onState);
+    socket.on('staffCaseChanged', onStaffCase);
     return () => {
       window.clearTimeout(timer);
       socket.off('disputeUpdated', onState);
+      socket.off('staffCaseChanged', onStaffCase);
     };
   }, []);
 

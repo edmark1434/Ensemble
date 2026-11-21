@@ -142,13 +142,27 @@ function describeCreditActivity(row) {
   }
   const isCredit = String(row.destination_wallet_id) === String(row.account_wallet_id);
   return {
-    type: row.type || 'Credit transaction',
+    type: teamTransferLabel(row, isCredit) || row.type || 'Credit transaction',
     amount: isCredit ? amount : -amount,
     positive: isCredit,
     tone: isCredit ? 'positive' : 'negative',
     detail: null,
     holdUntil: null,
   };
+}
+
+/** Team wallet moves read as what they are: a member's deposit, a payout, a contract payout. */
+function teamTransferLabel(row, isCredit) {
+  const ownerIsTeam = String(row.owner_type || '').toLowerCase() === 'team';
+  const otherIsTeam = String(row.counterparty_type || '').toLowerCase() === 'team';
+  if (row.reference_table === 'teams') {
+    if (ownerIsTeam) return isCredit ? 'Member deposit' : 'Paid out to member';
+    if (otherIsTeam) return isCredit ? 'Received from team' : 'Added to team wallet';
+  }
+  if (ownerIsTeam && row.reference_table === 'contracts' && isCredit && row.type === 'Escrow Release') {
+    return 'Contract payout to team';
+  }
+  return null;
 }
 
 /**
@@ -171,8 +185,13 @@ async function fetchCreditActivityForAccounts(accountIds) {
       ct.destination_wallet_id,
       ct.reference_table,
       ct.account_wallet_id,
+      owner_acc.type AS owner_type,
+      cp.counterparty_name,
+      cp.counterparty_handle,
+      cp.counterparty_type,
       ${STAFF_LEDGER_NOTE_COLUMNS}
     FROM unnest($1::uuid[]) AS acc(account_id)
+    LEFT JOIN accounts owner_acc ON owner_acc.account_id = acc.account_id
     CROSS JOIN LATERAL (
       SELECT
         t.credit_transaction_id,
@@ -192,6 +211,20 @@ async function fetchCreditActivityForAccounts(accountIds) {
       LIMIT $2
     ) ct
     ${staffLedgerNoteJoins({ ledger: 'ct', accountId: 'acc.account_id' })}
+    LEFT JOIN LATERAL (
+      -- The other side of the move (none for staff self-transfers).
+      SELECT COALESCE(oa.display_name, oa.handle) AS counterparty_name,
+             oa.handle AS counterparty_handle,
+             oa.type AS counterparty_type
+      FROM account_wallets oaw
+      INNER JOIN accounts oa ON oa.account_id = oaw.account_id
+      WHERE ct.source_wallet_id <> ct.destination_wallet_id
+        AND oaw.wallet_id = CASE
+          WHEN ct.destination_wallet_id = ct.account_wallet_id THEN ct.source_wallet_id
+          ELSE ct.destination_wallet_id
+        END
+      LIMIT 1
+    ) cp ON TRUE
     ORDER BY ct.created_at DESC
     `,
     [accountIds, CREDIT_ACTIVITY_PER_ACCOUNT]
@@ -203,6 +236,9 @@ async function fetchCreditActivityForAccounts(accountIds) {
     list.push({
       id: row.credit_transaction_id,
       ...describeCreditActivity(row),
+      counterparty: row.counterparty_name
+        ? { name: row.counterparty_name, handle: row.counterparty_handle || null, isTeam: String(row.counterparty_type || '').toLowerCase() === 'team' }
+        : null,
       label: row.status || 'Completed',
       timeAgo: formatRelativeTime(row.created_at),
       createdAt: row.created_at,
@@ -217,6 +253,9 @@ async function fetchHistoryForAccounts(accountIds) {
     return new Map();
   }
 
+  // Warnings staff aimed at a team sit on the leader's account and name the team.
+  const { teamWarningColumnReady } = require('../lib/SchemaFeatures');
+  const teamColumn = await teamWarningColumnReady();
   const [violationsResult, disputesResult] = await Promise.all([
     pool.query(
       `
@@ -224,6 +263,10 @@ async function fetchHistoryForAccounts(accountIds) {
         v.violation_id,
         v.violation_number,
         v.account_id,
+        ${teamColumn ? 'v.team_account_id' : 'NULL::uuid AS team_account_id'},
+        ${teamColumn ? 'COALESCE(ta.display_name, ta.handle)' : 'NULL::text'} AS team_name,
+        COALESCE(la.display_name, la.handle) AS account_name,
+        la.handle AS account_handle,
         v.type,
         v.reason,
         v.points,
@@ -237,7 +280,9 @@ async function fetchHistoryForAccounts(accountIds) {
       FROM violations v
       LEFT JOIN staff s ON s.staff_id = v.staff_id
       LEFT JOIN accounts sa ON sa.account_id = s.account_id
-      WHERE v.account_id = ANY($1::uuid[])
+      LEFT JOIN accounts la ON la.account_id = v.account_id
+      ${teamColumn ? 'LEFT JOIN accounts ta ON ta.account_id = v.team_account_id' : ''}
+      WHERE (v.account_id = ANY($1::uuid[])${teamColumn ? ' OR v.team_account_id = ANY($1::uuid[])' : ''})
         AND v.deleted_at IS NULL
       ORDER BY v.created_at DESC
       `,
@@ -275,13 +320,20 @@ async function fetchHistoryForAccounts(accountIds) {
   }
 
   for (const row of violationsResult.rows) {
-    const bucket = map.get(row.account_id);
-    if (!bucket) continue;
+    const buckets = [map.get(row.account_id), row.team_account_id ? map.get(row.team_account_id) : null]
+      .filter((bucket, index, list) => bucket && list.indexOf(bucket) === index);
+    if (!buckets.length) continue;
     const active = isViolationActive(row);
     const pastExpiry = Boolean(row.expires_at && new Date(row.expires_at).getTime() <= Date.now());
-    bucket.violations.push({
+    const item = {
       id: row.violation_number || row.violation_id,
       violationId: row.violation_id,
+      // The account that carries the points (the leader, for a warning issued through a team).
+      accountId: row.account_id,
+      issuedToName: row.account_name || null,
+      issuedToHandle: row.account_handle || null,
+      viaTeamAccountId: row.team_account_id || null,
+      viaTeamName: row.team_name || null,
       type: row.type || 'Violation',
       reason: row.reason || '—',
       points: Number(row.points || 0),
@@ -292,7 +344,8 @@ async function fetchHistoryForAccounts(accountIds) {
       expiresAt: row.expires_at || null,
       active,
       status: !active && pastExpiry ? 'expired' : row.status,
-    });
+    };
+    for (const bucket of buckets) bucket.violations.push(item);
   }
 
   for (const row of disputesResult.rows) {
@@ -316,7 +369,7 @@ async function fetchHistoryForAccounts(accountIds) {
   return map;
 }
 
-function buildHistory(accountId, historyMap, activityMap = new Map()) {
+function buildHistory(accountId, historyMap, activityMap = new Map(), { team = false } = {}) {
   const data = historyMap.get(accountId) || { violations: [], disputes: [] };
   const openDisputes = data.disputes.filter((d) => {
     const s = String(d.status).toLowerCase();
@@ -337,15 +390,17 @@ function buildHistory(accountId, historyMap, activityMap = new Map()) {
     data.violations.some((v) => v.active !== false) || activeDisputes.length > 0;
   const activity = activityMap.get(accountId) || [];
   // Each row weighs 1–10 (missing counts as 1), exactly like sumActiveWarningPoints.
+  // A team's list holds the warnings issued to its leaders, so it has no merit of its own.
   const activePoints = data.violations
-    .filter((v) => v.active)
+    .filter((v) => v.active && (!team || String(v.accountId) !== String(accountId)))
     .reduce((sum, v) => sum + Math.min(10, Math.max(1, Math.round(Number(v.points) || 1))), 0);
 
   return {
     summaryLabel: caution
       ? 'Active, Under Review, Deal with Caution'
       : 'Active — Good standing',
-    merit: meritFromWarningPoints(activePoints),
+    merit: team ? null : meritFromWarningPoints(activePoints),
+    activeWarningPoints: activePoints,
     totalViolations: data.violations.length,
     totalDisputes: data.disputes.length,
     openDisputes: activeDisputes.length,
@@ -787,14 +842,258 @@ async function markUserVerificationPending(accountId) {
   );
 }
 
+/** Latest status change of an account, read for "was this penalty applied with the team?". */
+function linkedPenaltyFrom(row, teamAccountId) {
+  if (!row) return null;
+  const status = String(row.status || '').toLowerCase();
+  if (!['banned', 'suspended', 'locked'].includes(status)) return null;
+  let meta = row.last_status_change || row.metadata || {};
+  if (typeof meta === 'string') {
+    try {
+      meta = JSON.parse(meta);
+    } catch {
+      meta = {};
+    }
+  }
+  if (String(meta.viaTeamAccountId || '') !== String(teamAccountId)) return null;
+  if (String(meta.status || '').toLowerCase() !== status) return null;
+  return status;
+}
+
+/**
+ * The leader's current penalty when it was applied together with this team (and is still the
+ * leader's latest standing change), else null. Lifting the team can lift it too.
+ */
+async function leaderPenaltyLinkedToTeam(leaderAccountId, teamAccountId) {
+  const result = await pool.query(
+    `
+    SELECT a.status, last.metadata AS last_status_change
+    FROM accounts a
+    LEFT JOIN LATERAL (
+      SELECT aa.metadata
+      FROM account_activity aa
+      WHERE aa.account_id = a.account_id AND aa.event_code = 'ACCOUNT_STATUS_CHANGED'
+      ORDER BY aa.created_at DESC
+      LIMIT 1
+    ) last ON TRUE
+    WHERE a.account_id = $1
+    `,
+    [leaderAccountId]
+  );
+  return linkedPenaltyFrom(result.rows[0], teamAccountId);
+}
+
+/** Each team's leader (first active Owner) with the standing staff need to see beside the team. */
+async function fetchTeamLeaders(teamIds) {
+  if (!teamIds.length) return new Map();
+  const { platformMeritSql } = require('./WarningBandRepositories');
+  const result = await pool.query(
+    `
+    SELECT
+      t.team_id,
+      t.account_id AS team_account_id,
+      o.user_id,
+      o.account_id,
+      o.email_address,
+      o.first_name,
+      o.last_name,
+      o.handle,
+      o.display_name,
+      o.status,
+      o.suspension_ends_at,
+      o.ban_ends_at,
+      o.lock_ends_at,
+      o.avatar_path,
+      o.merit,
+      o.forum_timeout,
+      o.last_status_change
+    FROM teams t
+    INNER JOIN LATERAL (
+      SELECT
+        u.user_id,
+        a.account_id,
+        u.email_address,
+        u.first_name,
+        u.last_name,
+        a.handle,
+        a.display_name,
+        a.status,
+        a.suspension_ends_at,
+        a.ban_ends_at,
+        a.lock_ends_at,
+        f.path AS avatar_path,
+        ${platformMeritSql('a.account_id')}::int AS merit,
+        EXISTS (
+          SELECT 1 FROM restrictions r
+          WHERE r.account_id = a.account_id
+            AND LOWER(r.type) IN ('forum_timeout', 'timeout')
+            AND r.starts_at <= NOW()
+            AND (r.ends_at IS NULL OR r.ends_at > NOW())
+        ) AS forum_timeout,
+        (
+          SELECT aa.metadata
+          FROM account_activity aa
+          WHERE aa.account_id = a.account_id AND aa.event_code = 'ACCOUNT_STATUS_CHANGED'
+          ORDER BY aa.created_at DESC
+          LIMIT 1
+        ) AS last_status_change
+      FROM team_members tm
+      INNER JOIN users u ON u.user_id = tm.user_id
+      INNER JOIN accounts a ON a.account_id = u.account_id
+      LEFT JOIN files f ON f.file_id = a.avatar_file_id
+      WHERE tm.team_id = t.team_id
+        AND tm.role = 'Owner'
+        AND tm.status = 'Active'
+        AND tm.deleted_at IS NULL
+        AND a.deleted_at IS NULL
+      ORDER BY tm.joined_at ASC
+      LIMIT 1
+    ) o ON TRUE
+    WHERE t.team_id = ANY($1::uuid[])
+    `,
+    [teamIds]
+  );
+  const map = new Map();
+  for (const row of result.rows) {
+    map.set(String(row.team_id), {
+      userId: row.user_id,
+      accountId: row.account_id,
+      name:
+        [row.first_name, row.last_name].filter(Boolean).join(' ').trim() ||
+        row.display_name ||
+        row.handle ||
+        'Unnamed member',
+      username: row.handle || null,
+      email: row.email_address || '',
+      avatarPath: row.avatar_path || null,
+      status: normalizeStatus(row.status),
+      suspensionEndsAt: row.suspension_ends_at || null,
+      banEndsAt: row.ban_ends_at || null,
+      lockEndsAt: row.lock_ends_at || null,
+      merit: Number(row.merit ?? 100),
+      forumTimeout: Boolean(row.forum_timeout),
+      // True when the leader's current penalty was applied together with this team.
+      penaltyLinkedToTeam: Boolean(linkedPenaltyFrom(row, row.team_account_id)),
+    });
+  }
+  return map;
+}
+
+/**
+ * Team wallet breakdown, batched: spendable, held by staff, escrow, and the part of the
+ * spendable balance owed to members from contract payouts (TeamsRepositories.wallet rules).
+ */
+async function fetchTeamWalletSummaries(teamIds) {
+  if (!teamIds.length) return new Map();
+  const [balances, reserved] = await Promise.all([
+    pool.query(
+      `
+      SELECT
+        t.team_id,
+        (ARRAY_AGG(w.wallet_id ORDER BY w.created_at DESC) FILTER (WHERE w.type = 'account wallets'))[1] AS wallet_id,
+        COALESCE(SUM(w.balance_credits) FILTER (WHERE w.type = 'account wallets'), 0)::bigint AS available,
+        COALESCE(SUM(w.frozen_balance_credits), 0)::bigint AS held,
+        COALESCE(SUM(w.balance_credits) FILTER (WHERE w.type = 'escrow wallets'), 0)::bigint AS escrow,
+        BOOL_OR(LOWER(COALESCE(w.status, 'active')) <> 'active') AS wallet_inactive
+      FROM teams t
+      INNER JOIN account_wallets aw ON aw.account_id = t.account_id
+      INNER JOIN wallets w ON w.wallet_id = aw.wallet_id
+      WHERE t.team_id = ANY($1::uuid[])
+      GROUP BY t.team_id
+      `,
+      [teamIds]
+    ),
+    pool.query(
+      `
+      WITH team_wallets AS (
+        SELECT t.team_id, w.wallet_id
+        FROM teams t
+        INNER JOIN account_wallets aw ON aw.account_id = t.account_id
+        INNER JOIN wallets w ON w.wallet_id = aw.wallet_id AND w.type = 'account wallets'
+        WHERE t.team_id = ANY($1::uuid[])
+      ),
+      releases AS (
+        SELECT tw.team_id, ct.reference_id AS contract_id, SUM(ct.amount_credits)::bigint AS released
+        FROM team_wallets tw
+        INNER JOIN credit_transactions ct ON ct.destination_wallet_id = tw.wallet_id
+        WHERE ct.reference_table = 'contracts'
+          AND ct.type = 'Escrow Release'
+          AND LOWER(ct.status::text) = 'completed'
+        GROUP BY tw.team_id, ct.reference_id
+      ),
+      distributions AS (
+        SELECT team_id, contract_id, SUM(amount_credits)::bigint AS distributed
+        FROM team_contract_distributions
+        WHERE team_id = ANY($1::uuid[])
+        GROUP BY team_id, contract_id
+      )
+      SELECT r.team_id, COALESCE(SUM(GREATEST(0, r.released - COALESCE(d.distributed, 0))), 0)::bigint AS reserved
+      FROM releases r
+      LEFT JOIN distributions d ON d.team_id = r.team_id AND d.contract_id = r.contract_id
+      GROUP BY r.team_id
+      `,
+      [teamIds]
+    ).catch((err) => {
+      console.warn('Team contract reserve totals skipped:', err.message);
+      return { rows: [] };
+    }),
+  ]);
+  const reservedByTeam = new Map(reserved.rows.map((row) => [String(row.team_id), Number(row.reserved || 0)]));
+  const map = new Map();
+  for (const row of balances.rows) {
+    const available = Number(row.available || 0);
+    const contractReserved = reservedByTeam.get(String(row.team_id)) || 0;
+    map.set(String(row.team_id), {
+      walletId: row.wallet_id || null,
+      available,
+      held: Number(row.held || 0),
+      escrow: Number(row.escrow || 0),
+      contractReserved,
+      unreserved: Math.max(0, available - contractReserved),
+      inactive: Boolean(row.wallet_inactive),
+    });
+  }
+  return map;
+}
+
+const EMPTY_TEAM_WALLET = { walletId: null, available: 0, held: 0, escrow: 0, contractReserved: 0, unreserved: 0, inactive: false };
+
+/** What staff should look at first on a team row. */
+function teamAttention({ teamType, leader, wallet, history, verificationStatus, status }) {
+  const flags = [];
+  const standard = teamType === 'standard';
+  if (standard && !leader) flags.push({ id: 'no_leader', label: 'No active leader', tone: 'danger' });
+  if (leader && ['Banned', 'Locked'].includes(leader.status)) {
+    flags.push({ id: 'leader_restricted', label: `Leader ${leader.status.toLowerCase()}`, tone: 'danger' });
+  } else if (leader && leader.status === 'Suspended') {
+    flags.push({ id: 'leader_suspended', label: 'Leader suspended', tone: 'warning' });
+  } else if (leader && String(leader.status).toLowerCase() === 'deactivated') {
+    // Voluntary, so the team is not paused, but nobody can pay out until the leader returns.
+    flags.push({ id: 'leader_deactivated', label: 'Leader deactivated', tone: 'info' });
+  }
+  if (wallet.held > 0) flags.push({ id: 'credits_held', label: `${wallet.held.toLocaleString()} credits held`, tone: 'warning' });
+  if (wallet.inactive) flags.push({ id: 'wallet_inactive', label: 'Wallet inactive', tone: 'danger' });
+  if ((history?.openDisputes || 0) > 0) {
+    flags.push({ id: 'open_disputes', label: `${history.openDisputes} open dispute${history.openDisputes === 1 ? '' : 's'}`, tone: 'warning' });
+  }
+  if (verificationStatus === 'Reverification Required' && status === 'Active') {
+    flags.push({ id: 'reverification', label: 'Business reverification due', tone: 'info' });
+  }
+  return flags;
+}
+
 async function fetchTeamsFromDatabase({ enrich = true } = {}) {
   const teamsResult = await pool.query(`
     SELECT
       t.team_id,
       t.account_id,
+      COALESCE(t.team_type, 'standard') AS team_type,
       a.handle,
       a.display_name,
       a.status,
+      a.suspension_ends_at,
+      a.ban_ends_at,
+      a.lock_ends_at,
       a.created_at,
       a.avatar_file_id,
       a.tagline,
@@ -818,17 +1117,7 @@ async function fetchTeamsFromDatabase({ enrich = true } = {}) {
         SELECT COUNT(*)::int
         FROM team_members tm
         WHERE tm.team_id = t.team_id AND tm.deleted_at IS NULL AND tm.status = 'Active'
-      ) AS member_count,
-      EXISTS (
-        SELECT 1 FROM restrictions r
-        WHERE r.account_id = a.account_id
-          AND (
-            LOWER(r.type) IN ('forum_timeout', 'timeout')
-            OR (LOWER(COALESCE(r.module, '')) = 'forum' AND LOWER(r.type) LIKE '%timeout%')
-          )
-          AND r.starts_at <= NOW()
-          AND (r.ends_at IS NULL OR r.ends_at > NOW())
-      ) AS forum_timeout
+      ) AS member_count
     FROM teams t
     INNER JOIN accounts a ON a.account_id = t.account_id
     LEFT JOIN files f ON f.file_id = a.avatar_file_id
@@ -846,6 +1135,7 @@ async function fetchTeamsFromDatabase({ enrich = true } = {}) {
       LIMIT 1
     ) w ON TRUE
     WHERE a.deleted_at IS NULL
+      AND t.deleted_at IS NULL
     ORDER BY a.created_at DESC
   `);
 
@@ -864,6 +1154,8 @@ async function fetchTeamsFromDatabase({ enrich = true } = {}) {
       u.email_address,
       u.first_name,
       u.last_name,
+      a.account_id,
+      a.status AS account_status,
       a.handle,
       a.display_name
     FROM team_members tm
@@ -873,12 +1165,12 @@ async function fetchTeamsFromDatabase({ enrich = true } = {}) {
       AND tm.deleted_at IS NULL
       AND tm.status = 'Active'
     ORDER BY
-      CASE LOWER(tm.role) WHEN 'owner' THEN 0 WHEN 'leader' THEN 1 WHEN 'manager' THEN 2 ELSE 3 END,
+      CASE LOWER(tm.role) WHEN 'owner' THEN 0 WHEN 'admin' THEN 1 WHEN 'representative' THEN 2 WHEN 'manager' THEN 3 ELSE 4 END,
       tm.joined_at ASC NULLS LAST
     `,
     [teamIds]
   );
-  const [membersResult, [creditMap, historyMap, activityMap, assetStats, lastActivityMap]] = await Promise.all([
+  const [membersResult, [creditMap, historyMap, activityMap, assetStats, lastActivityMap, leaderMap, walletMap]] = await Promise.all([
     membersRequest,
     enrich
       ? Promise.all([
@@ -897,9 +1189,25 @@ async function fetchTeamsFromDatabase({ enrich = true } = {}) {
             [accountIds]
           ).catch(() => ({ rows: [] })),
           fetchLastActivityForAccounts(accountIds).catch(() => new Map()),
+          fetchTeamLeaders(teamIds).catch((err) => {
+            console.warn('Team leaders skipped:', err.message);
+            return new Map();
+          }),
+          fetchTeamWalletSummaries(teamIds).catch((err) => {
+            console.warn('Team wallet summaries skipped:', err.message);
+            return new Map();
+          }),
         ])
-      : [new Map(), new Map(), new Map(), { rows: [] }, new Map()],
+      : [new Map(), new Map(), new Map(), { rows: [] }, new Map(), new Map(), new Map()],
   ]);
+
+  // Leaders' running automatic punishments (they carry the team's warnings).
+  const leaderAccountIds = [...leaderMap.values()].map((leader) => leader.accountId);
+  let leaderPunishments = new Map();
+  if (enrich && leaderAccountIds.length) {
+    const { runningPunishmentsByAccount } = require('../services/MeritPenaltyServices');
+    leaderPunishments = await runningPunishmentsByAccount(leaderAccountIds).catch(() => new Map());
+  }
 
   const membersByTeam = new Map();
   for (const row of membersResult.rows) {
@@ -910,10 +1218,12 @@ async function fetchTeamsFromDatabase({ enrich = true } = {}) {
       row.handle;
     list.push({
       id: row.user_id,
+      accountId: row.account_id,
       name,
       email: row.email_address,
       username: row.handle,
       role: row.role || 'Member',
+      accountStatus: normalizeStatus(row.account_status),
     });
     membersByTeam.set(row.team_id, list);
   }
@@ -924,38 +1234,70 @@ async function fetchTeamsFromDatabase({ enrich = true } = {}) {
 
   return teamsResult.rows.map((row) => {
     const members = membersByTeam.get(row.team_id) || [];
-    const leader = members[0] || {
-      id: null,
-      name: row.display_name || row.handle || 'Unknown',
-      email: '',
-      username: row.handle,
-      role: 'Owner',
-    };
+    const owner = members.find((m) => String(m.role).toLowerCase() === 'owner') || null;
+    const leaderDetail = leaderMap.get(String(row.team_id)) || null;
+    const leader = leaderDetail
+      ? { ...leaderDetail, meritPenalties: leaderPunishments.get(String(leaderDetail.accountId)) || [] }
+      : owner
+        ? {
+            userId: owner.id,
+            accountId: owner.accountId,
+            name: owner.name,
+            username: owner.username,
+            email: owner.email,
+            avatarPath: null,
+            status: owner.accountStatus,
+            merit: null,
+            forumTimeout: false,
+            penaltyLinkedToTeam: false,
+            meritPenalties: [],
+          }
+        : null;
     const teamName = row.display_name || row.handle || 'Unnamed team';
     const assets = assetsByAccount.get(row.account_id) || { listing_count: 0, listing_value: 0 };
     const balance = Number(row.balance_credits || 0);
+    const wallet = walletMap.get(String(row.team_id)) || {
+      ...EMPTY_TEAM_WALLET,
+      walletId: row.wallet_id || null,
+      available: balance,
+      held: Number(row.frozen_balance_credits || 0),
+      unreserved: balance,
+    };
+    const history = buildHistory(row.account_id, historyMap, activityMap, { team: true });
+    const verificationStatus = mapVerificationLabel(row.verification_status, { forTeam: true });
+    const status = normalizeStatus(row.status);
+    const teamType = String(row.team_type || 'standard').toLowerCase();
 
     return {
       id: row.team_id,
       accountId: row.account_id,
+      teamType,
       name: teamName,
       logoInitial: (teamName || 'T').charAt(0).toUpperCase(),
       avatarPath: row.avatar_path || null,
       handle: row.handle || null,
       tagline: row.tagline || null,
       description: row.description || null,
-      walletBalance: Number(row.balance_credits || 0),
+      walletBalance: balance,
       frozenBalance: Number(row.frozen_balance_credits || 0),
-      leaderName: leader.name,
-      leaderId: leader.id,
-      leaderEmail: leader.email,
+      wallet,
+      leader,
+      leaderName: leader?.name || 'No active leader',
+      leaderId: leader?.userId || null,
+      leaderEmail: leader?.email || '',
       memberCount: members.length || Number(row.member_count || 0),
       members,
       // Teams have no mailbox of their own; staff contact the owner.
-      email: leader.email || '',
-      verificationStatus: mapVerificationLabel(row.verification_status, { forTeam: true }),
-      status: normalizeStatus(row.status),
-      forumTimeout: Boolean(row.forum_timeout),
+      email: leader?.email || '',
+      verificationStatus,
+      status,
+      standing: {
+        suspensionEndsAt: status === 'Suspended' ? row.suspension_ends_at || null : null,
+        banEndsAt: status === 'Banned' ? row.ban_ends_at || null : null,
+        lockEndsAt: status === 'Locked' ? row.lock_ends_at || null : null,
+      },
+      // A team never posts in the forums; a timeout is its leader's.
+      forumTimeout: Boolean(leader?.forumTimeout),
       lastSeenAt: lastActivityMap.get(row.account_id) || null,
       createdAt: row.created_at,
       stats: {
@@ -970,8 +1312,9 @@ async function fetchTeamsFromDatabase({ enrich = true } = {}) {
       },
       documents: [],
       creditActivity: creditMap.get(row.account_id) || [],
-      verification: buildVerificationDetail(row),
-      history: buildHistory(row.account_id, historyMap, activityMap),
+      verification: buildVerificationDetail({ ...row, is_team: true }),
+      history,
+      attention: enrich ? teamAttention({ teamType, leader, wallet, history, verificationStatus, status }) : [],
     };
   });
 }
@@ -979,6 +1322,7 @@ async function fetchTeamsFromDatabase({ enrich = true } = {}) {
 function computeTeamStats(teams) {
   const suspended = teams.filter((t) => t.status === 'Suspended').length;
   const banned = teams.filter((t) => t.status === 'Banned').length;
+  const locked = teams.filter((t) => t.status === 'Locked').length;
   const active = teams.filter((t) => t.status === 'Active').length;
   const verified = teams.filter((t) => t.verificationStatus === 'Business Verified').length;
   const unverified = teams.filter((t) => t.verificationStatus === 'Unverified').length;
@@ -991,11 +1335,17 @@ function computeTeamStats(teams) {
   return {
     totalSuspended: suspended,
     totalBanned: banned,
+    totalLocked: locked,
     totalTeams: teams.length,
     totalActive: active,
     totalVerifiedBusinesses: verified,
     totalUnverifiedBusiness: unverified,
     totalPendingVerification: pending,
+    totalNeedsAttention: teams.filter((t) => (t.attention || []).some((flag) => flag.tone === 'danger')).length,
+    totalLeaderRestricted: teams.filter((t) => t.leader && ['Banned', 'Locked', 'Suspended'].includes(t.leader.status)).length,
+    totalWithoutLeader: teams.filter((t) => t.teamType === 'standard' && !t.leader).length,
+    totalCreditsHeld: teams.reduce((sum, t) => sum + Number(t.wallet?.held || 0), 0),
+    totalTeamWalletBalance: teams.reduce((sum, t) => sum + Number(t.wallet?.available || 0), 0),
   };
 }
 
@@ -1128,6 +1478,7 @@ async function getUserTeamOverview() {
     id: t.id,
     name: t.name,
     leaderName: t.leaderName,
+    leaderStatus: t.leader?.status || null,
     memberCount: t.memberCount,
     status: t.status,
     verificationStatus: t.verificationStatus,
@@ -1166,6 +1517,7 @@ async function getUserTeamOverview() {
         { label: 'Active', count: teamsData.stats.totalActive },
         { label: 'Suspended', count: teamsData.stats.totalSuspended },
         { label: 'Banned', count: teamsData.stats.totalBanned },
+        { label: 'Locked', count: teamsData.stats.totalLocked },
         { label: 'Pending verification', count: teamsData.stats.totalPendingVerification },
       ],
     },
@@ -1195,6 +1547,14 @@ function buildUserTeamAlerts(teamStats, userStats, verification) {
     alerts.push({
       id: 'suspended',
       message: `${teamStats.totalSuspended + userStats.totalSuspended} suspended account(s) on record.`,
+      severity: 'warning',
+    });
+  }
+  const leaderIssues = (teamStats.totalWithoutLeader || 0) + (teamStats.totalLeaderRestricted || 0);
+  if (leaderIssues > 0) {
+    alerts.push({
+      id: 'team-leaders',
+      message: `${leaderIssues} team(s) have a restricted or missing leader. New work and team payouts are paused for them; transfer ownership or lock the team.`,
       severity: 'warning',
     });
   }
@@ -1296,6 +1656,14 @@ function assertStatusTransition({ key, currentStatus, actorRole }) {
 async function updateAccountStatus(accountId, actionOrStatus, staffId = null, options = {}) {
   const account = await assertAccountExists(accountId);
   const key = String(actionOrStatus || '').toLowerCase();
+  // A team acts as one account but a person leads it: the team service applies the team
+  // penalty, the leader cascade and the team notices, then calls back with `teamDirect`.
+  if (String(account.type || '').toLowerCase() === 'team' && !options.teamDirect) {
+    return require('../services/TeamSanctionServices').changeTeamStanding(account, key, staffId, options);
+  }
+  const viaTeamMeta = options.viaTeamAccountId
+    ? { viaTeamAccountId: String(options.viaTeamAccountId), viaTeamName: options.viaTeamName || null }
+    : {};
   const { assertCanSanctionTarget, staffRoleOf } = require('../lib/SuspendGuards');
   const guardAction = ['ban', 'banned'].includes(key)
     ? 'ban'
@@ -1352,7 +1720,7 @@ async function updateAccountStatus(accountId, actionOrStatus, staffId = null, op
       referencePrefix: 'RST',
       referenceId: accountId,
       actorStaffId: staffId,
-      metadata: { endsAt, days: resolvedOptions.days ?? null, reason, ...punishmentMeta },
+      metadata: { endsAt, days: resolvedOptions.days ?? null, reason, ...punishmentMeta, ...viaTeamMeta },
     });
     let restriction = null;
     try {
@@ -1395,7 +1763,7 @@ async function updateAccountStatus(accountId, actionOrStatus, staffId = null, op
       referencePrefix: 'RST',
       referenceId: accountId,
       actorStaffId: staffId,
-      metadata: { reason },
+      metadata: { reason, ...viaTeamMeta },
     });
     let restriction = null;
     try {
@@ -1470,6 +1838,7 @@ async function updateAccountStatus(accountId, actionOrStatus, staffId = null, op
       lockEndsAt,
       reason,
       ...punishmentMeta,
+      ...viaTeamMeta,
       ...(resolvedOptions.disputeId ? { disputeId: String(resolvedOptions.disputeId) } : {}),
       ...(resolvedOptions.disputeNumber ? { disputeNumber: String(resolvedOptions.disputeNumber) } : {}),
     },
@@ -1811,6 +2180,25 @@ async function announceCreditAdjustment(accountId, { walletId, adjustedBy, reaso
   } catch (err) {
     console.warn('Credit adjustment broadcast skipped:', err.message);
   }
+  // A team account has no inbox: its Owners and Admins hear about the team wallet.
+  try {
+    const { describeTeamAccount, notifyTeamManagers } = require('../services/TeamStandingServices');
+    const team = await describeTeamAccount(accountId);
+    if (team.isTeam) {
+      await notifyTeamManagers(accountId, {
+        message:
+          adjustedBy > 0
+            ? `Staff added ${amount} credits to Team ${team.name}'s wallet. Reason: ${reason}`
+            : `Staff removed ${amount} credits from Team ${team.name}'s wallet. Reason: ${reason} If you think this is a mistake, contact Support.`,
+        prefix: 'TEAM_CREDITS_ADJUSTED',
+        referenceTable: 'wallets',
+        referenceId: walletId || accountId,
+        event: 'wallet_changed',
+      });
+    }
+  } catch (err) {
+    console.warn('Team credit adjustment notice skipped:', err.message);
+  }
 }
 
 /**
@@ -1825,9 +2213,14 @@ async function freezeAccountCredits(accountId, freeze = true, staffId = null, op
   return holds.unfreezeAccountCredits(accountId, { staffId, reason: options.reason, source: 'staff' });
 }
 
-async function warnAccount(accountId, { warningId, type, reason, points, expiresAt, duration, days, endsAt } = {}, staffId) {
-  await assertAccountExists(accountId);
+async function warnAccount(accountId, payload = {}, staffId) {
+  const { warningId, type, reason, viaTeam = null } = payload || {};
+  const target = await assertAccountExists(accountId);
   if (!staffId) throw new Error('Staff session required to issue a warning');
+  // Teams have no Platform Merit: a warning against a team is issued to its leader.
+  if (String(target.type || '').toLowerCase() === 'team') {
+    return require('../services/TeamSanctionServices').warnTeamLeader(target, payload, staffId);
+  }
   const { assertCanSanctionTarget, staffRoleOf } = require('../lib/SuspendGuards');
   await assertCanSanctionTarget({ actorStaffId: staffId, targetAccountId: accountId, action: 'warn' });
   const { assertWarnableAccount } = require('../services/WarningBandServices');
@@ -1847,20 +2240,22 @@ async function warnAccount(accountId, { warningId, type, reason, points, expires
   const { warningExpiry } = require('../lib/AccountRestriction');
   const expiry = warningExpiry({ durationDays: issued.durationDays, points: warnPoints });
 
+  const { teamWarningColumnReady } = require('../lib/SchemaFeatures');
+  const teamAccountId = viaTeam?.accountId && (await teamWarningColumnReady()) ? viaTeam.accountId : null;
   const inserted = await pool.query(
     `
     INSERT INTO violations (
       violation_number, account_id, type, reason, points,
-      status, staff_id, expires_at
-    ) VALUES ($1, $2, $3, $4, $5, 'active', $6, $7)
+      status, staff_id, expires_at${teamAccountId ? ', team_account_id' : ''}
+    ) VALUES ($1, $2, $3, $4, $5, 'active', $6, $7${teamAccountId ? ', $8' : ''})
     RETURNING violation_id
     `,
-    [violationNumber, accountId, warnType, warnReason, warnPoints, staffId, expiry]
+    [violationNumber, accountId, warnType, warnReason, warnPoints, staffId, expiry, ...(teamAccountId ? [teamAccountId] : [])]
   );
 
   await recordAccountActivity({
     accountId,
-    action: `Warning issued: ${warnType}`,
+    action: viaTeam?.name ? `Warning issued: ${warnType} (as leader of Team ${viaTeam.name})` : `Warning issued: ${warnType}`,
     eventCode: 'ACCOUNT_WARNED',
     referenceTable: 'violations',
     referencePrefix: 'VIO',
@@ -1873,6 +2268,7 @@ async function warnAccount(accountId, { warningId, type, reason, points, expires
       points: warnPoints,
       warningId: issued.warningId,
       expiresAt: expiry,
+      ...(viaTeam?.accountId ? { viaTeamAccountId: String(viaTeam.accountId), viaTeamName: viaTeam.name || null } : {}),
     },
   });
 
@@ -1895,6 +2291,7 @@ async function warnAccount(accountId, { warningId, type, reason, points, expires
       autoSuspended: Boolean(autoSuspend?.suspended),
       activeWarnings: autoSuspend?.activeCount ?? null,
       maxWarningsBeforeSuspend: autoSuspend?.max ?? null,
+      viaTeamName: viaTeam?.name || null,
     });
   } catch (notifyErr) {
     console.warn('Failed to broadcast warning notification:', notifyErr.message);
@@ -2150,6 +2547,7 @@ async function rescindWarning(accountId, violationId, staffId) {
 }
 
 module.exports = {
+  leaderPenaltyLinkedToTeam,
   getTeamsManagement,
   getUsersManagement,
   getUserTeamOverview,

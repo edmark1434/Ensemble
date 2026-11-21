@@ -1,4 +1,5 @@
 const repo = require('../repositories/AdminEconomyRepositories');
+const { fetchLedgerBalances, balanceKey } = require('../repositories/LedgerBalanceRepositories');
 const { CREDIT_TRANSACTION_TYPES, CREDIT_TRANSACTION_STATUSES } = require('../lib/CreditTransactionEnums');
 const { STAFF_ROLE } = require('../lib/StaffEnums');
 
@@ -358,10 +359,45 @@ async function listEconomyWallets(session, query) {
   return repo.listWallets({ ...filters, includeStaff: scope.includeStaff });
 }
 
+/** Member and escrow wallets carry a rebuilt balance; the platform wallet does not. */
+const BALANCE_WALLET_TYPES = new Set(['Account', 'Escrow']);
+
+/**
+ * Adds `balances: { source, destination }` to each entry: that wallet's spendable (and held)
+ * credits before and after the row, or null. A self-transfer (adjustment, hold) has one wallet,
+ * so only `source` is set.
+ */
+async function withBalances(entries) {
+  const list = (entries || []).filter(Boolean);
+  if (!list.length) return list;
+  const sides = (e) => (String(e.source.walletId) === String(e.destination.walletId) ? [e.source] : [e.source, e.destination]);
+  const pairs = [];
+  for (const e of list) {
+    for (const party of sides(e)) {
+      if (party.walletId && BALANCE_WALLET_TYPES.has(party.walletType)) {
+        pairs.push({ transactionId: e.id, walletId: party.walletId });
+      }
+    }
+  }
+  let found = new Map();
+  try {
+    found = await fetchLedgerBalances(pairs);
+  } catch (error) {
+    // The ledger still loads; balances are a reading aid, not the record.
+    console.error('Ledger balances skipped:', error.message);
+  }
+  const pick = (e, party) => (party?.walletId ? found.get(balanceKey(e.id, party.walletId)) || null : null);
+  return list.map((e) => {
+    const [source, destination] = sides(e);
+    return { ...e, balances: { source: pick(e, source), destination: pick(e, destination) } };
+  });
+}
+
 async function listEconomyLedger(session, query) {
   const scope = economyScope(session);
   const filters = parseLedgerQuery(query);
-  return repo.listLedger({ ...filters, includeStaff: scope.includeStaff });
+  const page = await repo.listLedger({ ...filters, includeStaff: scope.includeStaff });
+  return { ...page, items: await withBalances(page.items) };
 }
 
 /**
@@ -415,9 +451,11 @@ async function getEconomyLedgerEntry(session, transactionId) {
     ),
   ]);
   const byId = new Map(linked.filter(visible).map((e) => [String(e.id), e]));
+  // Balances for the entry itself; linked and group rows open their own entry for theirs.
+  const [entryWithBalances] = await withBalances([entry]);
 
   return {
-    entry,
+    entry: entryWithBalances,
     links: direct
       .map((d) => ({ relation: d.relation, entry: byId.get(String(d.id)) || null }))
       .filter((l) => l.entry),

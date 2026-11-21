@@ -59,6 +59,11 @@ function thresholdDurationReady() {
   return hasColumn('warning_thresholds', 'duration_days');
 }
 
+/** `violations.team_account_id` (team-leader-warnings migration). */
+function teamWarningColumnReady() {
+  return hasColumn('violations', 'team_account_id');
+}
+
 /**
  * SET fragment that clears the automatic-suspension marker, or '' before the migration.
  * Prefixed with a comma so it can follow other assignments.
@@ -73,5 +78,6 @@ module.exports = {
   warningLiftColumnsReady,
   meritPenaltiesReady,
   thresholdDurationReady,
+  teamWarningColumnReady,
   clearAutoSuspendSql,
 };

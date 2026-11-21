@@ -8,6 +8,8 @@ const { createCorsOriginValidator, getAllowedOrigins } = require('./CorsOrigins'
 dotenv.config();
 
 let io;
+/** Every connected staff socket. Gets `staffCaseChanged` (ids only; desks re-read over HTTP). */
+const STAFF_CASES_ROOM = 'staff:cases';
 const onlineAccounts = new Map();
 const callExpiryTimers = new Map();
 
@@ -61,6 +63,8 @@ const STAFF_SOCKET_EVENTS = new Set([
   'leaveForumRooms',
   'joinDisputeDiscussion',
   'leaveDisputeDiscussion',
+  'joinDisputeStaffRoom',
+  'leaveDisputeStaffRoom',
   'getActiveGroupCall',
   'getPresenceSnapshot',
   'markMessageAsRead',
@@ -127,6 +131,7 @@ async function initSocket(httpServer) {
     updateGroupProfileImageServices,
     removeGroupMemberServices,
     authorizeSocketRoomServices,
+    authorizeDisputeStaffRoomServices,
     typingEventServices,
     markConversationReadServices,
     callSignalServices,
@@ -275,6 +280,8 @@ async function initSocket(httpServer) {
       console.error('Failed to join marketplace actor rooms:', error.message);
       await socket.join(accountId);
     }
+    // Staff desks hear that a ticket or dispute changed (`staffCaseChanged`) and re-read it.
+    if (isStaffSocket) await socket.join(STAFF_CASES_ROOM);
 
     socket.on('joinRoom', async (roomPayload, callback) => {
       const roomId =
@@ -360,6 +367,26 @@ async function initSocket(httpServer) {
     socket.on('leaveDisputeDiscussion', ({ disputeId } = {}) => {
       if (!disputeId) return;
       socket.leave(`dispute:public:${disputeId}`);
+    });
+
+    // A staff console with a dispute open gets every message and state change on it here,
+    // whether or not the staff member is listed on the case's chat. Members are refused.
+    socket.on('joinDisputeStaffRoom', async (payload, callback) => {
+      const disputeId = payload?.disputeId ? String(payload.disputeId) : null;
+      try {
+        if (!isStaffSocket) throw new Error('Only staff can follow this dispute live.');
+        const room = await authorizeDisputeStaffRoomServices(disputeId, accountId);
+        await socket.join(room.room_id);
+        acknowledge(callback, room);
+      } catch (error) {
+        rejectEvent(socket, 'disputeStaffRoomJoin', callback, error, { disputeId });
+      }
+    });
+
+    socket.on('leaveDisputeStaffRoom', (payload) => {
+      const disputeId = payload?.disputeId ? String(payload.disputeId) : null;
+      if (!disputeId) return;
+      socket.leave(`dispute:staff:${disputeId}`);
     });
 
     const handleSendMessage = async (messagePayload = {}, callback) => {
@@ -878,10 +905,54 @@ function emitForumEvent(type, payload = {}) {
   });
 }
 
+/**
+ * Tell every staff desk that a ticket or dispute changed. Call after the change is saved.
+ * The payload carries no case content: each desk re-reads its queue, which applies its own
+ * access rules. Never throws.
+ * @param {{ kind: 'ticket'|'dispute', id: string, reason?: string|null }} change
+ */
+function emitStaffCaseChange({ kind, id, reason = null } = {}) {
+  if (!kind || !id || !io) return;
+  try {
+    io.to(STAFF_CASES_ROOM).emit('staffCaseChanged', {
+      kind,
+      id: String(id),
+      reason: reason || null,
+      at: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.warn('Staff case change not delivered:', error.message);
+  }
+}
+
+/**
+ * Tell members their wallet or credit history changed (a dispute payout paid, scheduled,
+ * moved or withdrawn), so open wallet views reload. Call after the change is committed.
+ * The payload carries no amounts: the client re-reads its own history. Never throws.
+ * @param {Array<string|null|undefined>} accountIds
+ * @param {{ reason?: string|null, disputeId?: string|null }} [detail]
+ */
+function emitWalletChanged(accountIds, { reason = null, disputeId = null } = {}) {
+  if (!io) return;
+  const rooms = [...new Set((accountIds || []).filter(Boolean).map(String))];
+  if (!rooms.length) return;
+  try {
+    io.to(rooms).emit('account:wallet_changed', {
+      reason: reason || null,
+      disputeId: disputeId ? String(disputeId) : null,
+      at: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.warn('Wallet change not delivered:', error.message);
+  }
+}
+
 module.exports = {
   initSocket,
   getIo,
   emitForumEvent,
+  emitStaffCaseChange,
+  emitWalletChanged,
   emitConversationMessage,
   refreshSocketStanding,
 };

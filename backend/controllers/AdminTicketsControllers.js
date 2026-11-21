@@ -7,11 +7,9 @@ const {
   removeTicketParticipant,
   respondTicketInvite,
   generateTicketTranscript,
-  assertCanFileAppeal,
   decideTicketAppeal,
   scheduleTicketClose,
   cancelScheduledTicketClose,
-  createSupportTicket,
   getTicketPickers,
   searchTicketTeams,
   getTicketCatalog,
@@ -40,11 +38,10 @@ const {
   listMemberDisputes,
   getMemberDispute,
   getCaseSummary,
-  notifyCaseOpened,
 } = require('../services/CaseServices');
 const { createReport } = require('../repositories/ModeratorSharedRepositories');
 const { createReportNumber, buildSubjectSnapshot } = require('../lib/ReportSubject');
-const { createStaffTicketService } = require('../services/TicketServices');
+const { createStaffTicketService, createMemberTicket } = require('../services/TicketServices');
 const { applyFinancialResolution } = require('../services/DisputeFinancialServices');
 const { ticketInStaffQueue } = require('../lib/TicketQueueScope');
 
@@ -396,111 +393,25 @@ async function getPublicTicketCatalog(_req, res) {
   }
 }
 
-// Same limits the appeal page shows (frontend/src/pages/user/account/appeal/appealShared.ts).
-function appealLengthError(subject, description, fields) {
-  if (subject.length > 200) return 'Subject must be 200 characters or less';
-  if (description.length < 10) return 'Description must be at least 10 characters';
-  if (description.length > 5000) return 'Description must be 5,000 characters or less';
-  if (String(fields?.case_id || '').trim().length > 80) return 'Case ID must be 80 characters or less';
-  if (String(fields?.evidence || '').trim().length > 2000) return 'Supporting evidence must be 2,000 characters or less';
-  return null;
-}
-
+/** Member ticket intake; the rules live in `TicketServices.createMemberTicket`. */
 async function createPublicTicket(req, res) {
   try {
-    const requesterAccountId = req.session?.account_id || req.session?.accountId || null;
-    if (!requesterAccountId) {
-      return res.status(401).json({ success: false, message: 'Authentication required to submit a ticket' });
-    }
-
-    const {
-      subject,
-      reason,
-      type,
-      category,
-      priority,
-      description,
-    } = req.body;
-    const { APPEAL_TICKET_TYPE, appealTicketsOnly } = require('../lib/AccountRestriction');
-    let ticketType = type || category || 'Other';
-    // Banned, locked and suspended members may still appeal, and do nothing else here.
-    const appealOnly = appealTicketsOnly(req.accountAccess);
-    if (appealOnly) {
-      if (String(type || category || APPEAL_TICKET_TYPE).trim() !== APPEAL_TICKET_TYPE) {
-        return res.status(403).json({
-          success: false,
-          code: req.accountAccess.code || 'ACCOUNT_BANNED',
-          message: req.accountAccess?.suspended
-            ? 'While your account is suspended you can only open an appeal ticket.'
-            : 'This account can only open an appeal ticket.',
-        });
-      }
-      ticketType = APPEAL_TICKET_TYPE;
-    }
-    // Each penalty is appealed on its own: the body names it as `appealTarget: { type, id }`.
-    let appealTarget = null;
-    if (ticketType === APPEAL_TICKET_TYPE) {
-      appealTarget = await assertCanFileAppeal(requesterAccountId, req.body?.appealTarget);
-    }
-    const subjectOrReason = (reason || subject || '').trim();
-    if (!subjectOrReason) {
-      return res.status(400).json({ success: false, message: 'Subject is required' });
-    }
-    if (!description?.trim()) {
-      return res.status(400).json({ success: false, message: 'Description is required' });
-    }
-    if (ticketType === APPEAL_TICKET_TYPE) {
-      const appealError = appealLengthError(subjectOrReason, description.trim(), req.body?.fields);
-      if (appealError) return res.status(400).json({ success: false, message: appealError });
-    }
-
-    const requesterEmail = req.body?.email || req.session?.email || req.session?.email_address || null;
-    const data = await createSupportTicket(
-      {
-        subject: subjectOrReason,
-        reason: subjectOrReason,
-        type: ticketType,
-        category,
-        priority: priority || 'Medium',
-        description: description.trim(),
-        attachments: req.body?.attachments,
-        // Appeals always store the same three answers; "Case ID" is the penalty they name.
-        fields: ticketType === APPEAL_TICKET_TYPE
-          ? {
-              case_id: appealTarget?.reference || String(req.body?.fields?.case_id || '').trim() || 'Not provided',
-              why_reverse: req.body?.fields?.why_reverse || description.trim(),
-              evidence: req.body?.fields?.evidence || '',
-            }
-          : (req.body?.fields ?? {}),
-        ...(appealTarget ? { appealTarget } : {}),
-        context: {
-          ...(req.body?.context || {}),
-          ...(requesterEmail ? { email: requesterEmail } : {}),
-        },
-        requesterAccountId,
-        email: requesterEmail,
-      },
-      req.session
-    );
-    await notifyCaseOpened({
-      accountId: requesterAccountId,
-      kind: 'ticket',
-      id: data.ticket.id,
-      number: data.ticket.number,
+    const data = await createMemberTicket({
+      session: req.session,
+      accountAccess: req.accountAccess,
+      body: req.body,
     });
-
-    res.status(201).json({
-      success: true,
-      data: {
-        ticketId: data.ticket.id,
-        ticketNumber: data.ticket.number,
-        chatAvailable: data.chatAvailable,
-      },
-    });
+    res.status(201).json({ success: true, data });
   } catch (err) {
-    console.error('Error creating public ticket:', err);
-    const status = err.statusCode && err.statusCode < 500 ? err.statusCode : 400;
-    res.status(status).json({ success: false, message: err.message || 'Failed to create ticket' });
+    const status = err.statusCode && err.statusCode < 500 ? err.statusCode : 500;
+    // Only messages written for the member go back; database errors stay in the log.
+    if (status >= 500) console.error('Error creating member ticket:', err);
+    res.status(status).json({
+      success: false,
+      ...(status < 500 && typeof err.code === 'string' ? { code: err.code } : {}),
+      ...(status < 500 && err.data ? { data: err.data } : {}),
+      message: status < 500 ? err.message : 'Failed to create the ticket. Please try again.',
+    });
   }
 }
 

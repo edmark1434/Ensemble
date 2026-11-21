@@ -40,9 +40,10 @@ export default function ForumDiscussion() {
           </p>
           <h1 className="text-xl font-bold text-white">Forum Control</h1>
           <p className="mt-1 max-w-3xl text-xs text-zinc-500">
-            Moderate discussions and groups in one place. Lock or pin threads, remove comments,
-            ban members from a group, and archive groups that break the rules. Every action is
-            written to the moderation activity log.
+            Moderate discussions and groups in one place. Lock or pin threads, hide posts and
+            comments, ban members from a group, and archive groups that break the rules. Nothing is
+            permanently deleted: every removal can be restored here, and every action is written to
+            the moderation activity log.
           </p>
         </div>
       </header>

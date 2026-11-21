@@ -16,9 +16,10 @@ dotenv.config();
 function actorId(session = {}) {
     return session.userId || session.accountId || session.account_id || null;
 }
+// Only forum staff, and only from a staff session. A substring match on "moderator"
+// used to let Jobs, Marketplace and Support moderators manage any forum group.
 function isStaff(session = {}) {
-    const role = String(session.role || session.staffRole || '').toLowerCase();
-    return role.includes('moderator') || role === 'admin';
+    return session.type === 'Staff' && ['Admin', 'Forum Moderator'].includes(session.role);
 }
 async function requireGroupManager(groupId, session, adminOnly = false) {
     const group = await getForumGroupById(groupId);
@@ -166,7 +167,10 @@ async function deleteForumGroupServices(groupId, session = {}) {
     await requireGroupManager(groupId, session, true);
     dataValidation({ groupId }, 'update');
     const group = await getForumGroupById(groupId);
-    const result = await deleteForumGroupRepositories(groupId);
+    const result = await deleteForumGroupRepositories(groupId, {
+        archivedBy: isStaff(session) ? 'staff' : 'owner',
+        archivedByUserId: actorId(session),
+    });
     emitForumEvent('group.deleted', { groupId: String(groupId), group });
     return result;
 }

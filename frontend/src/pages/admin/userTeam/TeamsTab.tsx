@@ -14,6 +14,7 @@ import {
   CreditActivityModal,
   HistoryModal,
   TeamOverviewModal,
+  TransferTeamOwnershipModal,
   VerificationModal,
   WarnAccountModal,
 } from './components/AccountModals';
@@ -22,7 +23,7 @@ import {
   runBulkAccountAction,
   setAccountStatus,
 } from './accountActions';
-import { buildRowActionItems, exportAccountJson } from './statusActions';
+import { buildTeamRowActionItems, exportAccountJson } from './statusActions';
 import { formatDateTime } from './formatDateTime';
 import type { PlatformTeam, TeamManagementData } from './userTeamTypes';
 import {
@@ -42,12 +43,7 @@ const ALL_BULK_ITEMS: BulkActionItem[] = [
   { id: 'clear', label: 'Clear selection', section: 'Other' },
 ];
 
-type ModalKind =
-  | 'overview'
-  | 'credit'
-  | 'verification'
-  | 'history'
-  | 'warn'
+type StatusAction =
   | 'ban'
   | 'suspend'
   | 'restore'
@@ -56,8 +52,21 @@ type ModalKind =
   | 'unsuspend'
   | 'unlock'
   | 'timeout'
-  | 'clear_timeout'
-  | null;
+  | 'clear_timeout';
+
+const STATUS_ACTIONS: StatusAction[] = [
+  'ban',
+  'suspend',
+  'restore',
+  'lock',
+  'unban',
+  'unsuspend',
+  'unlock',
+  'timeout',
+  'clear_timeout',
+];
+
+type ModalKind = 'overview' | 'credit' | 'verification' | 'history' | 'warn' | 'transfer' | StatusAction | null;
 
 type BulkPending = {
   kind: 'status' | 'verification';
@@ -112,6 +121,60 @@ const BULK_META: Record<Exclude<BulkActionId, 'clear'>, BulkPending> = {
   },
 };
 
+const ATTENTION_FILTERS = [
+  { value: 'needs', label: 'Needs attention' },
+  { value: 'leader', label: 'Leader restricted' },
+  { value: 'no_leader', label: 'No active leader' },
+  { value: 'held', label: 'Credits held' },
+  { value: 'disputes', label: 'Open disputes' },
+];
+
+function statusChipTone(status: string | null | undefined) {
+  const s = String(status || '').toLowerCase();
+  if (s === 'banned' || s === 'locked') return 'border-rose-500/30 bg-rose-500/10 text-rose-200';
+  if (s === 'suspended') return 'border-amber-500/30 bg-amber-500/10 text-amber-200';
+  if (s === 'active') return 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200';
+  return 'border-white/10 text-zinc-300';
+}
+
+function attentionChipTone(tone: string) {
+  if (tone === 'danger') return 'border-rose-500/30 bg-rose-500/10 text-rose-200';
+  if (tone === 'warning') return 'border-amber-500/30 bg-amber-500/10 text-amber-200';
+  return 'border-sky-500/30 bg-sky-500/10 text-sky-200';
+}
+
+function teamPenaltyEnd(team: PlatformTeam) {
+  const s = team.status.toLowerCase();
+  const end =
+    s === 'suspended'
+      ? team.standing?.suspensionEndsAt
+      : s === 'banned'
+        ? team.standing?.banEndsAt
+        : s === 'locked'
+          ? team.standing?.lockEndsAt
+          : null;
+  if (s === 'active') return null;
+  return end ? `until ${formatDateTime(end)}` : s === 'banned' ? 'permanent' : 'until lifted';
+}
+
+function matchesAttention(team: PlatformTeam, filter: string) {
+  const flags = team.attention || [];
+  switch (filter) {
+    case 'needs':
+      return flags.some((flag) => flag.tone === 'danger' || flag.tone === 'warning');
+    case 'leader':
+      return flags.some((flag) => flag.id === 'leader_restricted' || flag.id === 'leader_suspended');
+    case 'no_leader':
+      return flags.some((flag) => flag.id === 'no_leader');
+    case 'held':
+      return (team.wallet?.held || 0) > 0;
+    case 'disputes':
+      return (team.history?.openDisputes || 0) > 0;
+    default:
+      return true;
+  }
+}
+
 type TeamsTabProps = {
   onStatsLoaded?: (pendingVerification: number) => void;
   refreshToken?: number;
@@ -142,6 +205,8 @@ export default function TeamsTab({
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [verificationFilter, setVerificationFilter] = useState(defaultVerificationFilter);
+  const [typeFilter, setTypeFilter] = useState('all');
+  const [attentionFilter, setAttentionFilter] = useState('all');
   const [sortBy, setSortBy] = useState('newest');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkPending, setBulkPending] = useState<BulkPending | null>(null);
@@ -168,6 +233,8 @@ export default function TeamsTab({
   }, [refreshToken]);
 
   const q = search.trim().toLowerCase();
+  const filtersActive =
+    Boolean(q) || statusFilter !== 'all' || verificationFilter !== 'all' || typeFilter !== 'all' || attentionFilter !== 'all';
   const teams = useMemo(() => {
     if (!data) return [];
     let result = data.teams;
@@ -176,9 +243,15 @@ export default function TeamsTab({
       result = result.filter(
         (t) =>
           t.name.toLowerCase().includes(q) ||
+          String(t.handle || '').toLowerCase().includes(q) ||
           t.leaderName.toLowerCase().includes(q) ||
+          String(t.leader?.username || '').toLowerCase().includes(q) ||
           t.id.toLowerCase().includes(q) ||
-          t.email.toLowerCase().includes(q)
+          String(t.accountId).toLowerCase().includes(q) ||
+          t.email.toLowerCase().includes(q) ||
+          (t.members || []).some(
+            (m) => m.name.toLowerCase().includes(q) || String(m.username || '').toLowerCase().includes(q)
+          )
       );
     }
     if (statusFilter !== 'all') {
@@ -186,6 +259,12 @@ export default function TeamsTab({
     }
     if (verificationFilter !== 'all') {
       result = result.filter((t) => t.verificationStatus.toLowerCase() === verificationFilter);
+    }
+    if (typeFilter !== 'all') {
+      result = result.filter((t) => String(t.teamType || 'standard') === typeFilter);
+    }
+    if (attentionFilter !== 'all') {
+      result = result.filter((t) => matchesAttention(t, attentionFilter));
     }
 
     const time = (value: string | null) => (value ? new Date(value).getTime() : 0);
@@ -197,6 +276,10 @@ export default function TeamsTab({
           return a.name.localeCompare(b.name);
         case 'members':
           return b.memberCount - a.memberCount;
+        case 'wallet':
+          return (b.wallet?.available ?? b.walletBalance) - (a.wallet?.available ?? a.walletBalance);
+        case 'attention':
+          return (b.attention?.length || 0) - (a.attention?.length || 0);
         case 'lastSeen':
           return time(b.lastSeenAt) - time(a.lastSeenAt);
         case 'newest':
@@ -204,7 +287,7 @@ export default function TeamsTab({
           return time(b.createdAt) - time(a.createdAt);
       }
     });
-  }, [data, q, statusFilter, verificationFilter, sortBy]);
+  }, [data, q, statusFilter, verificationFilter, typeFilter, attentionFilter, sortBy]);
 
   const statusOptions = useMemo(
     () => uniqueOptions((data?.teams ?? []).map((t) => t.status)),
@@ -284,7 +367,8 @@ export default function TeamsTab({
     const isPrimary = capabilities.primaryActions.has(actionId);
     const isStatus =
       capabilities.statusActions.has(actionId) ||
-      (actionId === 'warn' && capabilities.canWarn);
+      (actionId === 'warn' && capabilities.canWarn) ||
+      (actionId === 'transfer' && capabilities.canTransferTeams);
     if (!isPrimary && !isStatus) return;
 
     switch (actionId) {
@@ -303,22 +387,15 @@ export default function TeamsTab({
       case 'warn':
         if (capabilities.canWarn) open(team, 'warn');
         break;
+      case 'transfer':
+        if (capabilities.canTransferTeams) open(team, 'transfer');
+        break;
       case 'export':
         exportAccountJson(`team-${team.handle || team.accountId}.json`, team);
         break;
-      case 'ban':
-      case 'suspend':
-      case 'restore':
-      case 'lock':
-      case 'unban':
-      case 'unsuspend':
-      case 'unlock':
-      case 'timeout':
-      case 'clear_timeout':
-        open(team, actionId);
-        break;
       default:
-        open(team, 'overview');
+        if ((STATUS_ACTIONS as string[]).includes(actionId)) open(team, actionId as StatusAction);
+        else open(team, 'overview');
     }
   };
 
@@ -338,6 +415,7 @@ export default function TeamsTab({
   }
 
   const s = data.stats;
+  const statusModal = modal && (STATUS_ACTIONS as string[]).includes(modal) ? (modal as StatusAction) : null;
 
   return (
     <>
@@ -345,7 +423,7 @@ export default function TeamsTab({
         cards={[
           [
             { label: 'Total suspended team', value: s.totalSuspended },
-            { label: 'Total banned team', value: s.totalBanned },
+            { label: 'Total banned / locked team', value: s.totalBanned + (s.totalLocked ?? 0) },
           ],
           [
             { label: 'Total team', value: s.totalTeams },
@@ -353,11 +431,31 @@ export default function TeamsTab({
           ],
           [
             { label: 'Total verified businesses', value: s.totalVerifiedBusinesses },
-            { label: 'Total unverified business', value: s.totalUnverifiedBusiness },
+            { label: 'Total pending verification', value: s.totalPendingVerification },
           ],
-          [{ label: 'Total pending verification', value: s.totalPendingVerification }],
+          [
+            { label: 'Teams needing attention', value: s.totalNeedsAttention ?? 0 },
+            { label: 'Credits held across teams', value: s.totalCreditsHeld ?? 0 },
+          ],
         ]}
       />
+
+      {((s.totalWithoutLeader ?? 0) > 0 || (s.totalLeaderRestricted ?? 0) > 0) && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-amber-500/25 bg-amber-500/[0.06] px-4 py-3 text-sm text-amber-100">
+          <span>
+            {(s.totalLeaderRestricted ?? 0) > 0 && `${s.totalLeaderRestricted} team(s) have a suspended, locked or banned leader. `}
+            {(s.totalWithoutLeader ?? 0) > 0 && `${s.totalWithoutLeader} team(s) have no active leader. `}
+            Banned, locked or missing leaders pause new work and payouts for their team.
+          </span>
+          <button
+            type="button"
+            onClick={() => setAttentionFilter('leader')}
+            className="rounded-lg border border-amber-400/30 px-3 py-1 text-xs text-amber-100 hover:bg-amber-400/10"
+          >
+            Show them
+          </button>
+        </div>
+      )}
 
       <section className="overflow-hidden rounded-2xl border border-white/[0.08] bg-[#14151c]">
         <div className="flex flex-col gap-3 border-b border-white/[0.06] px-4 py-3 sm:flex-row sm:flex-wrap sm:items-center">
@@ -366,15 +464,13 @@ export default function TeamsTab({
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search by team / leader / email…"
+              placeholder="Search team, leader, member, email…"
               className="w-full rounded-xl border border-white/[0.08] bg-white/[0.03] py-2 pl-9 pr-3 text-sm text-white outline-none focus:ring-2 focus:ring-rose-500/15"
             />
           </div>
           <p className="text-xs text-zinc-500 sm:order-last sm:w-full lg:order-none lg:w-auto">
             {teams.length} team{teams.length === 1 ? '' : 's'}
-            {q || statusFilter !== 'all' || verificationFilter !== 'all'
-              ? ` matching filters (of ${data.teams.length})`
-              : ''}
+            {filtersActive ? ` matching filters (of ${data.teams.length})` : ''}
             {selectedIds.size > 0 ? ` · ${selectedIds.size} selected` : ''}
           </p>
           <div className="hidden flex-1 lg:block" />
@@ -387,6 +483,16 @@ export default function TeamsTab({
                 value: verificationFilter,
                 options: verificationOptions,
               },
+              {
+                id: 'type',
+                label: 'Type',
+                value: typeFilter,
+                options: [
+                  { value: 'standard', label: 'Business team' },
+                  { value: 'contractual', label: 'Contract workspace' },
+                ],
+              },
+              { id: 'attention', label: 'Attention', value: attentionFilter, options: ATTENTION_FILTERS },
             ]}
             sort={{
               value: sortBy,
@@ -395,17 +501,23 @@ export default function TeamsTab({
                 { value: 'oldest', label: 'Oldest first' },
                 { value: 'name', label: 'Name A–Z' },
                 { value: 'members', label: 'Most members' },
+                { value: 'wallet', label: 'Largest wallet' },
+                { value: 'attention', label: 'Most flags' },
                 { value: 'lastSeen', label: 'Recently seen' },
               ],
             }}
             onFilterChange={(id, value) => {
               if (id === 'status') setStatusFilter(value);
               if (id === 'verification') setVerificationFilter(value);
+              if (id === 'type') setTypeFilter(value);
+              if (id === 'attention') setAttentionFilter(value);
             }}
             onSortChange={setSortBy}
             onClear={() => {
               setStatusFilter('all');
               setVerificationFilter('all');
+              setTypeFilter('all');
+              setAttentionFilter('all');
               setSortBy('newest');
             }}
           />
@@ -418,7 +530,7 @@ export default function TeamsTab({
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[1040px] text-left text-sm">
+          <table className="w-full min-w-[1240px] text-left text-sm">
             <thead>
               <tr className="border-b border-white/[0.06] bg-[#0f1016] text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
                 <th className="w-12 px-4 py-3">
@@ -433,12 +545,13 @@ export default function TeamsTab({
                     className="h-4 w-4 rounded border-white/20 bg-transparent accent-rose-500"
                   />
                 </th>
-                <th className="px-4 py-3">Team name</th>
+                <th className="px-4 py-3">Team</th>
                 <th className="px-4 py-3">Team leader</th>
-                <th className="px-4 py-3">No. members</th>
-                <th className="px-4 py-3">Verification status</th>
+                <th className="px-4 py-3">Members</th>
+                <th className="px-4 py-3">Team wallet</th>
+                <th className="px-4 py-3">Verification</th>
                 <th className="px-4 py-3">Status</th>
-                <th className="px-4 py-3">Last seen online</th>
+                <th className="px-4 py-3">Last seen</th>
                 <th className="px-4 py-3">Date created</th>
                 <th className="px-4 py-3 text-right">Actions</th>
               </tr>
@@ -447,11 +560,16 @@ export default function TeamsTab({
               {teams.map((team) => {
                 const accountId = String(team.accountId);
                 const isChecked = selectedIds.has(accountId);
+                const contractual = String(team.teamType || 'standard') === 'contractual';
+                const leader = team.leader ?? null;
+                const available = team.wallet?.available ?? team.walletBalance;
+                const held = team.wallet?.held ?? team.frozenBalance ?? 0;
+                const end = teamPenaltyEnd(team);
                 return (
                   <tr
                     key={team.id}
                     onClick={() => open(team, 'overview')}
-                    className={`cursor-pointer border-b border-white/[0.04] text-zinc-300 hover:bg-white/[0.02] ${
+                    className={`cursor-pointer border-b border-white/[0.04] align-top text-zinc-300 hover:bg-white/[0.02] ${
                       isChecked ? 'bg-rose-500/[0.07]' : ''
                     }`}
                   >
@@ -464,21 +582,70 @@ export default function TeamsTab({
                         className="h-4 w-4 rounded border-white/20 bg-transparent accent-rose-500"
                       />
                     </td>
-                    <td className="px-4 py-3 font-medium text-white">{team.name}</td>
-                    <td className="px-4 py-3">{team.leaderName}</td>
+                    <td className="max-w-[260px] px-4 py-3">
+                      <p className="font-medium text-white">{team.name}</p>
+                      <p className="text-[10px] text-zinc-600">
+                        {team.handle ? `@${team.handle} · ` : ''}
+                        {contractual ? 'Contract workspace' : 'Business team'}
+                      </p>
+                      {team.attention?.length ? (
+                        <div className="mt-1 flex flex-wrap gap-1">
+                          {team.attention.map((flag) => (
+                            <span
+                              key={flag.id}
+                              className={`rounded-full border px-1.5 py-0.5 text-[10px] ${attentionChipTone(flag.tone)}`}
+                            >
+                              {flag.label}
+                            </span>
+                          ))}
+                        </div>
+                      ) : null}
+                    </td>
+                    <td className="px-4 py-3">
+                      {leader ? (
+                        <>
+                          <p className="text-white">{leader.name}</p>
+                          <div className="mt-1 flex flex-wrap items-center gap-1 text-[10px]">
+                            <span className={`rounded-full border px-1.5 py-0.5 ${statusChipTone(leader.status)}`}>
+                              {leader.status}
+                            </span>
+                            {leader.merit != null && (
+                              <span className="rounded-full border border-white/10 px-1.5 py-0.5 text-zinc-400">
+                                Merit {leader.merit}
+                              </span>
+                            )}
+                            {leader.forumTimeout && (
+                              <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-1.5 py-0.5 text-amber-200">
+                                Timeout
+                              </span>
+                            )}
+                          </div>
+                        </>
+                      ) : (
+                        <span className="text-xs text-rose-300">{contractual ? 'Client-led' : 'No active leader'}</span>
+                      )}
+                    </td>
                     <td className="px-4 py-3 tabular-nums">{team.memberCount}</td>
+                    <td className="px-4 py-3 tabular-nums">
+                      <p className="text-white">{Number(available || 0).toLocaleString()}</p>
+                      {held > 0 && <p className="text-[10px] text-amber-300">{held.toLocaleString()} held</p>}
+                      {(team.wallet?.contractReserved || 0) > 0 && (
+                        <p className="text-[10px] text-sky-300">{team.wallet?.contractReserved.toLocaleString()} owed to members</p>
+                      )}
+                    </td>
                     <td className="px-4 py-3">{team.verificationStatus}</td>
-                    <td className="px-4 py-3">{team.status}</td>
+                    <td className="px-4 py-3">
+                      <span className={`rounded-full border px-2 py-0.5 text-xs ${statusChipTone(team.status)}`}>{team.status}</span>
+                      {end && <p className="mt-1 text-[10px] text-zinc-500">{end}</p>}
+                    </td>
                     <td className="px-4 py-3 text-xs">{formatDateTime(team.lastSeenAt)}</td>
                     <td className="px-4 py-3 text-xs">{formatDateTime(team.createdAt)}</td>
                     <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
                       <RowActionsMenu
                         status={team.status}
-                        items={buildRowActionItems(team.status, {
-                          hasViolations: (team.history?.totalViolations ?? 0) > 0,
-                          forumTimeout: team.forumTimeout,
-                          capabilities,
-                        })}
+                        statusLabel="Team status"
+                        sectionLabels={{ primary: 'Team', manage: 'Enforcement' }}
+                        items={buildTeamRowActionItems(team, capabilities)}
                         onAction={(id) => handleAction(team, id)}
                       />
                     </td>
@@ -487,7 +654,7 @@ export default function TeamsTab({
               })}
               {teams.length === 0 && (
                 <tr>
-                  <td colSpan={9} className="px-4 py-12 text-center text-zinc-500">
+                  <td colSpan={10} className="px-4 py-12 text-center text-zinc-500">
                     No teams match your search or filters.
                   </td>
                 </tr>
@@ -508,6 +675,9 @@ export default function TeamsTab({
             capabilities.canVerification ? () => open(selected, 'verification') : undefined
           }
           onOpenHistory={() => open(selected, 'history')}
+          onOpenTransfer={
+            capabilities.canTransferTeams ? () => open(selected, 'transfer') : undefined
+          }
         />
       )}
       {selected && modal === 'credit' && capabilities.canCredits && (
@@ -515,9 +685,10 @@ export default function TeamsTab({
           title={selected.name}
           accountId={selected.accountId}
           activity={selected.creditActivity}
-          totalCredits={selected.stats.totalCredits}
-          frozenBalance={selected.frozenBalance ?? 0}
+          totalCredits={selected.wallet?.available ?? selected.stats.totalCredits}
+          frozenBalance={selected.wallet?.held ?? selected.frozenBalance ?? 0}
           totalRevenue={selected.stats.totalRevenue}
+          teamWallet={selected.wallet}
           onClose={closeModal}
           onChanged={() => void refreshAfterChange()}
         />
@@ -537,6 +708,8 @@ export default function TeamsTab({
           entityName={selected.name}
           accountId={selected.accountId}
           history={selected.history}
+          forTeam
+          leader={selected.leader ?? null}
           onClose={closeModal}
           onChanged={() => void refreshAfterChange()}
         />
@@ -545,27 +718,27 @@ export default function TeamsTab({
         <WarnAccountModal
           entityName={selected.name}
           accountId={selected.accountId}
+          team={{ leader: selected.leader ?? null }}
           onClose={closeModal}
           onChanged={() => void refreshAfterChange()}
         />
       )}
-      {selected &&
-        (modal === 'ban' ||
-          modal === 'suspend' ||
-          modal === 'restore' ||
-          modal === 'lock' ||
-          modal === 'unban' ||
-          modal === 'unsuspend' ||
-          modal === 'unlock' ||
-          modal === 'timeout' ||
-          modal === 'clear_timeout') && (
+      {selected && modal === 'transfer' && capabilities.canTransferTeams && (
+        <TransferTeamOwnershipModal
+          team={selected}
+          onClose={closeModal}
+          onChanged={refreshAfterChange}
+        />
+      )}
+      {selected && statusModal && (
         <ConfirmStatusModal
           entityName={selected.name}
-          action={modal}
+          action={statusModal}
+          team={{ leader: selected.leader ?? null }}
           onClose={closeModal}
           onConfirm={async (options) => {
             try {
-              await setAccountStatus(selected.accountId, modal, options);
+              await setAccountStatus(selected.accountId, statusModal, options);
               await refreshAfterChange();
             } catch (err) {
               handleAccountActionError(err);
@@ -582,14 +755,28 @@ export default function TeamsTab({
           tone={bulkPending.tone}
           onClose={() => setBulkPending(null)}
           requireReason={bulkPending.kind === 'status'}
-          onConfirm={async (reason) => {
+          leaderOption={
+            bulkPending.kind === 'status' && ['ban', 'suspend', 'lock'].includes(bulkPending.action)
+              ? {
+                  label: `Also ${bulkPending.action} each team's leader`,
+                  hint: 'Leaders already at the same or a stricter standing are left as they are. Teams with no leader change alone.',
+                }
+              : bulkPending.kind === 'status' && bulkPending.action === 'restore'
+                ? {
+                    label: 'Also restore leaders whose penalty was set with their team',
+                    hint: 'Only penalties applied together with the team are lifted; other leader penalties stay.',
+                  }
+                : undefined
+          }
+          onConfirm={async (reason, options) => {
             setBulkBusy(true);
             try {
               await runBulkAccountAction(
                 [...selectedIds],
                 bulkPending.kind,
                 bulkPending.action,
-                reason
+                reason,
+                { includeLeader: options?.includeLeader }
               );
               setSelectedIds(new Set());
               await refreshAfterChange();

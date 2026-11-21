@@ -314,6 +314,11 @@ async function getAllJobsRepositories(filters = {}, accountId = null, actorIds =
                       s.updated_at DESC, s.created_at DESC
                     LIMIT 1
                 ), 'Free') as client_subscription_plan,
+                EXISTS (
+                    SELECT 1 FROM verifications v
+                    WHERE v.account_id = j.client_account_id
+                      AND v.is_verified = TRUE
+                ) as client_is_verified,
                 COALESCE((
                     SELECT CASE
                         WHEN LOWER(p.name) = 'business' THEN 90

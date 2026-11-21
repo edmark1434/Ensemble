@@ -272,14 +272,20 @@ const ACCENT_BTN: Record<Accent, string> = {
  * omits `resolutionOptions`; the server list always wins.
  */
 const FALLBACK_RESOLUTIONS: DisputeResolutionOption[] = [
-  { key: "resolved_both_parties", label: "Resolved by both parties", hint: "Both sides agreed on an outcome." },
-  { key: "disputee_refused", label: "Disputee refused to cooperate", hint: "The person named in the dispute would not take part.", requiresNote: true },
-  { key: "disputer_refused", label: "Disputer refused to cooperate", hint: "The person who filed would not take part.", requiresNote: true },
-  { key: "disputer_inactive", label: "Disputer inactive", hint: "The person who filed stopped responding." },
-  { key: "disputee_inactive", label: "Disputee inactive", hint: "The person named in the dispute stopped responding." },
-  { key: "withdrawn", label: "Withdrawn by the disputer", hint: "The person who filed asked to drop the case." },
-  { key: "no_violation", label: "No violation found", hint: "The review found nothing to act on.", requiresNote: true },
+  { key: "resolved_both_parties", label: "Resolved by both parties", hint: "Both sides agreed on an outcome.", escrow: "keep" },
+  { key: "disputee_refused", label: "Disputee refused to cooperate", hint: "The person named in the dispute would not take part.", requiresNote: true, escrow: "disputer" },
+  { key: "disputer_refused", label: "Disputer refused to cooperate", hint: "The person who filed would not take part.", requiresNote: true, escrow: "keep" },
+  { key: "disputer_inactive", label: "Disputer inactive", hint: "The person who filed stopped responding.", escrow: "keep" },
+  { key: "disputee_inactive", label: "Disputee inactive", hint: "The person named in the dispute stopped responding.", escrow: "disputer" },
+  { key: "withdrawn", label: "Withdrawn by the disputer", hint: "The person who filed asked to drop the case.", escrow: "keep" },
+  { key: "no_violation", label: "No violation found", hint: "The review found nothing to act on.", requiresNote: true, escrow: "keep" },
 ];
+
+/** What an outcome does with frozen escrow. An older server without `escrow` falls back to the catalog. */
+function outcomeEscrow(option: DisputeResolutionOption): "keep" | "disputer" {
+  if (option.escrow) return option.escrow;
+  return FALLBACK_RESOLUTIONS.find((item) => item.key === option.key)?.escrow || "keep";
+}
 
 /**
  * Preview of the message the backend posts on resolve. Mirrors the `body` builders in
@@ -400,6 +406,16 @@ const STATUS_OPTIONS = [
 
 const CLOSED_STATUS = "closed";
 
+/**
+ * Steps of the Resolve prompt. While the case holds frozen escrow it starts with the escrow:
+ *   choose → agreed  → outcome (leave escrow as is) | settle (split as agreed)
+ *          → award   (escrow to the disputer) → account (ban or not)
+ *          → settle  (staff ruling)           → account
+ *          → outcome (claim dropped, escrow stays) | dismiss
+ * Without frozen escrow: choose → ban | dismiss | outcome.
+ */
+type ResolveMode = "choose" | "agreed" | "outcome" | "settle" | "award" | "account" | "ban" | "dismiss";
+
 /** How a settlement splits the escrow. Mirrors the `splitMethod` the server accepts. */
 type SettleMethod = "milestones" | "amount" | "both";
 
@@ -495,9 +511,17 @@ export default function ModeratorDisputeDetailModal({
   const [reopenReason, setReopenReason] = useState("");
   const [reopenNotes, setReopenNotes] = useState("");
   const [resolvePromptOpen, setResolvePromptOpen] = useState(false);
-  const [resolveMode, setResolveMode] = useState<"choose" | "outcome" | "settle" | "ban" | "dismiss">(
-    "choose"
-  );
+  const [resolveMode, setResolveMode] = useState<ResolveMode>("choose");
+  /** Which outcomes "Record how this dispute ended" lists (see `outcomeChoices`). */
+  const [outcomeScope, setOutcomeScope] = useState<"all" | "agreed" | "dropped">("all");
+  /** Set when the split is the one both parties agreed on: recorded, and no account step. */
+  const [settleOutcome, setSettleOutcome] = useState<"" | "resolved_both_parties">("");
+  /** Why the escrow goes to the disputer. */
+  const [awardOutcome, setAwardOutcome] = useState("disputee_refused");
+  /** What happens to the disputee's account after an escrow ruling. */
+  const [accountAction, setAccountAction] = useState<"none" | "ban">("none");
+  /** The escrow step the account step follows (and submits with). */
+  const [accountFrom, setAccountFrom] = useState<"award" | "settle">("award");
   const [resolveOutcome, setResolveOutcome] = useState("");
   const [resolveNotes, setResolveNotes] = useState("");
   const [settleClientCredits, setSettleClientCredits] = useState("0");
@@ -524,6 +548,8 @@ export default function ModeratorDisputeDetailModal({
   const [payoutNotes, setPayoutNotes] = useState("");
   const formRef = useRef({ status: "", priority: "", resolutionNotes: "" });
   formRef.current = { status, priority, resolutionNotes };
+  /** When a live message for this case last arrived; the read-back fallback skips if it is recent. */
+  const lastLiveAtRef = useRef(0);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const threadEndRef = useRef<HTMLDivElement | null>(null);
   const composerRef = useRef<HTMLTextAreaElement | null>(null);
@@ -573,6 +599,7 @@ export default function ModeratorDisputeDetailModal({
       if (!matchesRoom(payload)) return;
       const mapped = mapDisputeSocketMessage(payload);
       if (!mapped) return;
+      lastLiveAtRef.current = Date.now();
       const extraMentions =
         payload.mentions && Object.keys(payload.mentions).length ? payload.mentions : null;
       setDetail((current) => {
@@ -611,7 +638,12 @@ export default function ModeratorDisputeDetailModal({
   onUpdatedRef.current = onUpdated;
   useEffect(() => {
     let timer: number | undefined;
+    let fallbackTimer: number | undefined;
+    // Only a change to the case itself moves the desk list; a new reply does not.
+    let notifyParent = false;
     const refreshLive = async () => {
+      const tellParent = notifyParent;
+      notifyParent = false;
       try {
         const res = await api.get(`${endpointBase}/${disputeId}`);
         if (!res.data?.success) return;
@@ -623,22 +655,72 @@ export default function ModeratorDisputeDetailModal({
               form.priority !== toApiToken(previous.priority) ||
               (form.resolutionNotes || "") !== (previous.resolutionNotes || ""))
         );
-        applyDetail(res.data.data as DisputeDetail, { syncForm: !dirty });
-        onUpdatedRef.current?.();
+        const next = res.data.data as DisputeDetail;
+        // A reply this staff member is still sending stays on screen until its POST returns.
+        const sending = (detailRef.current?.messages || []).filter((m) => String(m.id).startsWith("pending-"));
+        applyDetail(sending.length ? { ...next, messages: [...(next.messages || []), ...sending] } : next, {
+          syncForm: !dirty,
+        });
+        if (tellParent) onUpdatedRef.current?.();
       } catch {
         // Keep showing what we have; the next event or a manual action reloads it.
       }
     };
-    const onState = (payload: { disputeId?: string } | null) => {
-      if (!payload || String(payload.disputeId) !== String(disputeId)) return;
+    const schedule = ({ caseChanged }: { caseChanged: boolean }) => {
+      if (caseChanged) notifyParent = true;
       window.clearTimeout(timer);
       timer = window.setTimeout(() => void refreshLive(), 250);
     };
+    const onState = (payload: { disputeId?: string } | null) => {
+      if (!payload || String(payload.disputeId) !== String(disputeId)) return;
+      schedule({ caseChanged: true });
+    };
+    // Reaches every staff console. New replies normally arrive on their own (`disputeMessage`,
+    // through the staff room below). If one did not come with this notice, read the case back.
+    const onStaffCase = (payload: { kind?: string; id?: string; reason?: string | null } | null) => {
+      if (payload?.kind !== "dispute" || String(payload.id) !== String(disputeId)) return;
+      if (payload.reason !== "message") {
+        schedule({ caseChanged: true });
+        return;
+      }
+      const heardAt = Date.now();
+      window.clearTimeout(fallbackTimer);
+      fallbackTimer = window.setTimeout(() => {
+        // The reply itself is emitted just before this notice, so a recent arrival counts.
+        if (lastLiveAtRef.current >= heardAt - 3000) return;
+        schedule({ caseChanged: false });
+      }, 1500);
+    };
+    // Staff room for this case: every message and state change, whatever its audience, and
+    // whether or not this staff member is listed on the case's chat.
+    const joinStaffRoom = () => {
+      socket.emit("joinDisputeStaffRoom", { disputeId: String(disputeId) });
+    };
+    let dropped = false;
+    const onDisconnect = () => {
+      dropped = true;
+    };
+    const onConnect = () => {
+      joinStaffRoom();
+      if (!dropped) return;
+      // Replies and decisions made while the socket was down are read back once.
+      dropped = false;
+      schedule({ caseChanged: true });
+    };
     if (!socket.connected) socket.connect();
+    else joinStaffRoom();
+    socket.on("connect", onConnect);
+    socket.on("disconnect", onDisconnect);
     socket.on("disputeUpdated", onState);
+    socket.on("staffCaseChanged", onStaffCase);
     return () => {
       window.clearTimeout(timer);
+      window.clearTimeout(fallbackTimer);
+      socket.off("connect", onConnect);
+      socket.off("disconnect", onDisconnect);
       socket.off("disputeUpdated", onState);
+      socket.off("staffCaseChanged", onStaffCase);
+      socket.emit("leaveDisputeStaffRoom", { disputeId: String(disputeId) });
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [disputeId, endpointBase]);
@@ -747,6 +829,9 @@ export default function ModeratorDisputeDetailModal({
     try {
       const res = await api.post(`${endpointBase}/${disputeId}/financial-resolution`, body);
       showSuccessToast(successMsg);
+      // The money ruling went through but a follow-up step (the ban) did not.
+      const warning = (res.data?.data as DisputeDetail | undefined)?.warning;
+      if (warning) showErrorToast(warning);
       onUpdated();
       if (closeOnSuccess) {
         onClose();
@@ -765,40 +850,90 @@ export default function ModeratorDisputeDetailModal({
     }
   };
 
-  const confirmSettleEscrow = async () => {
-    if (settleSplit.error) {
+  /** Notes and payout date shared by every escrow ruling; null when both are fine. */
+  const escrowFormError = () => {
+    if (settleNotes.trim().length < 8) return "Resolution notes must be at least 8 characters.";
+    return payoutTimingError(settleTiming, payoutPolicy);
+  };
+
+  /** Escrow decided: ask what happens to the disputee's account before anything is sent. */
+  const goToAccountStep = (from: "award" | "settle") => {
+    if (from === "settle" && settleSplit.error) {
       showErrorToast(settleSplit.error);
       return;
     }
-    const { client: clientCredits, freelancer: freelancerCredits } = settleSplit;
-    if (settleNotes.trim().length < 8) {
-      showErrorToast("Resolution notes must be at least 8 characters.");
+    const formError = escrowFormError();
+    if (formError) {
+      showErrorToast(formError);
       return;
     }
-    const timingError = payoutTimingError(settleTiming, payoutPolicy);
-    if (timingError) {
-      showErrorToast(timingError);
+    // A refusal points to a ban; a split ruling or a party who went quiet does not.
+    const suggestBan = from === "award" && awardOutcome === "disputee_refused" && canBanDisputee;
+    setAccountFrom(from);
+    setAccountAction(suggestBan ? "ban" : "none");
+    if (suggestBan && !banReason.trim() && dispute) {
+      setBanReason(
+        `Refused to take part in the review of dispute ${dispute.number || ""} while holding the escrow on the contract.`.replace(
+          /\s{2,}/g,
+          " "
+        )
+      );
+    }
+    setResolveMode("account");
+  };
+
+  /**
+   * Send the escrow ruling, with the account action when there is one. `award` lets the server
+   * split everything to the disputer; `settle` sends the split staff picked.
+   */
+  const submitSettlement = async (from: "award" | "settle") => {
+    if (from === "settle" && settleSplit.error) {
+      showErrorToast(settleSplit.error);
       return;
     }
+    const formError = escrowFormError();
+    if (formError) {
+      showErrorToast(formError);
+      return;
+    }
+    // An agreed split never bans; the award and a staff ruling may.
+    const banning = accountAction === "ban" && (from === "award" || !settleOutcome);
+    if (banning && banReason.trim().length < 8) {
+      showErrorToast("Write the ban reason the member will see (at least 8 characters).");
+      return;
+    }
+    const body: Record<string, unknown> =
+      from === "award"
+        ? { action: "settle_escrow", award: "disputer", outcome: awardOutcome }
+        : {
+            action: "settle_escrow",
+            clientCredits: settleSplit.client,
+            freelancerCredits: settleSplit.freelancer,
+            splitMethod: settleMethod,
+            milestoneIds: settleMethod === "amount" ? [] : pickedMilestones.map((milestone) => milestone.id),
+            ...(settleOutcome ? { outcome: settleOutcome } : {}),
+          };
+    body.resolutionNotes = settleNotes.trim();
+    Object.assign(body, payoutTimingBody(settleTiming, payoutPolicy));
+    if (banning) {
+      body.accountAction = "ban";
+      body.banReason = banReason.trim();
+    }
+    const paid = settleTiming.mode === "now" ? "paid out" : "payout scheduled";
     const ok = await postFinancial(
-      {
-        action: "settle_escrow",
-        clientCredits,
-        freelancerCredits,
-        splitMethod: settleMethod,
-        milestoneIds: settleMethod === "amount" ? [] : pickedMilestones.map((milestone) => milestone.id),
-        resolutionNotes: settleNotes.trim(),
-        ...payoutTimingBody(settleTiming, payoutPolicy),
-      },
-      settleTiming.mode === "now"
-        ? "Escrow settled and paid out — dispute closed"
-        : "Escrow settled, payout scheduled — dispute closed",
+      body,
+      banning
+        ? `Escrow settled, ${paid}, and @${dispute?.respondent.username || "the disputee"} banned. Dispute closed`
+        : from === "award"
+          ? `Escrow returned to the disputer, ${paid}. Dispute closed`
+          : `Escrow settled, ${paid}. Dispute closed`,
       "Failed to settle escrow",
       { closeOnSuccess: true }
     );
     if (!ok) return;
     setResolvePromptOpen(false);
     setResolveMode("choose");
+    setBanReason("");
   };
 
   const confirmReverseTransaction = async () => {
@@ -1063,7 +1198,12 @@ export default function ModeratorDisputeDetailModal({
   const confirmDismiss = async () => {
     const notes = resolveNotes.trim();
     const ok = await runAction(
-      { action: "dismiss", resolution_notes: notes || null },
+      {
+        action: "dismiss",
+        resolution_notes: notes || null,
+        // Frozen escrow stays with the contract; the server needs that said out loud.
+        ...(escrowFirst ? { escrow: "keep" } : {}),
+      },
       "Dispute dismissed and closed",
       { closeOnSuccess: true }
     );
@@ -1109,8 +1249,12 @@ export default function ModeratorDisputeDetailModal({
   };
 
   const openResolve = () => {
-    const remaining = Number(detail?.dispute?.creditAmount || 0);
+    const remaining = escrowRemaining;
     setResolveMode("choose");
+    setOutcomeScope("all");
+    setSettleOutcome("");
+    setAwardOutcome("disputee_refused");
+    setAccountAction("none");
     setResolveOutcome("");
     setResolveNotes(resolutionNotes || "");
     // Approved milestones start (and stay) with the freelancer; the rest starts as a refund.
@@ -1135,7 +1279,7 @@ export default function ModeratorDisputeDetailModal({
   };
 
   const confirmResolve = async () => {
-    const choice = resolutionOptions.find((option) => option.key === resolveOutcome);
+    const choice = outcomeChoices.find((option) => option.key === resolveOutcome);
     if (!choice) {
       showErrorToast("Pick how this dispute ended");
       return;
@@ -1146,7 +1290,13 @@ export default function ModeratorDisputeDetailModal({
       return;
     }
     const ok = await runAction(
-      { action: "resolve", outcome: choice.key, resolution_notes: notes || null },
+      {
+        action: "resolve",
+        outcome: choice.key,
+        resolution_notes: notes || null,
+        // Frozen escrow stays with the contract; the server needs that said out loud.
+        ...(escrowFirst ? { escrow: "keep" } : {}),
+      },
       `Dispute closed — ${choice.label.toLowerCase()}`,
       { closeOnSuccess: true }
     );
@@ -1161,18 +1311,24 @@ export default function ModeratorDisputeDetailModal({
   const banned = String(dispute?.sanctionType || "").toLowerCase() === "ban";
   // Filed after the contract ended: its milestone payments are final, so no settle or reversal.
   const conductOnly = Boolean(dispute?.conductOnly);
-  const canSettle = Boolean(
+  // Credits the case still holds in escrow: the server's live figure, else the frozen amount.
+  const escrowRemaining = Number(detail?.escrowPending ?? dispute?.creditAmount ?? 0);
+  // Escrow first: while credits are frozen, Resolve decides where they go before anything else,
+  // and the server refuses to close or ban the case any other way.
+  const escrowFirst = Boolean(
     dispute &&
       canDecide &&
       !closed &&
       !conductOnly &&
       !dispute.financialResolution &&
-      Number(dispute.creditAmount || 0) > 0
+      escrowRemaining > 0
   );
   const canDismiss = Boolean(
     dispute && canDecide && adminMode && !closed && toApiToken(dispute.status) === "pending_review"
   );
-  const canBan = Boolean(dispute && canDecide && !closed && !banned);
+  // A plain ban only once no escrow is frozen; otherwise it follows the escrow ruling.
+  const canBan = Boolean(dispute && canDecide && !closed && !banned && !escrowFirst);
+  const canBanDisputee = Boolean(dispute?.respondent?.accountId && !banned);
   const canSwapParties = Boolean(
     dispute &&
       canDecide &&
@@ -1199,8 +1355,7 @@ export default function ModeratorDisputeDetailModal({
     ? `@${linkedContract.freelancerHandle}`
     : linkedContract?.freelancerName || "the freelancer";
 
-  // Settlement must hand out every remaining escrow credit, so nothing is stranded.
-  const escrowRemaining = Number(dispute?.creditAmount || 0);
+  // Settlement must hand out every remaining escrow credit (`escrowRemaining`), so nothing is stranded.
   // The linked contract's milestones, by where their credits stand.
   const settleMilestones = (linkedContract?.milestones || [])
     .filter((milestone) => milestone.credits > 0)
@@ -1309,7 +1464,37 @@ export default function ModeratorDisputeDetailModal({
     detail?.reopenOptions && detail.reopenOptions.length
       ? detail.reopenOptions
       : FALLBACK_REOPEN_REASONS;
-  const selectedResolution = resolutionOptions.find((option) => option.key === resolveOutcome);
+  // While escrow is frozen, a plain outcome may only leave it with the contract: "agreed" is the
+  // one both sides reached, "dropped" the ones where the claim goes nowhere.
+  const outcomeChoices = resolutionOptions.filter((option) => {
+    if (outcomeScope === "agreed") return option.key === "resolved_both_parties";
+    if (!escrowFirst) return true;
+    if (outcomeEscrow(option) !== "keep") return false;
+    return outcomeScope !== "dropped" || option.key !== "resolved_both_parties";
+  });
+  /** Why the escrow goes to the disputer (the disputee would not take part). */
+  const awardChoices = resolutionOptions.filter((option) => outcomeEscrow(option) === "disputer");
+  const selectedResolution = outcomeChoices.find((option) => option.key === resolveOutcome);
+  // Where an award to the disputer lands. The server works it out from the contract; this
+  // preview uses the same rule: approved milestones stay with the freelancer.
+  const disputerRole = contractRoleOf(dispute?.initiator?.username);
+  const awardSplit =
+    disputerRole === "Client"
+      ? { client: escrowRemaining - approvedFloor, freelancer: approvedFloor }
+      : disputerRole === "Freelancer"
+        ? { client: 0, freelancer: escrowRemaining }
+        : null;
+  const awardReady = !escrowFormError();
+  const disputeeLabel = dispute?.respondent?.username ? `@${dispute.respondent.username}` : "the disputee";
+  const disputerLabel = dispute?.initiator?.username ? `@${dispute.initiator.username}` : "the disputer";
+  /** The escrow ruling the account step confirms, in one line per side. */
+  const rulingSplit = accountFrom === "award" ? awardSplit : settleSplit;
+  const backFrom = (mode: ResolveMode): ResolveMode => {
+    if (mode === "account") return accountFrom;
+    if (mode === "outcome") return outcomeScope === "agreed" ? "agreed" : "choose";
+    if (mode === "settle") return settleOutcome ? "agreed" : "choose";
+    return "choose";
+  };
   const selectedReopen = reopenOptions.find((option) => option.key === reopenReason);
   const selectedAudience = replyAudienceOptions.find((option) => option.value === replyAudience);
   const messageById = new Map((detail?.messages || []).map((item) => [String(item.id), item]));
@@ -2156,22 +2341,50 @@ export default function ModeratorDisputeDetailModal({
           <ConfirmDialog
             title={
               resolveMode === "settle"
-                ? "Settle frozen escrow"
-                : resolveMode === "ban"
-                  ? "Permanent ban"
-                  : resolveMode === "dismiss"
-                    ? "Dismiss this dispute"
-                    : resolveMode === "outcome"
-                      ? "Record how this dispute ended"
-                      : "Resolve this dispute"
+                ? settleOutcome
+                  ? "Split the escrow as agreed"
+                  : "Staff ruling: split the escrow"
+                : resolveMode === "agreed"
+                  ? "Both parties agreed"
+                  : resolveMode === "award"
+                    ? "Escrow goes to the disputer"
+                    : resolveMode === "account"
+                      ? `What happens to ${disputeeLabel}'s account?`
+                      : resolveMode === "ban"
+                        ? "Permanent ban"
+                        : resolveMode === "dismiss"
+                          ? "Dismiss this dispute"
+                          : resolveMode === "outcome"
+                            ? outcomeScope === "agreed"
+                              ? "Leave the escrow with the contract"
+                              : "Record how this dispute ended"
+                            : "Resolve this dispute"
             }
             description={
               resolveMode === "settle" ? (
                 <>
                   Split all {escrowRemaining.toLocaleString()} frozen escrow credits between{" "}
                   {clientLabel} (client refund) and {freelancerLabel} (freelancer release), by
-                  milestone, by amount, or both. This closes the dispute and posts the ruling in the
-                  discussion.
+                  milestone, by amount, or both.{" "}
+                  {settleOutcome
+                    ? "Record the split both parties agreed on. This closes the dispute and posts the ruling in the discussion."
+                    : `Next you decide what happens to ${disputeeLabel}'s account.`}
+                </>
+              ) : resolveMode === "agreed" ? (
+                <>
+                  Leave the {escrowRemaining.toLocaleString()} frozen credits with the contract, or split
+                  them the way both sides agreed.
+                </>
+              ) : resolveMode === "award" ? (
+                <>
+                  {disputeeLabel} did not take part, so all {escrowRemaining.toLocaleString()} frozen
+                  credits go to {disputerLabel}&apos;s side of the contract. Next you decide what happens
+                  to {disputeeLabel}&apos;s account.
+                </>
+              ) : resolveMode === "account" ? (
+                <>
+                  The escrow is decided. Nothing is sent until you confirm here. The escrow ruling and
+                  the account action go through together.
                 </>
               ) : resolveMode === "ban" ? (
                 <>
@@ -2189,6 +2402,12 @@ export default function ModeratorDisputeDetailModal({
                   Pick how the case ended. The outcome is recorded on the dispute and posted in the
                   discussion so both sides see why it closed.
                 </>
+              ) : escrowFirst ? (
+                <>
+                  Escrow comes first. {escrowRemaining.toLocaleString()} credits are frozen on this
+                  contract. Decide where they go before anything else. A ban is offered once they are
+                  settled.
+                </>
               ) : (
                 <>
                   Choose how to close this case. Escrow settlement and permanent ban live here — they
@@ -2198,19 +2417,29 @@ export default function ModeratorDisputeDetailModal({
             }
             confirmLabel={
               resolveMode === "settle"
-                ? settleTiming.mode === "now"
-                  ? "Settle and pay now"
-                  : "Settle and schedule payout"
-                : resolveMode === "ban"
-                  ? "Ban permanently"
-                  : resolveMode === "dismiss"
-                    ? "Dismiss dispute"
-                    : resolveMode === "outcome"
-                      ? "Close dispute"
-                      : "Continue"
+                ? settleOutcome
+                  ? settleTiming.mode === "now"
+                    ? "Settle and pay now"
+                    : "Settle and schedule payout"
+                  : "Next: the account"
+                : resolveMode === "award"
+                  ? "Next: the account"
+                  : resolveMode === "account"
+                    ? accountAction === "ban"
+                      ? "Settle and ban"
+                      : settleTiming.mode === "now"
+                        ? "Settle and pay now"
+                        : "Settle and schedule payout"
+                    : resolveMode === "ban"
+                      ? "Ban permanently"
+                      : resolveMode === "dismiss"
+                        ? "Dismiss dispute"
+                        : resolveMode === "outcome"
+                          ? "Close dispute"
+                          : "Continue"
             }
             busyLabel={
-              resolveMode === "settle"
+              resolveMode === "settle" || resolveMode === "account"
                 ? "Settling…"
                 : resolveMode === "ban"
                   ? "Banning…"
@@ -2221,34 +2450,46 @@ export default function ModeratorDisputeDetailModal({
                       : "Working…"
             }
             busy={saving}
-            hideConfirm={resolveMode === "choose"}
+            hideConfirm={resolveMode === "choose" || resolveMode === "agreed"}
             cancelLabel={resolveMode === "choose" ? "Cancel" : "Back"}
             confirmDisabled={
               resolveMode === "settle"
                 ? !settleReady
-                : resolveMode === "ban"
-                  ? !banReason.trim()
-                  : resolveMode === "outcome"
-                    ? !selectedResolution ||
-                      (Boolean(selectedResolution?.requiresNote) && !resolveNotes.trim())
-                    : false
+                : resolveMode === "award"
+                  ? !awardReady
+                  : resolveMode === "account"
+                    ? accountAction === "ban" && banReason.trim().length < 8
+                    : resolveMode === "ban"
+                      ? !banReason.trim()
+                      : resolveMode === "outcome"
+                        ? !selectedResolution ||
+                          (Boolean(selectedResolution?.requiresNote) && !resolveNotes.trim())
+                        : false
             }
             confirmClassName={
-              resolveMode === "settle"
+              resolveMode === "settle" || resolveMode === "award"
                 ? BTN.warn
-                : resolveMode === "ban"
-                  ? BTN.danger
-                  : resolveMode === "dismiss"
-                    ? BTN.neutral
-                    : BTN.success
+                : resolveMode === "account"
+                  ? accountAction === "ban"
+                    ? BTN.danger
+                    : BTN.warn
+                  : resolveMode === "ban"
+                    ? BTN.danger
+                    : resolveMode === "dismiss"
+                      ? BTN.neutral
+                      : BTN.success
             }
             onCancel={
               resolveMode === "choose"
                 ? closeResolvePrompt
-                : () => setResolveMode("choose")
+                : () => setResolveMode(backFrom(resolveMode))
             }
             onConfirm={() => {
-              if (resolveMode === "settle") void confirmSettleEscrow();
+              if (resolveMode === "settle") {
+                if (settleOutcome) void submitSettlement("settle");
+                else goToAccountStep("settle");
+              } else if (resolveMode === "award") goToAccountStep("award");
+              else if (resolveMode === "account") void submitSettlement(accountFrom);
               else if (resolveMode === "ban") void confirmBan();
               else if (resolveMode === "dismiss") void confirmDismiss();
               else if (resolveMode === "outcome") void confirmResolve();
@@ -2265,20 +2506,73 @@ export default function ModeratorDisputeDetailModal({
                     </span>
                   </p>
                 ) : null}
-                {canSettle ? (
-                  <button
-                    type="button"
-                    disabled={saving}
-                    onClick={() => setResolveMode("settle")}
-                    className="w-full rounded-xl border border-amber-500/25 bg-amber-500/10 px-3 py-3 text-left transition hover:bg-amber-500/15"
-                  >
-                    <p className="text-sm font-medium text-amber-100">Settle escrow</p>
-                    <p className="mt-1 text-[11px] leading-relaxed text-amber-100/70">
-                      {dispute.creditAmount.toLocaleString()} credits are still frozen. Pick which
-                      milestones the freelancer is paid for, split by amount, or both. Paid out in{" "}
-                      {payoutPolicy.defaultDays} days by default, or now, or on a date you pick.
-                    </p>
-                  </button>
+                {escrowFirst ? (
+                  <>
+                    <button
+                      type="button"
+                      disabled={saving}
+                      onClick={() => setResolveMode("agreed")}
+                      className="w-full rounded-xl border border-emerald-500/25 bg-emerald-500/10 px-3 py-3 text-left transition hover:bg-emerald-500/15"
+                    >
+                      <p className="text-sm font-medium text-emerald-100">Both parties agreed</p>
+                      <p className="mt-1 text-[11px] leading-relaxed text-emerald-100/70">
+                        Leave the escrow with the contract, or split it the way they agreed. No account
+                        action.
+                      </p>
+                    </button>
+
+                    <button
+                      type="button"
+                      disabled={saving || !awardChoices.length}
+                      onClick={() => {
+                        setSettleOutcome("");
+                        setAwardOutcome(awardChoices[0]?.key || "disputee_refused");
+                        setResolveMode("award");
+                      }}
+                      className="w-full rounded-xl border border-red-500/25 bg-red-500/10 px-3 py-3 text-left transition hover:bg-red-500/15 disabled:opacity-50"
+                    >
+                      <p className="text-sm font-medium text-red-100">Disputee did not cooperate</p>
+                      <p className="mt-1 text-[11px] leading-relaxed text-red-100/70">
+                        {disputeeLabel} refused or stopped responding. The escrow returns to{" "}
+                        {disputerLabel}. Then you decide what happens to {disputeeLabel}&apos;s account
+                        (permanent ban, or no action).
+                      </p>
+                    </button>
+
+                    <button
+                      type="button"
+                      disabled={saving}
+                      onClick={() => {
+                        setSettleOutcome("");
+                        setResolveMode("settle");
+                      }}
+                      className="w-full rounded-xl border border-amber-500/25 bg-amber-500/10 px-3 py-3 text-left transition hover:bg-amber-500/15"
+                    >
+                      <p className="text-sm font-medium text-amber-100">Staff ruling: split the escrow</p>
+                      <p className="mt-1 text-[11px] leading-relaxed text-amber-100/70">
+                        Pick which milestones the freelancer is paid for, split by amount, or both. Paid
+                        out in {payoutPolicy.defaultDays} days by default, or now, or on a date you pick.
+                        Then the account step.
+                      </p>
+                    </button>
+
+                    <button
+                      type="button"
+                      disabled={saving}
+                      onClick={() => {
+                        setOutcomeScope("dropped");
+                        setResolveOutcome("");
+                        setResolveMode("outcome");
+                      }}
+                      className="w-full rounded-xl border border-white/10 bg-white/[0.03] px-3 py-3 text-left transition hover:bg-white/[0.06]"
+                    >
+                      <p className="text-sm font-medium text-zinc-100">Claim dropped</p>
+                      <p className="mt-1 text-[11px] leading-relaxed text-zinc-400">
+                        Withdrawn, the disputer refused or went quiet, or no violation was found. The escrow
+                        stays with the contract and both parties choose whether to continue it.
+                      </p>
+                    </button>
+                  </>
                 ) : null}
 
                 {canBan ? (
@@ -2305,30 +2599,228 @@ export default function ModeratorDisputeDetailModal({
                   >
                     <p className="text-sm font-medium text-zinc-100">Dismiss dispute</p>
                     <p className="mt-1 text-[11px] leading-relaxed text-zinc-400">
-                      Close without settling money or banning anyone.
+                      {escrowFirst
+                        ? "Close without banning anyone. The escrow stays with the contract."
+                        : "Close without settling money or banning anyone."}
                     </p>
                   </button>
                 ) : null}
 
+                {!escrowFirst ? (
+                  <button
+                    type="button"
+                    disabled={saving}
+                    onClick={() => {
+                      setOutcomeScope("all");
+                      setResolveMode("outcome");
+                    }}
+                    className="w-full rounded-xl border border-emerald-500/25 bg-emerald-500/10 px-3 py-3 text-left transition hover:bg-emerald-500/15"
+                  >
+                    <p className="text-sm font-medium text-emerald-100">Record an outcome</p>
+                    <p className="mt-1 text-[11px] leading-relaxed text-emerald-100/70">
+                      Close the case with a written outcome for both parties. Use this when money was
+                      already handled or no escrow split is needed.
+                    </p>
+                  </button>
+                ) : null}
+              </div>
+            ) : null}
+
+            {resolveMode === "agreed" ? (
+              <div className="space-y-2">
                 <button
                   type="button"
                   disabled={saving}
-                  onClick={() => setResolveMode("outcome")}
+                  onClick={() => {
+                    setOutcomeScope("agreed");
+                    setResolveOutcome("resolved_both_parties");
+                    setResolveMode("outcome");
+                  }}
                   className="w-full rounded-xl border border-emerald-500/25 bg-emerald-500/10 px-3 py-3 text-left transition hover:bg-emerald-500/15"
                 >
-                  <p className="text-sm font-medium text-emerald-100">Record an outcome</p>
+                  <p className="text-sm font-medium text-emerald-100">Leave the escrow as is</p>
                   <p className="mt-1 text-[11px] leading-relaxed text-emerald-100/70">
-                    Close the case with a written outcome for both parties. Use this when money was
-                    already handled or no escrow split is needed.
+                    No credits move. The {escrowRemaining.toLocaleString()} credits stay with the contract,
+                    and both parties are asked whether to continue it or end it. If nobody ends it in
+                    time, it continues.
+                  </p>
+                </button>
+                <button
+                  type="button"
+                  disabled={saving}
+                  onClick={() => {
+                    setSettleOutcome("resolved_both_parties");
+                    setResolveMode("settle");
+                  }}
+                  className="w-full rounded-xl border border-amber-500/25 bg-amber-500/10 px-3 py-3 text-left transition hover:bg-amber-500/15"
+                >
+                  <p className="text-sm font-medium text-amber-100">Split it as agreed</p>
+                  <p className="mt-1 text-[11px] leading-relaxed text-amber-100/70">
+                    They agreed how the escrow is shared. Record that split. The contract ends when it
+                    is ruled.
                   </p>
                 </button>
               </div>
             ) : null}
 
+            {resolveMode === "award" ? (
+              <>
+                <OutcomePicker
+                  options={awardChoices}
+                  value={awardOutcome}
+                  onChange={setAwardOutcome}
+                  disabled={saving}
+                  label="How the disputee failed to take part"
+                  activeClassName="border-red-500/40 bg-red-500/15"
+                />
+                <div className="grid grid-cols-2 gap-2 rounded-lg border border-white/10 bg-white/[0.02] px-3 py-2 text-[11px]">
+                  <p className="text-zinc-500">
+                    Client refund · {clientLabel}
+                    <span className="block text-sm tabular-nums text-amber-100">
+                      {awardSplit ? awardSplit.client.toLocaleString() : "—"}
+                    </span>
+                  </p>
+                  <p className="text-zinc-500">
+                    Freelancer release · {freelancerLabel}
+                    <span className="block text-sm tabular-nums text-sky-100">
+                      {awardSplit ? awardSplit.freelancer.toLocaleString() : "—"}
+                    </span>
+                  </p>
+                </div>
+                {awardSplit && disputerRole === "Client" && approvedFloor > 0 ? (
+                  <p className="flex items-start gap-2 rounded-lg border border-sky-500/25 bg-sky-500/5 px-3 py-2 text-[11px] leading-relaxed text-sky-100">
+                    <Lock className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                    <span>
+                      {approvedFloor.toLocaleString()} credits are for approved milestones (
+                      {approvedMilestones.map(milestoneName).join(", ")}). They still go to {freelancerLabel}
+                      ; the rest is refunded to {clientLabel}.
+                    </span>
+                  </p>
+                ) : null}
+                {!awardSplit ? (
+                  <p className="rounded-lg border border-amber-500/25 bg-amber-500/5 px-3 py-2 text-[11px] leading-relaxed text-amber-100">
+                    The console could not match {disputerLabel} to the client or the freelancer. The server
+                    checks the contract when you confirm. If {disputerLabel} is neither, use a staff ruling
+                    instead.
+                  </p>
+                ) : null}
+                <PayoutTimingPicker
+                  value={settleTiming}
+                  onChange={setSettleTiming}
+                  policy={payoutPolicy}
+                  disabled={saving}
+                  label={`When ${disputerLabel} receives the credits`}
+                />
+                <label className="block space-y-1 text-[11px] text-zinc-500">
+                  <span>Resolution notes (at least 8 characters, both parties read this)</span>
+                  <textarea
+                    value={settleNotes}
+                    onChange={(event) => setSettleNotes(event.target.value)}
+                    rows={3}
+                    maxLength={2000}
+                    placeholder={`What ${disputeeLabel} was asked for, and how they failed to answer.`}
+                    className={`${FIELD} resize-none`}
+                  />
+                </label>
+                <ul className="space-y-1 rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-[11px] leading-relaxed text-zinc-400">
+                  <li>{payoutTimingSummary(settleTiming, payoutPolicy)}</li>
+                  <li>
+                    {settleTiming.mode === "now"
+                      ? "The contract ends now and its unfinished milestones are cancelled."
+                      : "The contract ends now; its unfinished milestones are cancelled and the credits stay locked until the payout."}
+                  </li>
+                  <li>The ruling is posted in the discussion and both sides are notified.</li>
+                </ul>
+              </>
+            ) : null}
+
+            {resolveMode === "account" ? (
+              <>
+                <ul className="space-y-1 rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-[11px] leading-relaxed text-zinc-400">
+                  <li className="font-semibold text-zinc-300">
+                    {accountFrom === "award"
+                      ? `Escrow returns to ${disputerLabel}`
+                      : "Escrow split by staff ruling"}
+                  </li>
+                  {rulingSplit && rulingSplit.client > 0 ? (
+                    <li>
+                      {clientLabel} gets {rulingSplit.client.toLocaleString()} credits back.
+                    </li>
+                  ) : null}
+                  {rulingSplit && rulingSplit.freelancer > 0 ? (
+                    <li>
+                      {freelancerLabel} receives {rulingSplit.freelancer.toLocaleString()} credits.
+                    </li>
+                  ) : null}
+                  <li>{payoutTimingSummary(settleTiming, payoutPolicy)}</li>
+                </ul>
+                <div className="space-y-1.5" role="radiogroup" aria-label={`${disputeeLabel}'s account`}>
+                  {(
+                    [
+                      {
+                        value: "ban",
+                        label: "Permanent ban",
+                        hint: `${disputeeLabel} is banned from Ensemble. Their open jobs, gigs and listings close and pending proposals and orders are withdrawn. The case becomes public. Appeal only.`,
+                        disabled: !canBanDisputee,
+                        active: "border-red-500/40 bg-red-500/15",
+                      },
+                      {
+                        value: "none",
+                        label: "No account action",
+                        hint: `${disputeeLabel} keeps their account. Use this when they went quiet rather than refused, or a ban is too severe.`,
+                        disabled: false,
+                        active: "border-white/25 bg-white/[0.06]",
+                      },
+                    ] as const
+                  ).map((option) => {
+                    const active = accountAction === option.value;
+                    return (
+                      <button
+                        key={option.value}
+                        type="button"
+                        role="radio"
+                        aria-checked={active}
+                        disabled={saving || option.disabled}
+                        onClick={() => setAccountAction(option.value)}
+                        className={`w-full rounded-lg border px-3 py-2 text-left transition disabled:opacity-50 ${
+                          active ? option.active : "border-white/10 hover:border-white/25 hover:bg-white/[0.04]"
+                        }`}
+                      >
+                        <span className={`block text-xs font-semibold ${active ? "text-white" : "text-zinc-200"}`}>
+                          {option.label}
+                        </span>
+                        <span className="mt-0.5 block text-[11px] text-zinc-400">{option.hint}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+                {!canBanDisputee ? (
+                  <p className="text-[11px] text-zinc-500">
+                    {banned
+                      ? `${disputeeLabel} is already banned from an earlier decision on this case.`
+                      : "This dispute has no disputee account to ban."}
+                  </p>
+                ) : null}
+                {accountAction === "ban" ? (
+                  <label className="block space-y-1 text-[11px] text-zinc-500">
+                    <span>Reason shown to {disputeeLabel} (at least 8 characters)</span>
+                    <textarea
+                      value={banReason}
+                      onChange={(event) => setBanReason(event.target.value)}
+                      rows={3}
+                      maxLength={2000}
+                      placeholder="Why this account is banned"
+                      className={`${FIELD} resize-none`}
+                    />
+                  </label>
+                ) : null}
+              </>
+            ) : null}
+
             {resolveMode === "outcome" ? (
               <>
                 <OutcomePicker
-                  options={resolutionOptions}
+                  options={outcomeChoices}
                   value={resolveOutcome}
                   onChange={setResolveOutcome}
                   disabled={saving}
@@ -2366,11 +2858,12 @@ export default function ModeratorDisputeDetailModal({
                     ) : null}
                   </div>
                 ) : null}
-                {escrowRemaining > 0 && !conductOnly ? (
+                {escrowFirst ? (
                   <p className="rounded-lg border border-amber-500/25 bg-amber-500/5 px-3 py-2 text-[11px] leading-relaxed text-amber-100">
-                    {escrowRemaining.toLocaleString()} credits are still frozen. Closing without settling
-                    unfreezes them and the contract carries on as before. Use Settle escrow if the money
-                    should be split.
+                    No credits move. The {escrowRemaining.toLocaleString()} frozen credits stay with the
+                    contract, and both parties are asked whether to continue it or end it. The ruling
+                    posted in the discussion says so. If the money should be split, go back and pick a
+                    split instead.
                   </p>
                 ) : null}
               </>

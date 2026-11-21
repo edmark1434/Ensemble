@@ -299,7 +299,7 @@ export default function OverviewTab({ data, onOpenTab, onOpenWallet, onOpenTrans
                         {e.isAdjustment ? entrySubtitle(e) : `${e.source.name} → ${e.destination.name}`}
                       </span>
                     </span>
-                    {e.status !== 'Completed' && <StatusPill status={e.status} />}
+                    <StatusPill status={e.status} />
                     <span className="w-24 text-right">
                       <LedgerAmount entry={e} />
                       <span className="block text-[10px] text-zinc-600" title={formatDateTime(e.createdAt)}>

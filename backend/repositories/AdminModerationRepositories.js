@@ -1092,6 +1092,7 @@ async function updatePendingCase(caseId, body, session) {
       values
     );
     if (!result.rows.length) throw new Error('Dispute not found');
+    await broadcastDisputeChange(id);
     return { id, source, updated: true };
   }
 
@@ -1188,6 +1189,8 @@ async function deletePendingCase(caseId, body, session) {
       [id]
     );
     if (!result.rows.length) throw new Error('Dispute not found');
+    // Deleted cases are gone from every read, so only the staff queues need telling.
+    require('../lib/WebSocket').emitStaffCaseChange({ kind: 'dispute', id, reason: 'deleted' });
     return { id, source, deleted: true };
   }
 
@@ -1225,6 +1228,18 @@ async function deletePendingCase(caseId, body, session) {
   }
 
   throw new Error(`Cannot delete ${source} cases from this queue — resolve or update them instead`);
+}
+
+/**
+ * After a dispute row is saved here: sync its contract hold, then tell the parties, the public
+ * page and the staff desks (`emitDisputeState`). A failed broadcast never fails the write.
+ */
+async function broadcastDisputeChange(disputeId, reason = null) {
+  try {
+    await require('./DisputeChatRepositories').emitDisputeState(disputeId, { reason });
+  } catch (error) {
+    console.warn('Dispute change broadcast skipped:', error.message);
+  }
 }
 
 async function assignMyselfToPendingCase(caseId, body, session) {
@@ -1267,6 +1282,7 @@ async function assignMyselfToPendingCase(caseId, body, session) {
       [staffId, id]
     );
     if (!result.rows.length) throw new Error('Dispute not found');
+    await broadcastDisputeChange(id, 'handler_changed');
     return { id, source, assignedStaffId: staffId, status: titleCaseStatus(result.rows[0].status) };
   }
 

@@ -339,7 +339,13 @@ const EVENT_CATALOG = {
     label: 'Comment removed',
     targetType: 'Forum comment',
     severity: 'medium',
-    impact: 'Replaced the comment body with a moderator placeholder.',
+    impact: 'Hid the comment from the forums. Its text is kept so it can be restored.',
+  },
+  FORUM_COMMENT_RESTORED: {
+    label: 'Comment restored',
+    targetType: 'Forum comment',
+    severity: 'info',
+    impact: 'Published the comment back to the discussion.',
   },
   SETTINGS_UPDATED: {
     label: 'System settings changed',

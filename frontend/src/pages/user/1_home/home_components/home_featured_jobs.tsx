@@ -3,6 +3,7 @@ import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { CreditIcon } from "@/components/ui/credit-icon";
 import { SubscriptionIcon } from "@/components/ui/SubscriptionIcon";
+import { VerificationIcon } from "@/components/ui/VerificationIcon";
 import {
   Clock,
   ArrowRight,
@@ -156,6 +157,7 @@ export const HomeFeaturedJobs: React.FC = () => {
             clientHireRate: typeof j.client_hire_rate === "number" ? j.client_hire_rate : (parseInt(j.client_hire_rate) || 100),
             clientMerit: j.client_merit !== undefined && j.client_merit !== null ? Number(j.client_merit) : 100,
             clientSubscriptionPlan: j.client_subscription_plan || "Free",
+            clientIsVerified: Boolean(j.client_is_verified ?? j.clientIsVerified),
             clientProfileVisibility: Number(j.client_profile_visibility) || 0,
             applicationDeadline: j.application_deadline || undefined,
             isUrgent: Boolean(j.is_urgent),
@@ -450,6 +452,7 @@ export const HomeFeaturedJobs: React.FC = () => {
                   </div>
                 </div>
                 <span className="truncate text-gray-700 dark:text-zinc-300 font-semibold">{job.postedBy}</span>
+                <VerificationIcon verified={job.clientIsVerified} />
                 <SubscriptionIcon plan={job.clientSubscriptionPlan} />
               </div>
 

@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Hand, Loader2, Search, Trash2, UserCog } from 'lucide-react';
 import api from '@/lib/axios';
+import { useStaffCaseEvents } from '@/lib/staffCaseEvents';
 import { showErrorToast, showSuccessToast } from '@/components/utility/toast.ts';
 import ModeratorDisputeDetailModal from '@/pages/moderator/shared/ModeratorDisputeDetailModal';
 import { VerificationModal } from '../userTeam/components/AccountModals';
@@ -85,6 +86,9 @@ export default function MyCasesTab({
   const [busyId, setBusyId] = useState<string | null>(null);
   const [identityUser, setIdentityUser] = useState<PlatformUserAccount | null>(null);
   const [identityLoading, setIdentityLoading] = useState(false);
+
+  // Disputes here change from the parties, other desks and the payout job: keep rows current.
+  useStaffCaseEvents(['dispute'], () => onUpdated(), { delayMs: 800 });
 
   const counts = useMemo(
     () => ({

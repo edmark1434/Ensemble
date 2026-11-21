@@ -3,6 +3,7 @@ const TeamRepositories = require('../repositories/TeamsRepositories');
 const { createNotificationServices } = require('./NotificationServices');
 const { getIo } = require('../lib/WebSocket');
 const { getAccountById } = require('../repositories/AccountRepositories');
+const { assertTeamAllows } = require('./TeamStandingServices');
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const TASK_STATUSES = new Set(['todo', 'in_progress', 'in_review', 'overdue', 'completed']);
@@ -322,6 +323,7 @@ async function getWorkspaceServices(teamId, contractId, actorAccountId) {
 async function addMembersServices(teamId, contractId, actorAccountId, payload) {
   const context = await workspaceContext(teamId, contractId, actorAccountId, { createForManager: true });
   if (!context.canManage) throw new TeamTaskError('Only Team Owners and Admins can add workspace members', 403);
+  await assertTeamAllows(context.team, 'work');
   const accountIds = uniqueAccountIds(payload?.account_ids);
   if (!accountIds.length) throw new TeamTaskError('Select at least one Team member', 422);
   const added = await TeamTaskRepositories.addWorkspaceMembers(
@@ -337,6 +339,7 @@ async function addMembersServices(teamId, contractId, actorAccountId, payload) {
 async function removeMemberServices(teamId, contractId, memberAccountId, actorAccountId) {
   const context = await workspaceContext(teamId, contractId, actorAccountId, { createForManager: true });
   if (!context.canManage) throw new TeamTaskError('Only Team Owners and Admins can remove workspace members', 403);
+  await assertTeamAllows(context.team, 'work');
   const memberId = requireUuid(memberAccountId, 'member account ID');
   await TeamTaskRepositories.removeWorkspaceMember(context.workspace.workspace_id, memberId, context.actorAccountId);
   await emitWorkspaceUpdate(context, 'member_removed');
@@ -372,6 +375,7 @@ function normalizeTaskPayload(payload, { partial = false } = {}) {
 async function createTaskServices(teamId, contractId, actorAccountId, payload) {
   const context = await workspaceContext(teamId, contractId, actorAccountId, { createForManager: true });
   if (!context.canManage) throw new TeamTaskError('Only Team Owners and Admins can create tasks', 403);
+  await assertTeamAllows(context.team, 'work');
   const data = normalizeTaskPayload(payload || {});
   const task = await TeamTaskRepositories.createTask(context.workspace.workspace_id, data, context.actorAccountId);
   await notifyAssignments(context, data.assigneeAccountIds, task);
@@ -381,6 +385,7 @@ async function createTaskServices(teamId, contractId, actorAccountId, payload) {
 
 async function updateTaskServices(teamId, contractId, taskId, actorAccountId, payload) {
   const context = await workspaceContext(teamId, contractId, actorAccountId);
+  await assertTeamAllows(context.team, 'work');
   const normalizedTaskId = requireUuid(taskId, 'task ID');
   const existing = await TeamTaskRepositories.getTask(context.workspace.workspace_id, normalizedTaskId);
   if (!existing) throw new TeamTaskError('Task not found', 404, 'TASK_NOT_FOUND');
@@ -436,6 +441,7 @@ async function updateTaskServices(teamId, contractId, taskId, actorAccountId, pa
 async function deleteTaskServices(teamId, contractId, taskId, actorAccountId) {
   const context = await workspaceContext(teamId, contractId, actorAccountId);
   if (!context.canManage) throw new TeamTaskError('Only Team Owners and Admins can delete tasks', 403);
+  await assertTeamAllows(context.team, 'work');
   const normalizedTaskId = requireUuid(taskId, 'task ID');
   const task = await TeamTaskRepositories.deleteTask(context.workspace.workspace_id, normalizedTaskId, context.actorAccountId);
   if (!task) throw new TeamTaskError('Task not found', 404, 'TASK_NOT_FOUND');
@@ -450,6 +456,8 @@ async function distributeContractFundsServices(teamId, contractId, actorAccountI
   if (String(context.actorAccountId) !== String(projectLeadId)) {
     throw new TeamTaskError('Only the designated project leader of this contract can distribute its funds', 403, 'PROJECT_LEAD_DISTRIBUTION_ONLY');
   }
+  // Paying out team money is a wallet move: paused while the team is restricted.
+  await assertTeamAllows(context.team, 'wallet');
 
   const recipients = payload?.recipients;
   if (!Array.isArray(recipients) || recipients.length === 0 || recipients.length > 50) {
@@ -521,6 +529,7 @@ async function updateProjectLeadServices(teamId, contractId, actorAccountId, pay
   if (!context.canManage) {
     throw new TeamTaskError('Only a Team Owner or Admin can assign the contract project leader', 403, 'NOT_AUTHORIZED');
   }
+  await assertTeamAllows(context.team, 'work');
 
   const newProjectLeadAccountId = requireUuid(payload?.project_lead_account_id, 'Project Lead account ID');
   const isMember = await TeamTaskRepositories.isWorkspaceMember(context.workspace.workspace_id, newProjectLeadAccountId);

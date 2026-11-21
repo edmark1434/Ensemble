@@ -708,6 +708,37 @@ export default function TicketDetailModalShell({
     }
   };
 
+  // The latest server copy and form values, for the live refresh below (it runs from a socket
+  // handler, so it reads these instead of the values captured when it subscribed).
+  const liveRef = useRef({ detail, status, priority, assigneeId });
+  liveRef.current = { detail, status, priority, assigneeId };
+
+  /**
+   * The ticket changed elsewhere. Read it back, and move the status, priority and handler
+   * controls to the new values unless this staff member has already changed that control.
+   */
+  const refreshTicketState = async () => {
+    try {
+      const res = await api.get(`${endpointBase}/${ticketId}`);
+      if (!res.data?.success) return;
+      const data = res.data.data as TicketDetail;
+      const { detail: before, status: shownStatus, priority: shownPriority, assigneeId: shownAssignee } = liveRef.current;
+      const was = before?.ticket;
+      // Replies still sending stay at the foot of the thread until the server confirms them.
+      setDetail((current) => {
+        const sending = (current?.messages || []).filter((item) => String(item.id).startsWith('pending-'));
+        return sending.length ? { ...data, messages: [...data.messages, ...sending] } : data;
+      });
+      if (!was || shownStatus === was.status) setStatus(data.ticket.status);
+      if (!was || shownPriority === was.priority) setPriority(data.ticket.priority);
+      if (!was || shownAssignee === (was.assignee?.staffId?.toString() || '')) {
+        setAssigneeId(data.ticket.assignee?.staffId?.toString() || '');
+      }
+    } catch {
+      // Keep the open ticket in place if a background refresh fails.
+    }
+  };
+
   const placeMessage = (message: TicketMessage, pendingId?: string) => {
     setDetail((current) => {
       if (!current) return current;
@@ -854,6 +885,31 @@ export default function TicketDetailModalShell({
         };
       });
     };
+    // An edit, or a status / handler / priority change from someone else (another console,
+    // the member closing it, the auto-close job): read the ticket back, once per burst.
+    let refreshTimer: number | undefined;
+    const scheduleRefresh = () => {
+      window.clearTimeout(refreshTimer);
+      refreshTimer = window.setTimeout(() => void refreshTicketState(), 400);
+    };
+    const onMessageEdited = (payload: { conversation_id?: string } | null) => {
+      if (String(payload?.conversation_id || '') !== String(chatId)) return;
+      scheduleRefresh();
+    };
+    const onTicketState = (payload: { ticketId?: string; conversationId?: string | null } | null) => {
+      if (
+        String(payload?.ticketId || '') !== String(ticketId) &&
+        String(payload?.conversationId || '') !== String(chatId)
+      ) return;
+      scheduleRefresh();
+    };
+    const onStaffCase = (payload: { kind?: string; id?: string; reason?: string | null } | null) => {
+      if (payload?.kind !== 'ticket' || String(payload.id || '') !== String(ticketId)) return;
+      // Internal notes already arrive on their own. Anything else may also have moved the
+      // ticket (a claim or scheduled close posts a notice), so read it back.
+      if (payload.reason === 'internal_note') return;
+      scheduleRefresh();
+    };
     const joinTicketRoom = () => {
       socket.emit('joinRoom', { conversation_id: String(chatId) });
     };
@@ -865,15 +921,22 @@ export default function TicketDetailModalShell({
     socket.on('messageReplied', appendLiveMessage);
     socket.on('ticketInternalMessage', appendLiveMessage);
     socket.on('messageDeleted', markDeleted);
+    socket.on('messageUpdated', onMessageEdited);
     socket.on('ticketMembershipUpdated', refreshPeople);
+    socket.on('ticketStateChanged', onTicketState);
+    socket.on('staffCaseChanged', onStaffCase);
 
     return () => {
+      window.clearTimeout(refreshTimer);
       socket.off('connect', joinTicketRoom);
       socket.off('newMessage', appendLiveMessage);
       socket.off('messageReplied', appendLiveMessage);
       socket.off('ticketInternalMessage', appendLiveMessage);
       socket.off('messageDeleted', markDeleted);
+      socket.off('messageUpdated', onMessageEdited);
       socket.off('ticketMembershipUpdated', refreshPeople);
+      socket.off('ticketStateChanged', onTicketState);
+      socket.off('staffCaseChanged', onStaffCase);
       socket.emit('leaveRoom', { conversation_id: String(chatId) });
     };
     // The room changes only when another ticket is opened.

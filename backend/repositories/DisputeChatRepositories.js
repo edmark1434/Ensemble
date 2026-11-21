@@ -433,9 +433,45 @@ function publicDisputeRoom(disputeId) {
   return disputeId ? `dispute:public:${disputeId}` : null;
 }
 
+/**
+ * Staff consoles that have this case open (`joinDisputeStaffRoom`). Staff read every message
+ * on a case, whatever its audience, so every message and state change goes here. It does not
+ * depend on the staff member being listed on the case's Mongo chat.
+ */
+function staffDisputeRoom(disputeId) {
+  return disputeId ? `dispute:staff:${disputeId}` : null;
+}
+
+/**
+ * The staff room for a dispute, or null when the account is not staff or the dispute does
+ * not exist. Every staff role may view every dispute (`buildDisputePermissions.canView`).
+ */
+async function findStaffDisputeRoom(disputeId, accountId) {
+  if (!DISPUTE_UUID.test(String(disputeId || '')) || !ACCOUNT_UUID.test(String(accountId || ''))) {
+    return null;
+  }
+  const result = await pool.query(
+    `SELECT d.dispute_id
+     FROM disputes d
+     WHERE d.dispute_id = $1
+       AND d.deleted_at IS NULL
+       AND EXISTS (SELECT 1 FROM staff s WHERE s.account_id::text = $2)`,
+    [disputeId, String(accountId)]
+  );
+  return result.rows.length ? staffDisputeRoom(String(result.rows[0].dispute_id)) : null;
+}
+
 function emitDisputeChat(
   event,
-  { chatId = null, disputeId = null, payload, accountIds = [], includeChatRoom = false, includePublicRoom = false } = {}
+  {
+    chatId = null,
+    disputeId = null,
+    payload,
+    accountIds = [],
+    includeChatRoom = false,
+    includePublicRoom = false,
+    includeStaffRoom = false,
+  } = {}
 ) {
   try {
     const { getIo } = require('../lib/WebSocket');
@@ -445,6 +481,10 @@ function emitDisputeChat(
     if (includeChatRoom && chatId) rooms.add(String(chatId));
     if (includePublicRoom) {
       const room = publicDisputeRoom(disputeId);
+      if (room) rooms.add(room);
+    }
+    if (includeStaffRoom) {
+      const room = staffDisputeRoom(disputeId);
       if (room) rooms.add(room);
     }
     for (const accountId of accountIds || []) {
@@ -518,6 +558,7 @@ async function emitDisputeState(disputeId, { reason = null } = {}) {
       Boolean
     ),
     includePublicRoom: true,
+    includeStaffRoom: true,
   });
   // Each party's Cases view gets what they may now do (reply, read only, removed after a swap).
   void require('../services/CaseServices').announceDisputeCase(String(row.dispute_id), {
@@ -626,7 +667,69 @@ async function postDisputeFiledEvidence(row, attachments) {
     disputeId: row.dispute_id,
     attachments: files,
     mentionAccountIds: [row.by_account_id, row.for_account_id],
+    filingEvidence: true,
   });
+}
+
+// Cases filed before `filing_evidence` was stored: the filer's attachment-only first reply,
+// posted right after the summary.
+const LEGACY_FILING_EVIDENCE_WINDOW_MS = 10 * 60 * 1000;
+
+/**
+ * The files the filer attached on the dispute form: the evidence behind the complaint.
+ * The message itself stays private to its author and staff; callers decide who may read
+ * this (the filer, and both parties once the case is public; never the community).
+ * @param {string|null} chatId
+ * @param {{ by_account_id?: string, for_account_id?: string, created_at?: Date|string }} row
+ * @returns {Promise<{ submittedAt: Date|null, authorAccountId: string|null, attachments: object[] }|null>}
+ */
+async function loadDisputeFilingEvidence(chatId, row) {
+  if (!chatId || !row || !isMongoReady()) return null;
+  const db = mongoDb();
+  if (!db) return null;
+  const alive = {
+    conversation_id: String(chatId),
+    is_deleted: { $ne: true },
+    deleted_at: null,
+    'attachments.0': { $exists: true },
+  };
+  try {
+    let docs = await db
+      .collection('messages')
+      .find({ ...alive, filing_evidence: true })
+      .sort({ created_at: 1 })
+      .toArray();
+    if (!docs.length && row.created_at) {
+      const filedAt = new Date(row.created_at);
+      if (!Number.isNaN(filedAt.getTime())) {
+        const parties = [row.by_account_id, row.for_account_id].filter(Boolean).map(String);
+        const legacy = await db.collection('messages').findOne(
+          {
+            ...alive,
+            author_type: 'user',
+            sender_id: { $in: parties },
+            message_content: { $in: ['', null] },
+            created_at: {
+              $gte: filedAt,
+              $lte: new Date(filedAt.getTime() + LEGACY_FILING_EVIDENCE_WINDOW_MS),
+            },
+          },
+          { sort: { created_at: 1 } }
+        );
+        docs = legacy ? [legacy] : [];
+      }
+    }
+    const attachments = docs.flatMap((doc) => normalizeDisputeAttachments(doc.attachments));
+    if (!attachments.length) return null;
+    return {
+      submittedAt: docs[0].created_at || null,
+      authorAccountId: docs[0].sender_id ? String(docs[0].sender_id) : null,
+      attachments,
+    };
+  } catch (error) {
+    console.warn('Dispute filing evidence skipped:', error.message);
+    return null;
+  }
 }
 
 /**
@@ -810,6 +913,8 @@ async function createDisputeMessage({
   attachments = [],
   /** The case's parties, so their "@handle" in this message links for live readers too. */
   mentionAccountIds = [],
+  /** The files the filer attached on the dispute form (see `loadDisputeFilingEvidence`). */
+  filingEvidence = false,
 }) {
   if (!isMongoReady()) {
     throw new Error('MongoDB is not connected — cannot send dispute chat messages');
@@ -849,6 +954,7 @@ async function createDisputeMessage({
     audience: normalizedAudience,
     audiences: audienceList,
     published_at: isPublishedAudience(normalizedAudience) ? now : null,
+    ...(filingEvidence ? { filing_evidence: true } : {}),
     created_at: now,
     updated_at: now,
   });
@@ -897,6 +1003,7 @@ async function createDisputeMessage({
     accountIds: targets.accountIds,
     includeChatRoom: targets.includeChatRoom,
     includePublicRoom: isPublishedAudience(normalizedAudience) && Boolean(disputeId),
+    includeStaffRoom: Boolean(disputeId),
   });
   if (disputeId) {
     void require('../services/CaseServices').announceDisputeCase(String(disputeId), {
@@ -990,6 +1097,7 @@ async function updateDisputeMessageAudience(
     accountIds: targets.accountIds,
     includeChatRoom: targets.includeChatRoom,
     includePublicRoom: isPublishedAudience(nextAudience) && Boolean(disputeId),
+    includeStaffRoom: Boolean(disputeId),
   });
   if (!isPublishedAudience(nextAudience) && disputeId) {
     // Tell public viewers to drop it, without sending the text.
@@ -1087,6 +1195,7 @@ async function broadcastInboxDisputeMessage(io, event, message) {
     accountIds: targets.accountIds,
     includeChatRoom: targets.includeChatRoom,
     includePublicRoom: isPublishedAudience(audience),
+    includeStaffRoom: true,
   });
   return true;
 }
@@ -1317,6 +1426,9 @@ async function getPublicDisputeDiscussion(disputeId, viewerAccountId = null) {
     commentsNeedApproval: Boolean(viewerAccountId) && !isParty,
     // Only the two parties see how the money was split and when it lands.
     settlement: isParty ? await getDisputeSettlementForParty(disputeId, viewerAccountId) : null,
+    // The files behind the complaint, so the disputee can answer them. Never for the community:
+    // they may hold chat logs, receipts or other private material.
+    evidence: isParty ? await loadDisputeFilingEvidence(chatId, row) : null,
     chatId,
     messages,
   };
@@ -1422,12 +1534,15 @@ async function loadDisputeCaseDetails(disputeId) {
     if (!r) return null;
     const { disputeResolutionLabel } = require('../lib/DisputeResolutions');
     const avatars = await loadAccountAvatarPaths([r.by_account_id, r.for_account_id]).catch(() => new Map());
+    const evidence = await loadDisputeFilingEvidence(await getDisputeChatId(disputeId), r);
     const outcomeKey = r.resolution_outcome || null;
     const closed = String(r.status || '').toLowerCase() === 'closed';
     return {
       type: r.type || 'Contract',
       title: r.title || null,
       complaint: r.description || null,
+      // Files attached when the case was filed (see `loadDisputeFilingEvidence`).
+      evidence,
       priority: r.priority || null,
       filedAt: r.created_at || null,
       openedAt: r.opened_at || null,
@@ -1694,6 +1809,8 @@ module.exports = {
   postDisputePublicInvite,
   getDisputeSettlementForParty,
   emitDisputeState,
+  staffDisputeRoom,
+  findStaffDisputeRoom,
   createDisputeMessage,
   updateDisputeMessageAudience,
   ensureStaffMemberOnChat,

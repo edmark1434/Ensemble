@@ -7,6 +7,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import type { ViewType } from "./job_list_viewtype";
 import { CreditIcon } from "@/components/ui/credit-icon";
 import { SubscriptionIcon } from "@/components/ui/SubscriptionIcon";
+import { VerificationIcon } from "@/components/ui/VerificationIcon";
 import useGlobalState from "@/lib/global_state";
 import { computeJobRankingBreakdown } from "../job_ranking";
 import { ApplicationWindowTimer } from "./job_utilities/ApplicationWindowTimer";
@@ -74,6 +75,7 @@ export interface Job {
   applicationExtendedAt?: string;
   postingFeeCredits?: number;
   clientSubscriptionPlan?: "Free" | "Premium" | "Business" | string;
+  clientIsVerified?: boolean;
   clientProfileVisibility?: number;
 }
 
@@ -460,6 +462,7 @@ const JobList: React.FC<JobListProps> = ({
                       </div>
                     </div>
                     <span className="truncate text-gray-700 dark:text-zinc-300 font-semibold">{job.postedBy}</span>
+                    <VerificationIcon verified={job.clientIsVerified} />
                     <SubscriptionIcon plan={job.clientSubscriptionPlan} />
                   </div>
 
@@ -696,6 +699,7 @@ const JobList: React.FC<JobListProps> = ({
                     <div className="text-left leading-tight">
                       <div className="flex items-center gap-1.5">
                         <p className="text-xs font-bold text-gray-700 dark:text-zinc-300">{job.postedBy}</p>
+                        <VerificationIcon verified={job.clientIsVerified} />
                         <SubscriptionIcon plan={job.clientSubscriptionPlan} />
                       </div>
                       <div className="flex items-center gap-1 text-[10px] text-gray-500 dark:text-zinc-400">

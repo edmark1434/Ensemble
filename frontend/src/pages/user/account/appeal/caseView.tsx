@@ -13,10 +13,12 @@ import {
 import {
   CaseProgress,
   ComplaintText,
+  FiledEvidencePanel,
   Panel,
   PartyTile,
   StepDot,
   relativeTime,
+  type FiledEvidence,
   type StepState,
 } from '@/pages/user/disputes/publicDisputeParts';
 
@@ -32,6 +34,8 @@ export type DisputeCaseDetails = {
   type?: string;
   title?: string | null;
   complaint?: string | null;
+  /** Files filed with the complaint: the filer's own, or (once public) what the disputee answers. */
+  evidence?: FiledEvidence | null;
   filedAt?: string | null;
   disputer?: CaseParty | null;
   disputee?: CaseParty | null;
@@ -297,6 +301,7 @@ export function DisputeSidePanels({
   stats,
   lastAt,
   reopened,
+  onPreview,
 }: {
   details: DisputeCaseDetails | null;
   access?: CaseAccess | null;
@@ -305,6 +310,8 @@ export function DisputeSidePanels({
   stats: CaseStats;
   lastAt?: string | null;
   reopened: boolean;
+  /** Opens an image from the filed evidence. */
+  onPreview?: (url: string) => void;
 }) {
   const closed = Boolean(access?.closed);
   const escrowLine = details?.conductOnly
@@ -397,6 +404,12 @@ export function DisputeSidePanels({
           <ComplaintText text={details.complaint} mentions={mentions} />
         </Panel>
       ) : null}
+      <FiledEvidencePanel
+        evidence={details?.evidence}
+        viewerRole={access?.viewerRole}
+        isPublic={Boolean(access?.visibility)}
+        onPreview={onPreview}
+      />
       <ActivityPanel stats={stats} openedLabel="Filed" openedAt={details?.filedAt} lastAt={lastAt} noticeLabel="Notices" />
       <TipsPanel
         tips={[

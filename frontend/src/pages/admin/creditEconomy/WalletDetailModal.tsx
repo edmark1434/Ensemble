@@ -19,6 +19,7 @@ import type { PlatformTeam, PlatformUserAccount } from '../userTeam/userTeamType
 import { AdjustCreditsDialog, HoldCreditsDialog, ReleaseHoldDialog } from './CreditActionDialogs';
 import { entrySubtitle, entryTitle, exportLedger, LedgerEntryDetail, LedgerLinkChips } from './ledgerShared';
 import {
+  BalanceChange,
   CopyId,
   ECONOMY_ACCENT,
   ECONOMY_API,
@@ -420,6 +421,13 @@ export default function WalletDetailModal({
                         {(tx.page?.items || []).map((e) => {
                           const counterparty = e.direction === 'in' ? e.source : e.destination;
                           const open = expanded === e.id;
+                          // This wallet's side of the row (an internal move touches it once).
+                          const ownBalance =
+                            e.balances?.source?.walletId === walletId
+                              ? e.balances.source
+                              : e.balances?.destination?.walletId === walletId
+                                ? e.balances.destination
+                                : null;
                           return (
                             <li key={e.id}>
                               {/* A div, not a button: the link chips inside are buttons. */}
@@ -445,8 +453,11 @@ export default function WalletDetailModal({
                                   </p>
                                   <LedgerLinkChips entry={e} onOpenTransaction={onOpenTransaction} />
                                 </div>
-                                {e.status !== 'Completed' && <StatusPill status={e.status} />}
-                                <LedgerAmount entry={e} />
+                                <StatusPill status={e.status} />
+                                <span className="flex shrink-0 flex-col items-end">
+                                  <LedgerAmount entry={e} />
+                                  <BalanceChange balance={ownBalance} />
+                                </span>
                               </div>
                               {open && (
                                 <div className="border-t border-white/[0.04] bg-[#0f1016] px-3 py-3">

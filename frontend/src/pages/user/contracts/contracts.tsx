@@ -99,6 +99,10 @@ export interface DetailedContract {
   }[];
   clientAvatar?: string;
   freelancerAvatar?: string;
+  clientIsVerified?: boolean;
+  clientSubscriptionPlan?: string;
+  freelancerIsVerified?: boolean;
+  freelancerSubscriptionPlan?: string;
   status: ContractStatus;
   isArchived: boolean;
   jobId?: string;

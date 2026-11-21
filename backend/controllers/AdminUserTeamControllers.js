@@ -17,12 +17,15 @@ const {
   applyAdminDiditVerificationAction,
 } = require('../services/AdminVerificationServices');
 const { getAdminAccountProfile } = require('../services/AdminAccountProfileServices');
+const { transferTeamOwnership } = require('../services/TeamSanctionServices');
 const { getWarningLiftPreview, liftWarningPoints } = require('../services/WarningLiftServices');
 const {
   listAccountMeritPenalties,
   endMeritPenaltyEarly,
   endMeritPenaltiesEarly,
 } = require('../services/MeritPenaltyServices');
+
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function staffIdFromSession(session) {
   return session?.staffId || session?.staff_id || null;
@@ -84,9 +87,13 @@ async function patchAdminAccountStatus(req, res) {
       punishmentId: req.body?.punishmentId || req.body?.punishment_id,
       customDuration: req.body?.customDuration === true || req.body?.custom_duration === true,
       actorAccountId: req.session?.account_id || req.session?.accountId || null,
+      // Team targets only: also apply the penalty to (or lift it from) the team leader.
+      includeLeader: req.body?.includeLeader === undefined ? undefined : req.body.includeLeader === true,
     });
     const { describeSummary } = require('../services/BanCleanupServices');
-    const message = data.forumTimeout
+    const message = data.isTeam && data.summary
+      ? data.summary
+      : data.forumTimeout
       ? 'Timeout applied'
       : data.forumTimeout === false && String(action).toLowerCase().includes('timeout')
         ? 'Timeout cleared'
@@ -234,7 +241,13 @@ async function postAdminAccountWarn(req, res) {
       },
       staffIdFromSession(req.session)
     );
-    res.status(200).json({ success: true, data, message: 'Warning issued' });
+    res.status(200).json({
+      success: true,
+      data,
+      message: data.issuedTo
+        ? `Warning issued to team leader ${data.issuedTo.name}. Teams have no Platform Merit, so the leader carries the points.`
+        : 'Warning issued',
+    });
   } catch (err) {
     console.error('Error issuing warning:', err);
     const code = err.statusCode && err.statusCode < 500 ? err.statusCode : 400;
@@ -377,6 +390,38 @@ async function postAdminAccountPardon(req, res) {
   }
 }
 
+/** Admin / Support: move a team's ownership (e.g. the leader is banned or gone). */
+async function postAdminTeamTransferOwnership(req, res) {
+  if (!UUID_PATTERN.test(String(req.params.accountId || ''))) {
+    return res.status(400).json({ success: false, message: 'A valid team account id is required' });
+  }
+  try {
+    const data = await transferTeamOwnership(
+      req.params.accountId,
+      {
+        newOwnerAccountId: req.body?.newOwnerAccountId,
+        previousOwnerRole: req.body?.previousOwnerRole,
+        reason: req.body?.reason,
+      },
+      staffIdFromSession(req.session),
+      req.session?.account_id || req.session?.accountId || null
+    );
+    res.status(200).json({
+      success: true,
+      data,
+      message: `${data.newOwner.name} now owns the team. Both owners were told.`,
+    });
+  } catch (err) {
+    const status = Number(err.statusCode) || 500;
+    if (status >= 500) console.error('Error transferring team ownership:', err);
+    res.status(status >= 500 ? 500 : status).json({
+      success: false,
+      code: err.code || null,
+      message: status >= 500 ? 'Failed to transfer team ownership' : err.message,
+    });
+  }
+}
+
 async function getAdminAccountActivity(req, res) {
   try {
     const { accountId } = req.params;
@@ -392,8 +437,6 @@ async function getAdminAccountActivity(req, res) {
     res.status(500).json({ success: false, message: 'Failed to load account activity' });
   }
 }
-
-const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 async function getAdminAccountProfileDetails(req, res) {
   if (!UUID_PATTERN.test(String(req.params.accountId || ''))) {
@@ -434,4 +477,5 @@ module.exports = {
   postAdminEndMeritPenalty,
   postAdminUnfreezeAccount,
   postAdminAccountPardon,
+  postAdminTeamTransferOwnership,
 };

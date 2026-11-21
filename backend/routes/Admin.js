@@ -25,6 +25,7 @@ const {
   postAdminAccountPardon,
   getAdminAccountActivity,
   getAdminAccountProfileDetails,
+  postAdminTeamTransferOwnership,
 } = require('../controllers/AdminUserTeamControllers');
 
 /** Admin + Support: full User & Team. Forum/Marketplace/Jobs: read + limited enforcement. */
@@ -60,6 +61,7 @@ const {
   getAdminForumDiscussion,
   patchAdminForumDiscussion,
   deleteAdminForumComment,
+  patchAdminForumComment,
 } = require('../controllers/AdminForumControllers');
 const {
   getAdminModerationOverview,
@@ -135,6 +137,7 @@ router.post('/accounts/:accountId/merit-penalties/:penaltyId/end', [checkSession
 router.post('/accounts/:accountId/pardon', [checkSession, requireUserTeamFullWrite], postAdminAccountPardon);
 router.get('/accounts/:accountId/activity', [checkSession, requireUserTeamAccess], getAdminAccountActivity);
 router.get('/accounts/:accountId/profile', [checkSession, requireUserTeamAccess], getAdminAccountProfileDetails);
+router.post('/teams/:accountId/transfer-ownership', [checkSession, requireUserTeamFullWrite], postAdminTeamTransferOwnership);
 router.get('/economy-overview', [checkSession, requireEconomyAccess], getAdminEconomyOverview);
 router.get('/economy/wallets', [checkSession, requireEconomyAccess], getAdminEconomyWallets);
 router.get('/economy/wallets/:walletId', [checkSession, requireEconomyAccess], getAdminWalletDetail);
@@ -151,6 +154,8 @@ router.patch('/moderation/forum/groups/:groupId/members/:memberId', [checkSessio
 router.get('/moderation/forum/discussions', [checkSession, requireAdmin], getAdminForumDiscussions);
 router.get('/moderation/forum/discussions/:discussionId', [checkSession, requireAdmin], getAdminForumDiscussion);
 router.patch('/moderation/forum/discussions/:discussionId', [checkSession, requireAdmin], patchAdminForumDiscussion);
+router.patch('/moderation/forum/discussions/:discussionId/comments/:commentId', [checkSession, requireAdmin], patchAdminForumComment);
+// Hides the comment (restorable); kept for older clients.
 router.delete('/moderation/forum/discussions/:discussionId/comments/:commentId', [checkSession, requireAdmin], deleteAdminForumComment);
 
 /** Marketplace / Jobs control + Restrictions — same controllers as moderator desks. */

@@ -351,6 +351,8 @@ async function submitTicketSatisfaction(ticketId, accountId, score, comment) {
     actorAccountId: accountId,
     metadata: { score: rating },
   });
+  // The member's other views and every staff desk show the rating without a reload.
+  void require('../services/CaseServices').announceTicketCase(String(ticketId), { reason: 'rated' });
   return result.rows[0];
 }
 

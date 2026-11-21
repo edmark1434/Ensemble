@@ -9,6 +9,7 @@ import UserHeader from "@/components/nav/user_header";
 import { DashboardTaskList } from './dashboard_components/DashboardTaskList';
 import { RateReviewModal } from './dashboard_components/RateReviewModal';
 import { DeliveryFlowGuide } from './dashboard_components/DeliveryFlowGuide';
+import { constructAvatarUrl } from '@/lib/accountAvatars';
 import socket from '@/lib/socket';
 
 // ============================================================================
@@ -671,9 +672,7 @@ const DashboardMain = () => {
                                                     <div className="flex items-center justify-between gap-2 text-xs text-gray-600 dark:text-zinc-400 mb-3">
                                                         <div className="flex items-center gap-2 min-w-0">
                                                             <img 
-                                                                src={task.client_avatar 
-                                                                        ? `${import.meta.env.VITE_CLOUDFRONT_URL}${task.client_avatar.startsWith('/') ? '' : '/'}${task.client_avatar}`
-                                                                        : "https://i.pravatar.cc/150?u=a042581f4e29026704d"}
+                                                                src={constructAvatarUrl(task.client_avatar, task.client_name || 'Client')}
                                                                 alt="Client Avatar" 
                                                                 className="w-5 h-5 rounded-full object-cover border border-gray-200 dark:border-zinc-700 shrink-0"
                                                             />
@@ -818,9 +817,7 @@ const DashboardMain = () => {
                                                     <div className="flex items-center justify-between gap-2 text-xs text-gray-600 dark:text-zinc-400 mb-3">
                                                         <div className="flex items-center gap-2 min-w-0">
                                                             <img 
-                                                                src={task.freelancer_avatar 
-                                                                        ? `${import.meta.env.VITE_CLOUDFRONT_URL}${task.freelancer_avatar.startsWith('/') ? '' : '/'}${task.freelancer_avatar}`
-                                                                        : "https://i.pravatar.cc/150?u=a042581f4e29026704d"}
+                                                                src={constructAvatarUrl(task.freelancer_avatar, task.freelancer_name || 'Freelancer')}
                                                                 alt="Freelancer Avatar" 
                                                                 className="w-5 h-5 rounded-full object-cover border border-gray-200 dark:border-zinc-700 shrink-0"
                                                             />

@@ -9,6 +9,7 @@ import {
   Gavel,
   Lock,
   MessagesSquare,
+  Paperclip,
   Scale,
   Users,
 } from "lucide-react";
@@ -54,6 +55,13 @@ export type DiscussionPerson = {
   avatar?: string | null;
 };
 
+/** The files the disputer attached when filing. Sent to the two parties only. */
+export type FiledEvidence = {
+  submittedAt?: string | null;
+  authorAccountId?: string | null;
+  attachments: DisputeAttachment[];
+};
+
 export type Discussion = {
   id: string;
   number?: string | null;
@@ -72,6 +80,8 @@ export type Discussion = {
   commentsNeedApproval?: boolean;
   /** Parties only: who receives what from the ruling, and when. */
   settlement?: DisputeSettlement | null;
+  /** Parties only: the evidence filed with the complaint. */
+  evidence?: FiledEvidence | null;
   /** Lower-cased handle → account id, for "@handle" profile links. */
   mentions?: MentionMap;
   chatId?: string | null;
@@ -417,6 +427,44 @@ export function ComplaintText({ text, mentions }: { text: string; mentions?: Men
   );
 }
 
+/**
+ * The files filed with the complaint. The disputer sees what they sent; the disputee sees what
+ * they are answering. Reaches the two parties only, never the community.
+ */
+export function FiledEvidencePanel({
+  evidence,
+  viewerRole,
+  isPublic,
+  onPreview,
+}: {
+  evidence?: FiledEvidence | null;
+  viewerRole?: ViewerRole | "requester" | "participant" | null;
+  /** Staff made the case public, so the disputee can see these files too. */
+  isPublic: boolean;
+  onPreview?: (url: string) => void;
+}) {
+  const files = evidence?.attachments || [];
+  if (!files.length) return null;
+  const count = `${files.length} file${files.length === 1 ? "" : "s"}`;
+  const lead =
+    viewerRole === "disputee"
+      ? `The disputer filed ${count} with this complaint. You can answer them in your reply.`
+      : viewerRole === "disputer"
+        ? isPublic
+          ? `You filed ${count} with this complaint. The other party can see them; the public cannot.`
+          : `You filed ${count} with this complaint. If staff make the case public, the other party will see them too.`
+        : `${count} filed with this complaint.`;
+  return (
+    <Panel title="Evidence filed" icon={<Paperclip className="h-3 w-3" />}>
+      <p className="text-xs leading-relaxed text-gray-500 dark:text-zinc-400">{lead}</p>
+      <DisputeAttachments attachments={files} onPreview={onPreview ? (url) => onPreview(url) : undefined} />
+      {evidence?.submittedAt ? (
+        <p className="mt-2 text-[11px] text-gray-400 dark:text-zinc-500">Filed {formatWhen(evidence.submittedAt)}</p>
+      ) : null}
+    </Panel>
+  );
+}
+
 export function CasePanel({
   discussion,
   signedIn,
@@ -424,6 +472,7 @@ export function CasePanel({
   latestRuling,
   stats,
   onOpenRuling,
+  onPreview,
   showProgress = false,
   showParties = false,
 }: {
@@ -433,6 +482,8 @@ export function CasePanel({
   latestRuling?: DiscussionMessage;
   stats: { replies: number; rulings: number; participants: number };
   onOpenRuling: (messageId: string) => void;
+  /** Opens an image from the filed evidence. */
+  onPreview?: (url: string) => void;
   /** Desktop column and phone drawer: the header only shows progress on tablets. */
   showProgress?: boolean;
   /** Phone drawer: the header shows the parties on larger screens. */
@@ -489,6 +540,13 @@ export function CasePanel({
           <ComplaintText text={discussion.description} mentions={discussion.mentions} />
         </Panel>
       ) : null}
+
+      <FiledEvidencePanel
+        evidence={discussion.evidence}
+        viewerRole={discussion.viewerRole}
+        isPublic
+        onPreview={onPreview}
+      />
 
       <Panel title="Activity" icon={<MessagesSquare className="h-3 w-3" />}>
         <div className="grid grid-cols-3 gap-2 text-center">
@@ -617,12 +675,12 @@ export function ThreadMessage({
   return (
     <div
       id={`dispute-message-${message.id}`}
-      className={`group relative flex scroll-mt-4 gap-3 rounded-xl px-3 transition-colors sm:px-4 ${
-        continued ? "py-1" : "mt-1 pb-2 pt-3"
+      className={`group relative flex scroll-mt-4 gap-3 px-3 transition-colors sm:px-4 ${
+        continued ? "py-0.5" : "mt-1 pb-1 pt-3"
       } ${
         flagged
-          ? "bg-amber-50/70 hover:bg-amber-50 dark:bg-amber-500/[0.05] dark:hover:bg-amber-500/[0.08]"
-          : "hover:bg-gray-50 dark:hover:bg-white/[0.025]"
+          ? "border-l-2 border-amber-400/70 bg-amber-50/70 hover:bg-amber-50 dark:border-amber-500/40 dark:bg-amber-500/[0.05] dark:hover:bg-amber-500/[0.08]"
+          : "rounded-xl hover:bg-gray-50 dark:hover:bg-white/[0.025]"
       } ${pending ? "opacity-60" : ""} ${
         animate ? "animate-[console-rise_0.35s_ease-out_backwards] motion-reduce:animate-none" : ""
       }`}
@@ -659,7 +717,7 @@ export function ThreadMessage({
           </div>
         ) : null}
 
-        {held ? (
+        {continued ? null : held ? (
           <p className="mt-1 text-[11px] text-amber-700 dark:text-amber-300/80">
             Only you and staff can see this reply until a staff member or admin makes it public.
           </p>
@@ -681,7 +739,7 @@ export function ThreadMessage({
           <button
             type="button"
             onClick={onReply}
-            className="mt-1 inline-flex items-center gap-1 rounded-md px-1 py-0.5 text-[11px] font-semibold text-gray-400 transition hover:bg-gray-100 hover:text-gray-700 focus:opacity-100 sm:opacity-0 sm:group-hover:opacity-100 dark:text-zinc-500 dark:hover:bg-white/5 dark:hover:text-white"
+            className="mt-1 inline-flex items-center gap-1 rounded-md px-1 py-0.5 text-[11px] font-semibold text-gray-400 transition hover:bg-gray-100 hover:text-gray-700 focus:opacity-100 sm:absolute sm:right-2 sm:top-1 sm:mt-0 sm:border sm:border-gray-200 sm:bg-white sm:px-1.5 sm:opacity-0 sm:shadow-sm sm:group-hover:opacity-100 dark:text-zinc-500 dark:hover:bg-white/5 dark:hover:text-white sm:dark:border-white/10 sm:dark:bg-zinc-900"
           >
             <CornerUpLeft className="h-3 w-3" />
             Reply

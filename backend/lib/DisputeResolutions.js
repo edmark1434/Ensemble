@@ -15,12 +15,19 @@ const DISPUTE_DECISION_AUTHOR = {
   role: 'resolution',
 };
 
+/**
+ * `escrow` says what a resolution does with escrow the case still holds:
+ *   keep     → the credits stay with the contract (the parties choose to continue or end it);
+ *   disputer → the credits go to the disputer's side (Settle escrow, `award: "disputer"`).
+ * A case with frozen escrow cannot close any other way.
+ */
 const DISPUTE_RESOLUTIONS = [
   {
     key: 'resolved_both_parties',
     label: 'Resolved by both parties',
     hint: 'Both sides agreed on an outcome.',
     requiresNote: false,
+    escrow: 'keep',
     finding: ({ disputer, disputee }) =>
       `${disputer} and ${disputee} reached an agreement during review. The matter is settled between them and requires no further action from the platform.`,
     notifyMessage: 'was closed — both parties reached an agreement.',
@@ -30,6 +37,7 @@ const DISPUTE_RESOLUTIONS = [
     label: 'Disputee refused to cooperate',
     hint: 'The person named in the dispute would not take part.',
     requiresNote: true,
+    escrow: 'disputer',
     finding: ({ disputee }) =>
       `${disputee} declined to take part in the review. The case has been decided without their account of events.`,
     notifyMessage: 'was closed — the disputee refused to cooperate.',
@@ -39,6 +47,7 @@ const DISPUTE_RESOLUTIONS = [
     label: 'Disputer refused to cooperate',
     hint: 'The person who filed would not take part.',
     requiresNote: true,
+    escrow: 'keep',
     finding: ({ disputer }) =>
       `${disputer} declined to take part in the review of the case they filed. No finding can be made on the complaint as it stands.`,
     notifyMessage: 'was closed — the disputer refused to cooperate.',
@@ -48,6 +57,7 @@ const DISPUTE_RESOLUTIONS = [
     label: 'Disputer inactive',
     hint: 'The person who filed stopped responding.',
     requiresNote: false,
+    escrow: 'keep',
     finding: ({ disputer }) =>
       `${disputer} stopped responding to the review and the case cannot proceed without them. It is closed for inactivity.`,
     notifyMessage: 'was closed for inactivity by the disputer.',
@@ -57,6 +67,7 @@ const DISPUTE_RESOLUTIONS = [
     label: 'Disputee inactive',
     hint: 'The person named in the dispute stopped responding.',
     requiresNote: false,
+    escrow: 'disputer',
     finding: ({ disputee }) =>
       `${disputee} stopped responding to the review. The case is closed for inactivity on their side.`,
     notifyMessage: 'was closed for inactivity by the disputee.',
@@ -66,6 +77,7 @@ const DISPUTE_RESOLUTIONS = [
     label: 'Withdrawn by the disputer',
     hint: 'The person who filed asked to drop the case.',
     requiresNote: false,
+    escrow: 'keep',
     finding: ({ disputer }) =>
       `${disputer} withdrew the complaint. The case is closed at their request, with no finding against either party.`,
     notifyMessage: 'was withdrawn and closed.',
@@ -75,6 +87,7 @@ const DISPUTE_RESOLUTIONS = [
     label: 'No violation found',
     hint: 'The review found nothing to act on.',
     requiresNote: true,
+    escrow: 'keep',
     finding: () =>
       'The review found no breach of the platform rules by either party. No action is taken against either account.',
     notifyMessage: 'was closed — staff found no violation.',
@@ -155,12 +168,23 @@ function disputeResolutionLabel(key) {
 
 /** Catalog shaped for the staff console: no message builders, just what the UI renders. */
 function listDisputeResolutionOptions() {
-  return DISPUTE_RESOLUTIONS.map(({ key, label, hint, requiresNote }) => ({
+  return DISPUTE_RESOLUTIONS.map(({ key, label, hint, requiresNote, escrow }) => ({
     key,
     label,
     hint,
     requiresNote,
+    escrow,
   }));
+}
+
+/** Resolutions that send a case's frozen escrow to the disputer (`award: "disputer"`). */
+const DISPUTER_AWARD_OUTCOMES = DISPUTE_RESOLUTIONS.filter((item) => item.escrow === 'disputer').map(
+  (item) => item.key
+);
+
+/** Added to a resolution's finding when the case closed with escrow left on the contract. */
+function escrowKeptLine(amount) {
+  return `The ${credits(amount)} in escrow stay with the contract. Both parties are asked whether to continue it or end it.`;
 }
 
 /**
@@ -271,8 +295,11 @@ function payoutTimingLine({ immediate, releaseAt }) {
 
 /**
  * The ruling posted when staff settle a contract's frozen escrow.
+ * With `outcome` (an entry of DISPUTE_RESOLUTIONS), the ruling opens with that finding, for
+ * example the disputee refusing to take part before the escrow went to the disputer.
  * @param {{ client: string, freelancer: string, clientCredits: number, freelancerCredits: number,
- *   immediate: boolean, releaseAt: Date|string, notes?: string, disputeNumber?: string }} context
+ *   immediate: boolean, releaseAt: Date|string, notes?: string, disputeNumber?: string,
+ *   outcome?: object|null, disputer?: string, disputee?: string }} context
  */
 function buildDisputeSettlementMessage({
   client,
@@ -284,6 +311,9 @@ function buildDisputeSettlementMessage({
   notes,
   disputeNumber,
   milestones = [],
+  outcome = null,
+  disputer,
+  disputee,
 } = {}) {
   const shares = [];
   if (clientCredits > 0) shares.push(`${client} (client) receives ${credits(clientCredits)} back`);
@@ -303,16 +333,18 @@ function buildDisputeSettlementMessage({
       extra > 0 ? `, plus ${credits(extra)} from the rest of the escrow` : ''
     }.`;
   }
+  const settled = `The escrow on this contract has been settled: ${shares.join(', and ')}.${milestoneLine} ${payoutTimingLine({
+    immediate,
+    releaseAt,
+  })} The contract has ended and its unfinished milestones are cancelled.`;
   return buildDisputeRulingMessage(
     {
-      label: 'Escrow settled',
-      finding: () =>
-        `The escrow on this contract has been settled: ${shares.join(', and ')}.${milestoneLine} ${payoutTimingLine({
-          immediate,
-          releaseAt,
-        })} The contract has ended and its unfinished milestones are cancelled.`,
+      label: outcome ? `${outcome.label} · Escrow settled` : 'Escrow settled',
+      finding: (names) => (outcome ? `${outcome.finding(names)} ${settled}` : settled),
     },
     {
+      disputer,
+      disputee,
       notes,
       disputeNumber,
       heading: 'Final decision',
@@ -510,6 +542,8 @@ function buildDisputeRulingMessage(
 module.exports = {
   DISPUTE_RESOLUTIONS,
   DISPUTE_RESOLUTION_KEYS,
+  DISPUTER_AWARD_OUTCOMES,
+  escrowKeptLine,
   DISPUTE_REOPEN_REASONS,
   DISPUTE_REOPEN_KEYS,
   DISPUTE_DECISION_AUTHOR,

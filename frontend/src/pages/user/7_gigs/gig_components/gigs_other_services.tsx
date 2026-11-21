@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { CreditIcon } from "@/components/ui/credit-icon";
 import { SubscriptionIcon } from "@/components/ui/SubscriptionIcon";
+import { VerificationIcon } from "@/components/ui/VerificationIcon";
 import { resolveAvatarPath } from "@/lib/accountAvatars";
 import api from "@/lib/axios";
 import { formatDistanceToNow } from "date-fns";
@@ -80,6 +81,7 @@ export const GigsOtherServices: React.FC<GigsOtherServicesProps> = ({ currentGig
               const mappedGig = {
                 ...g,
                 freelancerSubscriptionPlan: g.freelancerSubscriptionPlan || g.freelancer_subscription_plan || "Free",
+                freelancerIsVerified: Boolean(g.freelancerIsVerified ?? g.freelancer_is_verified),
                 thumbnail: mapUrl(g.thumbnail_path || g.thumbnail),
                 clientAvatar: isValidAvatar ? resolveAvatarPath(rawAvatar) : undefined,
               };
@@ -449,6 +451,7 @@ export const GigsOtherServices: React.FC<GigsOtherServicesProps> = ({ currentGig
                           <span className="text-[11px] font-semibold text-gray-700 dark:text-zinc-300 truncate">
                             {gig.postedBy}
                           </span>
+                          <VerificationIcon verified={gig.freelancerIsVerified} />
                           <SubscriptionIcon plan={gig.freelancerSubscriptionPlan} />
                         </div>
                         <div className="flex items-center gap-1 text-[10px] font-medium text-gray-500">

@@ -25,11 +25,20 @@ const checkSession = require('../middleware/CheckSession');
 const requireAuth = require('../middleware/RequireAuth');
 const optionalAuth = require('../middleware/OptionalAuth');
 const optionalSession = require('../middleware/OptionalSession');
+const { createRateLimiter } = require('../middleware/RateLimiter');
+
+const jobInviteLimiter = createRateLimiter('jobInvite', {
+    windowMs: 60 * 1000,
+    accountLimit: 10,
+    anonymousLimit: 5,
+    networkLimit: 120,
+    message: 'You are sending invitations too fast. Please wait a moment.',
+});
 
 
 // Job Invitations
 router.get('/my-active-jobs', [checkSession, requireAuth], getActiveJobsByClientController);
-router.post('/invite', [checkSession, requireAuth], createJobInvitationController);
+router.post('/invite', [checkSession, requireAuth, jobInviteLimiter], createJobInvitationController);
 
 // Terms of service
 router.get('/tos', getTermsOfServiceController);

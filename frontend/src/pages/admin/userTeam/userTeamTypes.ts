@@ -1,14 +1,73 @@
 export type TeamMember = {
   id: string | number;
+  accountId?: string;
   name: string;
   email: string;
   username: string;
   role: string;
+  /** The member's own account standing (Active, Suspended, Banned, Locked). */
+  accountStatus?: string;
+};
+
+/** The team's leader (first active Owner). Warnings and timeouts aimed at the team land here. */
+export type TeamLeader = {
+  userId: string | null;
+  accountId: string;
+  name: string;
+  username: string | null;
+  email: string;
+  avatarPath: string | null;
+  status: string;
+  suspensionEndsAt?: string | null;
+  banEndsAt?: string | null;
+  lockEndsAt?: string | null;
+  merit: number | null;
+  forumTimeout: boolean;
+  /** The leader's current penalty was applied together with this team (lifting the team can lift it). */
+  penaltyLinkedToTeam: boolean;
+  meritPenalties?: {
+    id: string;
+    effect: string;
+    label: string;
+    ruleLabel?: string | null;
+    startsAt?: string | null;
+    endsAt: string | null;
+    durationDays?: number | null;
+    triggerMerit?: number | null;
+    meritAtStart?: number | null;
+  }[];
+};
+
+/** Team wallet: spendable, held by staff, escrow and the part owed to members from contract payouts. */
+export type TeamWalletSummary = {
+  walletId: string | null;
+  available: number;
+  held: number;
+  escrow: number;
+  contractReserved: number;
+  unreserved: number;
+  inactive: boolean;
+};
+
+export type TeamAttentionFlag = {
+  id: string;
+  label: string;
+  tone: 'danger' | 'warning' | 'info';
 };
 
 export type PlatformTeam = {
   id: string;
   accountId: string;
+  /** `standard` business team, or a `contractual` project workspace. */
+  teamType?: 'standard' | 'contractual' | string;
+  leader?: TeamLeader | null;
+  wallet?: TeamWalletSummary;
+  standing?: {
+    suspensionEndsAt: string | null;
+    banEndsAt: string | null;
+    lockEndsAt: string | null;
+  };
+  attention?: TeamAttentionFlag[];
   name: string;
   logoInitial: string;
   avatarPath: string | null;
@@ -66,6 +125,8 @@ export type CreditActivityItem = {
   /** When a hold was set to be released (at the time it was placed). */
   holdUntil?: string | null;
   createdAt?: string | null;
+  /** The other side of the move (a member, a team, a client), when there is one. */
+  counterparty?: { name: string; handle: string | null; isTeam: boolean } | null;
 };
 
 export type VerificationDetail = {
@@ -193,7 +254,9 @@ export type AccountActivityItem = {
 
 export type TeamHistory = {
   summaryLabel: string;
-  merit?: number;
+  /** Members only. Null for teams: they have no Platform Merit. */
+  merit?: number | null;
+  activeWarningPoints?: number;
   totalViolations: number;
   totalDisputes: number;
   openDisputes: number;
@@ -212,6 +275,13 @@ export type TeamHistory = {
     expiresAt?: string | null;
     active?: boolean;
     status?: string;
+    /** The account carrying the points (the team leader, for a warning issued through a team). */
+    accountId?: string;
+    issuedToName?: string | null;
+    issuedToHandle?: string | null;
+    /** Set when the warning was issued against a team and landed on its leader. */
+    viaTeamAccountId?: string | null;
+    viaTeamName?: string | null;
   }[];
   disputes: { id: string; title: string; description: string; status: string; by: string; timeAgo: string }[];
   activity?: AccountActivityItem[];
@@ -226,6 +296,12 @@ export type TeamManagementData = {
     totalVerifiedBusinesses: number;
     totalUnverifiedBusiness: number;
     totalPendingVerification: number;
+    totalLocked?: number;
+    totalNeedsAttention?: number;
+    totalLeaderRestricted?: number;
+    totalWithoutLeader?: number;
+    totalCreditsHeld?: number;
+    totalTeamWalletBalance?: number;
   };
   teams: PlatformTeam[];
   lastUpdated: string;

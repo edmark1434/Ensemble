@@ -203,6 +203,7 @@ const JobMain: React.FC = () => {
           clientHireRate: typeof j.client_hire_rate === "number" ? j.client_hire_rate : (parseInt(j.client_hire_rate) || 100),
           clientMerit: j.client_merit !== undefined && j.client_merit !== null ? Number(j.client_merit) : 100,
           clientSubscriptionPlan: j.client_subscription_plan || "Free",
+          clientIsVerified: Boolean(j.client_is_verified ?? j.clientIsVerified),
           clientProfileVisibility: Number(j.client_profile_visibility) || 0,
           clientLastActive: j.client_last_active ? getTimeAgo(new Date(j.client_last_active)) : undefined
         })).map((mappedJob: Job) => ({

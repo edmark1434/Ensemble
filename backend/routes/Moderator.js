@@ -156,6 +156,8 @@ router.patch('/forum/groups/:id/members/:memberId', [checkSession, forumModerato
 router.get('/forum/discussions', [checkSession, forumModerator], ForumModerator.getDiscussions);
 router.get('/forum/discussions/:id', [checkSession, forumModerator], ForumModerator.getDiscussion);
 router.patch('/forum/discussions/:id', [checkSession, forumModerator], ForumModerator.patchDiscussion);
+router.patch('/forum/discussions/:id/comments/:commentId', [checkSession, forumModerator], ForumModerator.patchComment);
+// Hides the comment (restorable); kept for older clients.
 router.delete('/forum/discussions/:id/comments/:commentId', [checkSession, forumModerator], ForumModerator.deleteComment);
 router.get('/forum/restrictions', [checkSession, forumModerator], ForumModerator.getRestrictions);
 router.get('/forum/restrictions/lookup', [checkSession, forumModerator], lookupRestrictionAccounts);

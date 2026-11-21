@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { ExternalLink, CheckCircle, Clock, Star, Eye, ArrowRight, ListChecks, X } from 'lucide-react';
+import { constructAvatarUrl } from '@/lib/accountAvatars';
 
 interface ReviewData {
     rating?: number | string;
@@ -85,7 +86,7 @@ export const ContractReviewsModal: React.FC<ContractReviewsModalProps> = ({
                     <div className="flex items-center gap-3 min-w-0 flex-1">
                         {avatar ? (
                             <img
-                                src={`${import.meta.env.VITE_CLOUDFRONT_URL}${avatar.startsWith('/') ? '' : '/'}${avatar}`}
+                                src={constructAvatarUrl(avatar, title)}
                                 alt={title}
                                 className="w-10 h-10 rounded-full object-cover border border-gray-200 dark:border-white/10 shrink-0 shadow-2xs"
                                 onError={(e) => { e.currentTarget.style.display = 'none'; }}
@@ -414,12 +415,8 @@ export const DashboardTaskList: React.FC<DashboardTaskListProps> = ({ tasks, isF
                             <div className="flex items-center gap-3">
                                 <img 
                                     src={isFreelancerRole 
-                                        ? (task.client_avatar 
-                                            ? `${import.meta.env.VITE_CLOUDFRONT_URL}${task.client_avatar.startsWith('/') ? '' : '/'}${task.client_avatar}`
-                                            : "https://i.pravatar.cc/150?u=a042581f4e29026704d") 
-                                        : (task.freelancer_avatar 
-                                            ? `${import.meta.env.VITE_CLOUDFRONT_URL}${task.freelancer_avatar.startsWith('/') ? '' : '/'}${task.freelancer_avatar}`
-                                            : "https://i.pravatar.cc/150?u=b042581f4e29026704d")} 
+                                        ? constructAvatarUrl(task.client_avatar, task.client_name || 'Client')
+                                        : constructAvatarUrl(task.freelancer_avatar, task.freelancer_name || 'Freelancer')} 
                                     alt="User Avatar" 
                                     className="w-9 h-9 rounded-full object-cover border border-gray-200 dark:border-zinc-700 shrink-0"
                                 />

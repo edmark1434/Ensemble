@@ -3,6 +3,8 @@ const {
   buildDisputePermissions,
   loadDisputeRow,
   getDisputeDetail,
+  assertDisputeBanAllowed,
+  banDisputeRespondent,
 } = require('../repositories/AdminTicketsRepositories');
 const {
   domainError,
@@ -26,6 +28,8 @@ const {
   buildDisputeReversalMessage,
   buildDisputePayoutUpdateMessage,
   formatPayoutDate,
+  findDisputeResolution,
+  DISPUTER_AWARD_OUTCOMES,
   DISPUTE_PAYOUT_DEFAULT_DAYS,
   DISPUTE_PAYOUT_MAX_DAYS,
 } = require('../lib/DisputeResolutions');
@@ -66,6 +70,56 @@ function parseSettlementSplit(body) {
     throw domainError('A picked milestone id is not valid.', 400);
   }
   return { splitMethod, milestoneIds: splitMethod === 'amount' ? [] : milestoneIds };
+}
+
+/** Outcomes a split ruling may record: the split both parties agreed on. */
+const AGREED_SPLIT_OUTCOMES = ['resolved_both_parties'];
+
+/**
+ * What a Settle escrow ruling decides besides the split.
+ *   award: "disputer"       → the server sends all escrow to the disputer's side; needs an outcome
+ *                             from DISPUTER_AWARD_OUTCOMES (the disputee would not take part).
+ *   outcome                 → recorded as the case's resolution (`resolution_outcome`).
+ *   accountAction: "ban"    → the disputee is banned permanently once the escrow is settled.
+ */
+function parseSettlementRuling(body) {
+  const award = String(body?.award || '').toLowerCase().trim();
+  if (award && award !== 'disputer') throw domainError('award must be "disputer" when given.', 400);
+  const outcomeKey = String(body?.outcome ?? body?.resolutionOutcome ?? '').toLowerCase().trim();
+  const outcome = outcomeKey ? findDisputeResolution(outcomeKey) : null;
+  if (outcomeKey && !outcome) throw domainError('That outcome is not one staff can pick.', 400);
+  if (award === 'disputer') {
+    if (!outcome || !DISPUTER_AWARD_OUTCOMES.includes(outcome.key)) {
+      throw domainError(
+        `Pick why the escrow goes to the disputer. Use one of: ${DISPUTER_AWARD_OUTCOMES.join(', ')}.`,
+        400
+      );
+    }
+  } else if (outcome && !AGREED_SPLIT_OUTCOMES.includes(outcome.key)) {
+    throw domainError(
+      outcome.escrow === 'disputer'
+        ? `"${outcome.label}" sends the escrow to the disputer. Use award "disputer" instead of a split.`
+        : `A split ruling can only record "Resolved by both parties".`,
+      400
+    );
+  }
+  const accountAction =
+    String(body?.accountAction ?? body?.account_action ?? 'none').toLowerCase().trim() || 'none';
+  if (!['none', 'ban'].includes(accountAction)) {
+    throw domainError('accountAction must be none or ban.', 400);
+  }
+  if (accountAction === 'ban' && outcome && AGREED_SPLIT_OUTCOMES.includes(outcome.key)) {
+    throw domainError('A split both parties agreed on cannot ban either of them.', 400);
+  }
+  let banReason = null;
+  if (accountAction === 'ban') {
+    banReason = String(body?.banReason ?? body?.ban_reason ?? '').trim();
+    if (banReason.length < 8) {
+      throw domainError('Write the ban reason the member will see (at least 8 characters).', 400);
+    }
+    if (banReason.length > 2000) throw domainError('The ban reason is too long.', 400);
+  }
+  return { awardToDisputer: award === 'disputer', outcome, accountAction, banReason };
 }
 
 /**
@@ -157,7 +211,7 @@ function payoutLines(payouts, labels) {
   );
 }
 
-async function announceSettlement(row, result, notes) {
+async function announceSettlement(row, result, notes, { outcome = null } = {}) {
   const clientId = result.payouts.find((p) => p.recipient_role === 'client')?.recipient_account_id;
   const freelancerId = result.payouts.find((p) => p.recipient_role === 'freelancer')?.recipient_account_id;
   const labels = await loadAccountLabels([clientId, freelancerId, row.by_account_id, row.for_account_id]);
@@ -174,6 +228,9 @@ async function announceSettlement(row, result, notes) {
       notes,
       disputeNumber: row.dispute_number || null,
       milestones: result.milestones || [],
+      outcome,
+      disputer: labels.get(String(row.by_account_id)) || undefined,
+      disputee: labels.get(String(row.for_account_id)) || undefined,
     })
   );
 
@@ -317,6 +374,30 @@ async function announceFailure(row, failed, error) {
   });
 }
 
+/** Accounts whose wallet a money result touched: payout recipients and a reversal's two sides. */
+function walletAccountsOf(result) {
+  const lists = [result?.payouts, result?.paid, result?.failed, result?.cancelled].filter(Array.isArray);
+  return [
+    ...lists.flat().map((p) => p?.recipient_account_id),
+    result?.fromAccountId,
+    result?.recipientAccountId,
+  ].filter(Boolean);
+}
+
+/**
+ * Open wallet views (Transactions, Settings → Wallet) of both parties and every recipient
+ * reload, so a paid, scheduled, moved or withdrawn payout shows without a refresh. The change
+ * is already committed when this runs.
+ */
+function broadcastWalletChange(row, result, reason) {
+  // Lazy require: the socket module loads services of its own.
+  const { emitWalletChanged } = require('../lib/WebSocket');
+  emitWalletChanged([row.by_account_id, row.for_account_id, ...walletAccountsOf(result)], {
+    reason,
+    disputeId: row.dispute_id,
+  });
+}
+
 async function logActivity(row, staffId, eventCode, action, metadata) {
   await recordAccountActivity({
     accountId: row.by_account_id || row.for_account_id,
@@ -334,7 +415,12 @@ async function logActivity(row, staffId, eventCode, action, metadata) {
  * Staff money actions on a dispute. A case filed after its contract ended
  * (`contract_ended_at_filing`) refuses settle_escrow and reverse_transaction.
  *   settle_escrow       { clientCredits, freelancerCredits, resolutionNotes, splitMethod?, milestoneIds?,
- *                          releaseMode?, releaseAt? }  splitMethod: amount | milestones | both
+ *                          releaseMode?, releaseAt?, award?, outcome?, accountAction?, banReason? }
+ *                          splitMethod: amount | milestones | both
+ *                          award "disputer" + outcome disputee_refused | disputee_inactive: the server
+ *                          sends all escrow to the disputer's side (approved milestones stay the
+ *                          freelancer's). outcome resolved_both_parties records an agreed split.
+ *                          accountAction "ban" bans the disputee once the escrow is settled.
  *   reverse_transaction  { creditTransactionId, amount?, resolutionNotes, releaseMode?, releaseAt? }
  *   release_payouts      pay every waiting payout now
  *   reschedule_payouts   { releaseAt, resolutionNotes? }
@@ -354,15 +440,24 @@ async function applyFinancialResolution(disputeId, body, staffSession) {
 
   let result;
   let reason = action;
+  let warning = null;
   if (action === 'settle_escrow') {
     const notes = requireNotes(notesInput);
     const timing = parseReleaseTiming(body);
-    const clientCredits = parseNonNegInt(body?.clientCredits ?? body?.client_credits ?? 0, 'clientCredits');
-    const freelancerCredits = parseNonNegInt(
-      body?.freelancerCredits ?? body?.freelancer_credits ?? 0,
-      'freelancerCredits'
-    );
-    const split = parseSettlementSplit(body);
+    const ruling = parseSettlementRuling(body);
+    // An award to the disputer is split by the server; the console's numbers are ignored.
+    const clientCredits = ruling.awardToDisputer
+      ? 0
+      : parseNonNegInt(body?.clientCredits ?? body?.client_credits ?? 0, 'clientCredits');
+    const freelancerCredits = ruling.awardToDisputer
+      ? 0
+      : parseNonNegInt(body?.freelancerCredits ?? body?.freelancer_credits ?? 0, 'freelancerCredits');
+    const split = ruling.awardToDisputer
+      ? { splitMethod: 'amount', milestoneIds: [] }
+      : parseSettlementSplit(body);
+    const banning = ruling.accountAction === 'ban';
+    // Checked before any credit moves, so a ruling never lands with a ban that cannot follow.
+    if (banning) await assertDisputeBanAllowed(row, staff);
     result = await settleEscrow({
       disputeId,
       staffId,
@@ -371,21 +466,47 @@ async function applyFinancialResolution(disputeId, body, staffSession) {
       resolutionNotes: notes,
       ...split,
       ...timing,
+      awardToDisputer: ruling.awardToDisputer,
+      resolutionOutcome: ruling.outcome?.key || null,
     });
-    await logActivity(row, staffId, 'DISPUTE_ESCROW_SETTLED', 'escrow settled', {
-      clientCredits,
-      freelancerCredits,
-      splitMethod: split.splitMethod,
-      milestones: (result.milestones || []).map((m) => ({
-        id: m.id,
-        name: m.name,
-        credits: m.credits,
-        approved: Boolean(m.approved),
-      })),
-      immediate: timing.immediate,
-      releaseAt: timing.releaseAt,
+    await logActivity(
+      row,
+      staffId,
+      'DISPUTE_ESCROW_SETTLED',
+      ruling.awardToDisputer ? 'escrow returned to the disputer' : 'escrow settled',
+      {
+        clientCredits: result.clientCredits,
+        freelancerCredits: result.freelancerCredits,
+        splitMethod: result.splitMethod,
+        outcome: ruling.outcome?.key || null,
+        awardedRole: result.awardedRole || null,
+        accountAction: ruling.accountAction,
+        milestones: (result.milestones || []).map((m) => ({
+          id: m.id,
+          name: m.name,
+          credits: m.credits,
+          approved: Boolean(m.approved),
+        })),
+        immediate: timing.immediate,
+        releaseAt: timing.releaseAt,
+      }
+    );
+    // A ban makes the case public, so the ruling is posted for both parties.
+    await announceSettlement(banning ? { ...row, visibility: true } : row, result, notes, {
+      outcome: ruling.outcome,
     });
-    await announceSettlement(row, result, notes);
+    if (banning) {
+      try {
+        await banDisputeRespondent(row, { reason: ruling.banReason, staff, staffSession });
+        reason = 'escrow_settled_banned';
+      } catch (err) {
+        // The escrow ruling is committed; say plainly that the ban is what did not happen.
+        console.error('Dispute settled but the ban failed:', err.message);
+        warning = `The escrow was settled and the case closed, but the ban did not go through: ${
+          err.message || 'unknown error'
+        } Ban the account from User & Team.`;
+      }
+    }
   } else if (action === 'reverse_transaction') {
     const notes = requireNotes(notesInput);
     const timing = parseReleaseTiming(body);
@@ -450,9 +571,10 @@ async function applyFinancialResolution(disputeId, body, staffSession) {
 
   // Every money action changes what both parties and every open staff view should show.
   await emitDisputeState(disputeId, { reason });
+  broadcastWalletChange(row, result, reason);
 
   const detail = await getDisputeDetail(disputeId, staffSession);
-  return { ...detail, financialResult: summarizeResult(result) };
+  return { ...detail, financialResult: summarizeResult(result), ...(warning ? { warning } : {}) };
 }
 
 /** Keep raw ledger rows out of the HTTP response; the detail payload has the full picture. */
@@ -481,10 +603,15 @@ async function releaseDueDisputePayoutsServices() {
       released += item.paid.length;
       await announcePaid(row, item.paid, { auto: true });
       await emitDisputeState(item.disputeId, { reason: 'payout_released' });
+      broadcastWalletChange(row, { paid: item.paid }, 'payout_released');
     } else if (item.failed?.length) {
       failed += item.failed.length;
       // Say it once; hourly retries stay quiet until someone acts.
-      if (item.firstFailure) await announceFailure(row, item.failed, item.error);
+      if (item.firstFailure) {
+        await announceFailure(row, item.failed, item.error);
+        // The member's row turns from Pending to Delayed.
+        broadcastWalletChange(row, { failed: item.failed }, 'payout_failed');
+      }
       await emitDisputeState(item.disputeId, { reason: 'payout_failed' });
     }
   }

@@ -106,6 +106,22 @@ async function consumeUploadIntentRepository(intentId, accountId, fileData) {
     }
 }
 
+/** The keys in `keys` that this account uploaded and finalized itself (and that still exist). */
+async function listOwnedUploadKeysRepository(accountId, keys) {
+    if (!accountId || !Array.isArray(keys) || !keys.length) return [];
+    const { rows } = await pool.query(
+        `SELECT DISTINCT ui.final_key
+         FROM upload_intents ui
+         JOIN files f ON f.file_id = ui.file_id
+         WHERE ui.account_id = $1
+           AND ui.final_key = ANY($2::text[])
+           AND ui.status = 'consumed' AND ui.consumed_at IS NOT NULL
+           AND f.deleted_at IS NULL`,
+        [accountId, keys]
+    );
+    return rows.map((row) => row.final_key);
+}
+
 module.exports = {
     getAllProfileFilesRepositories,
     createFileRepository,
@@ -113,5 +129,6 @@ module.exports = {
     getUploadIntentForOwnerRepository,
     claimUploadIntentRepository,
     releaseUploadIntentRepository,
-    consumeUploadIntentRepository
+    consumeUploadIntentRepository,
+    listOwnedUploadKeysRepository,
 }

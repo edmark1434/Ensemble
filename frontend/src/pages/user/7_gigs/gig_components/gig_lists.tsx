@@ -6,6 +6,7 @@ import { useNavigate, useOutletContext } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { CreditIcon } from "@/components/ui/credit-icon";
 import { SubscriptionIcon } from "@/components/ui/SubscriptionIcon";
+import { VerificationIcon } from "@/components/ui/VerificationIcon";
 import { formatDistanceToNow } from "date-fns";
 import type { Gig } from "../gig_datasets";
 import PopupReportGig from "./PopupReportGig";
@@ -410,6 +411,7 @@ export const GigList: React.FC<GigListProps> = ({
                       <div className="text-left leading-tight truncate">
                         <div className="flex items-center gap-1.5 min-w-0">
                           <p className="text-xs font-bold text-gray-700 dark:text-zinc-300 truncate">{gig.postedBy}</p>
+                          <VerificationIcon verified={gig.freelancerIsVerified} />
                           <SubscriptionIcon plan={gig.freelancerSubscriptionPlan} />
                         </div>
                         {/* Freelancer Overall Rating */}
@@ -678,6 +680,7 @@ export const GigList: React.FC<GigListProps> = ({
                       <div className="text-left leading-tight truncate">
                         <div className="flex items-center gap-1.5 min-w-0">
                           <p className="text-xs font-bold text-gray-700 dark:text-zinc-300 truncate">{gig.postedBy}</p>
+                          <VerificationIcon verified={gig.freelancerIsVerified} />
                           <SubscriptionIcon plan={gig.freelancerSubscriptionPlan} />
                         </div>
                         {/* Freelancer Overall Rating */}

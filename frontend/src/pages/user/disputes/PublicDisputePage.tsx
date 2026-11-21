@@ -319,6 +319,13 @@ export default function PublicDisputePage() {
     };
 
     const join = () => socket.emit("joinDisputeDiscussion", { disputeId: String(id) });
+    // Guests cannot open the (signed-in) socket, and a dropped connection misses events:
+    // while there is no live connection, read the case back every few seconds instead.
+    const POLL_MS = 15_000;
+    const pollTimer = window.setInterval(() => {
+      if (socket.connected || document.visibilityState !== "visible") return;
+      refetch();
+    }, POLL_MS);
     // Anything posted while the connection was down is read back on reconnect.
     let dropped = false;
     const onConnect = () => {
@@ -345,6 +352,7 @@ export default function PublicDisputePage() {
     socket.on("disputeUpdated", onState);
     return () => {
       window.clearTimeout(refetchTimer);
+      window.clearInterval(pollTimer);
       socket.off("connect", onConnect);
       socket.off("disconnect", onDisconnect);
       socket.off("disputeMessage", onLive);
@@ -643,6 +651,7 @@ export default function PublicDisputePage() {
         latestRuling: derived.latestRuling,
         stats: derived.stats,
         onOpenRuling: openRuling,
+        onPreview: (url: string) => setPreviewUrl(url),
       }
     : null;
 
@@ -773,7 +782,13 @@ export default function PublicDisputePage() {
                       <MessagesSquare className="h-4 w-4 text-gray-400 dark:text-zinc-500" />
                       Discussion
                       <span
-                        title={live ? "Updates arrive as they happen" : "Reconnecting… updates will catch up"}
+                        title={
+                          live
+                            ? "Updates arrive as they happen"
+                            : isAuthenticated
+                              ? "Reconnecting… updates will catch up"
+                              : "New replies load every few seconds"
+                        }
                         className={`inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${
                           live
                             ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300"
@@ -786,7 +801,7 @@ export default function PublicDisputePage() {
                           ) : null}
                           <span className={`relative h-1.5 w-1.5 rounded-full ${live ? "bg-emerald-500" : "bg-gray-400"}`} />
                         </span>
-                        {live ? "Live" : "Reconnecting"}
+                        {live ? "Live" : isAuthenticated ? "Reconnecting" : "Auto-updating"}
                       </span>
                     </h2>
                     {messages.length > 4 ? (

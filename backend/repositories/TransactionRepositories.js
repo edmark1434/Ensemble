@@ -73,10 +73,10 @@ async function getCreditTransactionsByAccountId(accountId) {
 }
 
 /**
- * Dispute payouts that will land in one of this account's wallets but have not been paid
- * yet. They have no ledger row until they are paid, so the history shows them separately.
+ * Dispute payouts to one of this account's wallets that have no ledger row: waiting
+ * (scheduled or failed) or withdrawn (cancelled). A paid payout is its ledger row instead.
  */
-async function getPendingDisputePayoutsByAccountId(accountId) {
+async function getUnpaidDisputePayoutsByAccountId(accountId) {
     try {
         const result = await pool.query(
             `
@@ -87,6 +87,7 @@ async function getPendingDisputePayoutsByAccountId(accountId) {
                 p.status,
                 p.release_at,
                 p.created_at,
+                p.cancelled_at,
                 p.transaction_type,
                 p.source_wallet_id,
                 p.destination_wallet_id,
@@ -99,7 +100,7 @@ async function getPendingDisputePayoutsByAccountId(accountId) {
             INNER JOIN disputes d ON d.dispute_id = p.dispute_id
             INNER JOIN wallets destination_wallet ON destination_wallet.wallet_id = p.destination_wallet_id
             WHERE aw.account_id = $1
-              AND p.status IN ('scheduled', 'failed')
+              AND p.status IN ('scheduled', 'failed', 'cancelled')
               AND d.deleted_at IS NULL
             ORDER BY p.release_at ASC, p.dispute_payout_id ASC
             `,
@@ -134,6 +135,6 @@ async function getAccountWalletSummaryByAccountId(accountId) {
 
 module.exports = {
     getCreditTransactionsByAccountId,
-    getPendingDisputePayoutsByAccountId,
+    getUnpaidDisputePayoutsByAccountId,
     getAccountWalletSummaryByAccountId,
 };

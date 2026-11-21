@@ -7,6 +7,7 @@ import type { Gig } from "../gig_datasets";
 import { computeGigRankingBreakdown } from "../gig_ranking";
 import { CreditIcon } from "@/components/ui/credit-icon";
 import { SubscriptionIcon } from "@/components/ui/SubscriptionIcon";
+import { VerificationIcon } from "@/components/ui/VerificationIcon";
 import PopupReportGig from "./PopupReportGig";
 import api from "@/lib/axios";
 import useGlobalState from "@/lib/global_state";
@@ -666,11 +667,12 @@ const GigViewDetails: React.FC<GigViewDetailsProps> = ({ selectedGig, onClose, o
                       <p className="text-xs font-bold text-gray-900 dark:text-white leading-tight truncate">
                         {selectedGig.postedBy}
                       </p>
+                      <VerificationIcon verified={selectedGig.freelancerIsVerified} />
                       <SubscriptionIcon plan={selectedGig.freelancerSubscriptionPlan} />
                     </div>
                     <div className="space-y-0.5">
                       <div className="flex items-center gap-1.5 text-[10px] text-gray-500 dark:text-zinc-400">
-                        <span>Freelancer Rating:</span>
+                        <span>{isTeam ? "Team Rating:" : "Freelancer Rating:"}</span>
                         <div className="flex items-center gap-0.5 font-medium text-gray-700 dark:text-zinc-200">
                           <Star className="h-2.5 w-2.5 text-yellow-500 fill-yellow-500" />
                           <span>{selectedGig.clientRating} ({selectedGig.ratingCount})</span>

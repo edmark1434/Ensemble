@@ -2,6 +2,20 @@ const TeamProjectRepositories = require('../repositories/TeamProjectRepositories
 const TeamsServices = require('./TeamsServices');
 const { createNotificationServices } = require('./NotificationServices');
 const { getIo } = require('../lib/WebSocket');
+const { assertTeamAllows, TeamStandingError } = require('./TeamStandingServices');
+
+/**
+ * The workspace team's standing gate (TeamStandingServices). A project identifier that is not
+ * a team id is left to the repository's own not-found handling.
+ */
+async function assertProjectTeamAllows(teamId, action) {
+  try {
+    await assertTeamAllows(teamId, action);
+  } catch (err) {
+    if (err instanceof TeamStandingError && err.code === 'TEAM_NOT_FOUND') return;
+    throw err;
+  }
+}
 
 function emitSubcontractUpdate(teamId, payload = {}) {
   try {
@@ -66,6 +80,7 @@ async function getProjectTaskboard(teamId, viewerAccountId) {
 }
 
 async function updateProjectTask(teamId, taskId, viewerAccountId, data) {
+  await assertProjectTeamAllows(teamId, 'work');
   const result = await TeamProjectRepositories.updateProjectTask(teamId, taskId, viewerAccountId, data);
   emitSubcontractUpdate(teamId, { action: 'task_updated', task_id: taskId });
   return result;
@@ -116,12 +131,14 @@ async function createProjectTask(teamId, viewerAccountId, data) {
     error.statusCode = 422;
     throw error;
   }
+  await assertProjectTeamAllows(teamId, 'work');
   const result = await TeamProjectRepositories.createProjectTask(teamId, viewerAccountId, data);
   emitSubcontractUpdate(teamId, { action: 'task_created', task_id: result.task_id });
   return result;
 }
 
 async function deleteProjectTask(teamId, taskId, viewerAccountId) {
+  await assertProjectTeamAllows(teamId, 'work');
   return await TeamProjectRepositories.deleteProjectTask(teamId, taskId, viewerAccountId);
 }
 
@@ -151,6 +168,7 @@ async function getAvailableTeamMembers(teamId, viewerAccountId) {
 
 async function addProjectTeamMembers(teamId, accountIds, viewerAccountId) {
   await getProjectDetails(teamId, viewerAccountId);
+  await assertProjectTeamAllows(teamId, 'manage_members');
   const result = await TeamProjectRepositories.addProjectTeamMembers(teamId, accountIds, viewerAccountId);
   try {
     if (typeof TeamsServices.syncChat === 'function') {
@@ -181,6 +199,7 @@ async function addProjectTeamMembers(teamId, accountIds, viewerAccountId) {
 
 async function removeProjectMember(teamId, memberAccountId, viewerAccountId) {
   await getProjectDetails(teamId, viewerAccountId);
+  await assertProjectTeamAllows(teamId, 'work');
   const result = await TeamProjectRepositories.removeProjectMember(teamId, memberAccountId, viewerAccountId);
   try {
     if (typeof TeamsServices.syncChat === 'function') {
@@ -208,10 +227,12 @@ async function removeProjectMember(teamId, memberAccountId, viewerAccountId) {
 }
 
 async function updateProjectDetails(teamId, viewerAccountId, data) {
+  await assertProjectTeamAllows(teamId, 'manage_team');
   return await TeamProjectRepositories.updateProjectDetails(teamId, viewerAccountId, data);
 }
 
 async function deleteProject(teamId, viewerAccountId) {
+  await assertProjectTeamAllows(teamId, 'delete_team');
   return await TeamProjectRepositories.deleteProject(teamId, viewerAccountId);
 }
 
@@ -260,6 +281,7 @@ async function createSubcontractProposal(teamId, viewerAccountId, data) {
     error.statusCode = 422;
     throw error;
   }
+  await assertProjectTeamAllows(teamId, 'hire');
   const result = await TeamProjectRepositories.createSubcontractProposal(teamId, viewerAccountId, data);
   try {
     if (result.client_account_id) {
@@ -299,6 +321,7 @@ async function decideSubcontractProposal(teamId, proposalId, viewerAccountId, da
     error.statusCode = 400;
     throw error;
   }
+  await assertProjectTeamAllows(teamId, 'hire');
   const result = await TeamProjectRepositories.decideSubcontractProposal(teamId, proposalId, viewerAccountId, data);
   try {
     if (result.lead_account_id) {
@@ -366,16 +389,19 @@ async function getAvailableVideoProjects(teamId, viewerAccountId) {
 
 async function createVideoProject(teamId, viewerAccountId, data) {
   const project = await getProjectDetails(teamId, viewerAccountId);
+  await assertProjectTeamAllows(project.team_id, 'work');
   return await TeamProjectRepositories.createWorkspaceProject(project.team_id, viewerAccountId, data);
 }
 
 async function linkVideoProject(teamId, viewerAccountId, data) {
   const project = await getProjectDetails(teamId, viewerAccountId);
+  await assertProjectTeamAllows(project.team_id, 'work');
   return await TeamProjectRepositories.linkWorkspaceProject(project.team_id, viewerAccountId, data.projectId);
 }
 
 async function unlinkVideoProject(teamId, projectId, viewerAccountId) {
   const project = await getProjectDetails(teamId, viewerAccountId);
+  await assertProjectTeamAllows(project.team_id, 'work');
   return await TeamProjectRepositories.unlinkWorkspaceProject(project.team_id, viewerAccountId, projectId);
 }
 

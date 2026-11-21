@@ -365,6 +365,15 @@ async function getCaseSummary(accountId, accountAccess) {
   };
 }
 
+/** Staff desks re-read their queues (`staffCaseChanged`). Never throws. */
+function announceStaffCase(kind, id, reason) {
+  try {
+    require('../lib/WebSocket').emitStaffCaseChange({ kind, id, reason });
+  } catch (error) {
+    console.warn('Staff case change skipped:', error.message);
+  }
+}
+
 function emitCaseUpdate(accountId, payload) {
   try {
     const io = require('../lib/WebSocket').getIo();
@@ -407,6 +416,7 @@ async function ticketMemberRecipients(row) {
  * @param {{ reason?: string }} [options] `message` or `status`
  */
 async function announceTicketCase(ticketId, { reason = 'status' } = {}) {
+  announceStaffCase('ticket', ticketId, reason);
   try {
     const { getTicketCaseRow, loadAccountStatuses } = require('../repositories/CaseRepositories');
     const row = await getTicketCaseRow(ticketId);
@@ -455,6 +465,7 @@ function disputeAudienceParties(row, audience, senderId) {
  *   `audience` limits a `message` update to the parties that message reaches.
  */
 async function announceDisputeCase(disputeId, { reason = 'status', audience = null, senderId = null } = {}) {
+  announceStaffCase('dispute', disputeId, reason);
   try {
     const { pool } = require('../lib/Database');
     const { loadAccountStatuses } = require('../repositories/CaseRepositories');
@@ -505,6 +516,8 @@ async function announceDisputeCase(disputeId, { reason = 'status', audience = nu
  */
 async function notifyCaseOpened({ accountId, kind, id, number = null }) {
   if (!accountId || !id) return;
+  // A new ticket or dispute lands in the staff queues without a reload.
+  announceStaffCase(kind, id, 'opened');
   try {
     const { createNotificationServices } = require('./NotificationServices');
     const ref = number ? (kind === 'ticket' ? `#${number}` : number) : '';

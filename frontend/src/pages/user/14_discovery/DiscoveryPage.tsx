@@ -1166,19 +1166,6 @@ export default function DiscoveryPage() {
                       <Sparkles className="w-3 h-3" />
                       Discovery Feed
                     </button>
-                    <button
-                      onClick={() => {
-                        setSortOption("pure_random");
-                        setShuffleSeed(
-                          Math.floor(100000 + Math.random() * 900000)
-                        );
-                      }}
-                      className={chip(sortOption === "pure_random")}
-                      title="Random exploration pick"
-                    >
-                      <Dices className="w-3.5 h-3.5" />
-                      Random
-                    </button>
                     {allMySkills.length > 0 && (
                       <button
                         onClick={() =>

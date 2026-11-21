@@ -63,8 +63,50 @@ async function getActiveTeamOwnerAccountIds(teamAccountId) {
       AND tm.role='Owner' AND tm.status='Active'`,
     [teamAccountId])).rows.map((row) => row.account_id);
 }
+/**
+ * The team account's standing and its leader's, for the team standing gate. Works for
+ * contractual (project) teams too. `teamId` may be the team id or the team's account id.
+ */
+async function getTeamStanding(teamIdOrAccountId) {
+  return (await pool.query(`SELECT t.team_id,t.account_id,COALESCE(t.team_type,'standard') AS team_type,
+      a.display_name,a.handle,a.status AS account_status,
+      a.suspension_ends_at AS account_suspension_ends_at,a.ban_ends_at AS account_ban_ends_at,a.lock_ends_at AS account_lock_ends_at,
+      o.account_id AS owner_account_id,o.status AS owner_account_status,o.display_name AS owner_name,o.handle AS owner_handle
+    FROM teams t
+    JOIN accounts a ON a.account_id=t.account_id
+    LEFT JOIN LATERAL (
+      SELECT oa.account_id,oa.status,oa.display_name,oa.handle
+      FROM team_members om
+      JOIN users ou ON ou.user_id=om.user_id
+      JOIN accounts oa ON oa.account_id=ou.account_id
+      WHERE om.team_id=t.team_id AND om.role='Owner' AND om.status='Active' AND om.deleted_at IS NULL
+        AND oa.deleted_at IS NULL
+      ORDER BY om.joined_at ASC
+      LIMIT 1
+    ) o ON TRUE
+    WHERE (t.team_id::text=$1 OR t.account_id::text=$1) AND t.deleted_at IS NULL
+    LIMIT 1`, [String(teamIdOrAccountId)])).rows[0] || null;
+}
+/** Active Owners and Admins: the people who hear about the team's standing and wallet. */
+async function getTeamManagerAccountIds(teamAccountId) {
+  return (await pool.query(`SELECT DISTINCT u.account_id FROM teams t
+    JOIN team_members tm ON tm.team_id=t.team_id
+    JOIN users u ON u.user_id=tm.user_id
+    WHERE t.account_id=$1 AND tm.status='Active' AND tm.deleted_at IS NULL AND tm.role IN ('Owner','Admin')`,
+    [teamAccountId])).rows.map((row) => row.account_id);
+}
+/** Active members' account ids, for live team updates. */
+async function getActiveTeamMemberAccountIds(teamAccountId) {
+  return (await pool.query(`SELECT u.account_id FROM teams t
+    JOIN team_members tm ON tm.team_id=t.team_id
+    JOIN users u ON u.user_id=tm.user_id
+    WHERE t.account_id=$1 AND tm.status='Active' AND tm.deleted_at IS NULL`,
+    [teamAccountId])).rows.map((row) => row.account_id);
+}
 async function getTeam(teamId, accountId) {
   return (await pool.query(`SELECT t.*,a.display_name,a.handle,a.tagline,a.description,a.status AS account_status,f.path AS avatar_path, a.banner_preset,
+    a.suspension_ends_at AS account_suspension_ends_at,a.ban_ends_at AS account_ban_ends_at,a.lock_ends_at AS account_lock_ends_at,
+    o.account_id owner_account_id,o.status owner_account_status,
     COALESCE(mc.member_count,0)::int member_count,tm.role current_user_role,tm.status current_user_status,
     COALESCE(v.is_verified,FALSE) is_business_verified,v.verified_at business_verified_at,
     COALESCE(cv.is_verified,FALSE)
@@ -280,6 +322,64 @@ async function getTeamInvitePreview(code, accountId = null) {
     LEFT JOIN accounts o ON o.account_id = ou.account_id
     WHERE upper(t.join_code) = upper($1) AND t.deleted_at IS NULL
   `, [code, accountId])).rows[0] || null;
+}
+/**
+ * Staff move a team's ownership (for example because the leader is banned). Every current
+ * Owner row becomes `previousOwnerRole` ('Admin', 'Member') or leaves the team ('Removed');
+ * the new owner must be an active member. One transaction, so a team never has two owners.
+ */
+async function transferOwnershipByStaff(teamId, newOwnerUserId, previousOwnerRole = 'Member') {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    // Lock the roster rows involved so two staff transfers cannot interleave.
+    const target = (await client.query(
+      `SELECT user_id, role, status FROM team_members
+        WHERE team_id=$1 AND user_id=$2 AND deleted_at IS NULL FOR UPDATE`,
+      [teamId, newOwnerUserId]
+    )).rows[0];
+    if (!target || target.status !== 'Active') {
+      const error = new Error('The new owner must be an active member of this team');
+      error.statusCode = 422;
+      throw error;
+    }
+    if (target.role === 'Owner') {
+      const error = new Error('That member already owns this team');
+      error.statusCode = 409;
+      throw error;
+    }
+    const previous = (await client.query(
+      `SELECT tm.user_id, u.account_id FROM team_members tm JOIN users u ON u.user_id=tm.user_id
+        WHERE tm.team_id=$1 AND tm.role='Owner' AND tm.deleted_at IS NULL FOR UPDATE OF tm`,
+      [teamId]
+    )).rows;
+    if (previous.length) {
+      if (previousOwnerRole === 'Removed') {
+        await client.query(
+          `UPDATE team_members SET role='Member', status='Removed', updated_at=NOW()
+            WHERE team_id=$1 AND role='Owner' AND deleted_at IS NULL`,
+          [teamId]
+        );
+      } else {
+        await client.query(
+          `UPDATE team_members SET role=$2, updated_at=NOW()
+            WHERE team_id=$1 AND role='Owner' AND deleted_at IS NULL`,
+          [teamId, previousOwnerRole === 'Admin' ? 'Admin' : 'Member']
+        );
+      }
+    }
+    await client.query(
+      `UPDATE team_members SET role='Owner', updated_at=NOW() WHERE team_id=$1 AND user_id=$2`,
+      [teamId, newOwnerUserId]
+    );
+    await client.query('COMMIT');
+    return { previousOwnerAccountIds: previous.map((row) => String(row.account_id)) };
+  } catch (e) {
+    await client.query('ROLLBACK');
+    throw e;
+  } finally {
+    client.release();
+  }
 }
 async function transferOwnership(teamId,oldUserId,newUserId){const c=await pool.connect();try{await c.query('BEGIN');await c.query(`UPDATE team_members SET role='Admin',updated_at=NOW() WHERE team_id=$1 AND user_id=$2 AND role='Owner'`,[teamId,oldUserId]);await c.query(`UPDATE team_members SET role='Owner',updated_at=NOW() WHERE team_id=$1 AND user_id=$2 AND status='Active'`,[teamId,newUserId]);await c.query('COMMIT');}catch(e){await c.query('ROLLBACK');throw e;}finally{c.release();}}
 async function wallet(teamId){
@@ -1030,5 +1130,5 @@ async function deleteTeamVideoProject(teamId, projectId) {
   return { success: true };
 }
 
-module.exports={createTeam,getUserId,isAccountVerified,isActiveTeamOwner,getTeamOwnerVerificationEligibility,getActiveTeamOwnerAccountIds,getTeam,listTeams,getMembership,listMembers,listJoinRequests,upsertMembership,updateMembership,updateTeam,softDeleteTeam,hasActiveAssignedContract,hasActiveTeamContract,findByCode,getTeamInvitePreview,transferOwnership,wallet,getTeamTransactions,distributeTeamFunds,addTeamFunds,listMarketplacePosts,reviews,addReview,addReport,getTeamInbox,createTeamInbox,syncTeamInboxMembers,getTeamCreationEligibility,getTeamMemberLimitEligibility,listTeamTasks,createTeamTask,updateTeamTask,deleteTeamTask,listTeamVideoProjects,createTeamVideoProject,ensureTeamMembersHaveProjectAccess,deleteTeamVideoProject};
+module.exports={createTeam,getUserId,isAccountVerified,isActiveTeamOwner,getTeamOwnerVerificationEligibility,getActiveTeamOwnerAccountIds,getTeamStanding,getTeamManagerAccountIds,getActiveTeamMemberAccountIds,transferOwnershipByStaff,getTeam,listTeams,getMembership,listMembers,listJoinRequests,upsertMembership,updateMembership,updateTeam,softDeleteTeam,hasActiveAssignedContract,hasActiveTeamContract,findByCode,getTeamInvitePreview,transferOwnership,wallet,getTeamTransactions,distributeTeamFunds,addTeamFunds,listMarketplacePosts,reviews,addReview,addReport,getTeamInbox,createTeamInbox,syncTeamInboxMembers,getTeamCreationEligibility,getTeamMemberLimitEligibility,listTeamTasks,createTeamTask,updateTeamTask,deleteTeamTask,listTeamVideoProjects,createTeamVideoProject,ensureTeamMembersHaveProjectAccess,deleteTeamVideoProject};
 

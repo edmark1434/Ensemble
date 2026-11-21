@@ -1,7 +1,14 @@
 import type { ReactNode } from 'react';
 import { ArrowUpRight, Filter, Receipt, Undo2 } from 'lucide-react';
-import { CopyId, downloadCsv, formatCredits, shortId, StatusPill } from './economyUi';
-import { referenceLabel, typeLabel, type LedgerEntry, type LedgerFilters, type LedgerParty } from './creditEconomyTypes';
+import { balanceChangeText, balanceChangeTitle, CopyId, downloadCsv, formatCredits, shortId, StatusPill } from './economyUi';
+import {
+  referenceLabel,
+  typeLabel,
+  type LedgerBalance,
+  type LedgerEntry,
+  type LedgerFilters,
+  type LedgerParty,
+} from './creditEconomyTypes';
 
 /**
  * Ledger pieces shared by the Ledger tab, the wallet modal and the entry modal: the URL
@@ -87,12 +94,25 @@ export function partyLabel(p: LedgerParty) {
   return p.handle ? `${p.name} (@${p.handle})` : p.name;
 }
 
+/**
+ * A staff credit hold or its release: an Escrow Hold / Escrow Release from a wallet to itself
+ * with reference `wallets`. The credits stay in the member's wallet, moved between spendable and held.
+ */
+export function staffHoldKind(e: LedgerEntry): 'hold' | 'release' | null {
+  if (e.referenceTable !== 'wallets' || !e.source.walletId || e.source.walletId !== e.destination.walletId) return null;
+  if (e.type === 'Escrow Hold') return 'hold';
+  if (e.type === 'Escrow Release') return 'release';
+  return null;
+}
+
 /** Plain name of an entry: "Staff grant", "Top-up", "Marketplace sale", "Platform fee"… */
 export function entryTitle(e: LedgerEntry) {
   if (e.isAdjustment) {
     const delta = e.adjustment?.delta;
     return delta == null ? 'Staff adjustment' : delta > 0 ? 'Staff grant' : 'Staff deduction';
   }
+  const hold = staffHoldKind(e);
+  if (hold) return hold === 'hold' ? 'Credits put on hold' : 'Hold released';
   if (e.referenceTable === 'payments') return 'Top-up';
   return typeLabel(e.type);
 }
@@ -112,6 +132,7 @@ export function feeSourceNoun(type: string | null | undefined) {
 /** One short line under the title that says something the title does not. */
 export function entrySubtitle(e: LedgerEntry) {
   if (e.isAdjustment) return e.adjustment?.reason || 'No reason recorded';
+  if (staffHoldKind(e)) return 'Staff credit hold (stays in the wallet)';
   if (e.feeFor) return `Taken from ${feeSourceNoun(e.feeFor.type)}`;
   if (e.relatedDisputeId) return 'Linked to a dispute';
   if (e.referenceTable && e.referenceTable !== 'payments' && e.referenceTable !== 'cashouts') return referenceLabel(e.referenceTable);
@@ -131,7 +152,8 @@ export function exportLedger(entries: LedgerEntry[], filename = `credit-ledger-$
     filename,
     [
       'Transaction ID', 'Date', 'Category', 'Type', 'Status', 'Amount', 'Signed',
-      'From', 'From wallet', 'To', 'To wallet', 'Reason', 'By',
+      'From', 'From wallet', 'From balance before', 'From balance after',
+      'To', 'To wallet', 'To balance before', 'To balance after', 'Reason', 'By',
       'Fee entry', 'Fee amount', 'Fee charged on', 'Reverses', 'Reversed by',
       'Reference type', 'Reference ID', 'Dispute ID', 'Escrow contract', 'Cashout reference', 'Cashout status',
     ],
@@ -145,8 +167,12 @@ export function exportLedger(entries: LedgerEntry[], filename = `credit-ledger-$
       e.signedAmount ?? '',
       partyLabel(e.source),
       e.source.walletId || '',
+      e.balances?.source?.before ?? '',
+      e.balances?.source?.after ?? '',
       partyLabel(e.destination),
       e.destination.walletId || '',
+      e.balances?.destination?.before ?? '',
+      e.balances?.destination?.after ?? '',
       e.adjustment?.reason || '',
       e.adjustment?.actorName || '',
       e.fee?.id || '',
@@ -276,6 +302,21 @@ export function relatedScopes(e: LedgerEntry, currentWalletId?: string | null) {
  * Everything about one entry: the adjustment audit, its linked rows (each opens the entry
  * modal), every id with copy, and ledger shortcuts for the rest of its story.
  */
+/** "1,200 → 850 credits" with the held change and the approximate note, for the detail facts. */
+function BalanceFact({ balance }: { balance: LedgerBalance }) {
+  return (
+    <span className="block font-sans tabular-nums" title={balanceChangeTitle(balance)}>
+      {balanceChangeText(balance)} credits
+      {balance.heldBefore !== balance.heldAfter && (
+        <span className="block text-[11px] text-amber-200/80">
+          On hold {formatCredits(balance.heldBefore)} → {formatCredits(balance.heldAfter)}
+        </span>
+      )}
+      {balance.approximate && <span className="block text-[10px] text-zinc-500">Approximate (older unsigned adjustment)</span>}
+    </span>
+  );
+}
+
 export function LedgerEntryDetail({
   entry: e,
   onOpenWallet,
@@ -284,7 +325,15 @@ export function LedgerEntryDetail({
   currentWalletId,
   showOpenEntry = true,
   showLinks = true,
-}: LedgerNav & { entry: LedgerEntry; currentWalletId?: string | null; showOpenEntry?: boolean; showLinks?: boolean }) {
+  showBalances = true,
+}: LedgerNav & {
+  entry: LedgerEntry;
+  currentWalletId?: string | null;
+  showOpenEntry?: boolean;
+  showLinks?: boolean;
+  /** Before → after balance of each side (off where the host already shows it). */
+  showBalances?: boolean;
+}) {
   const walletValue = (p: LedgerParty) => {
     if (!p.walletId) return null;
     const canOpen = p.walletType === 'Account' && onOpenWallet && p.walletId !== currentWalletId;
@@ -389,6 +438,15 @@ export function LedgerEntryDetail({
         <DetailFact label="Transaction ID" value={<CopyId value={e.id} className="text-xs text-zinc-200" />} />
         <DetailFact label="From wallet" value={walletValue(e.source)} />
         <DetailFact label="To wallet" value={e.isAdjustment ? 'Same wallet' : walletValue(e.destination)} />
+        {showBalances && e.balances?.source && (
+          <DetailFact
+            label={e.source.walletId === e.destination.walletId ? 'Balance before → after' : `${e.source.name} balance`}
+            value={<BalanceFact balance={e.balances.source} />}
+          />
+        )}
+        {showBalances && e.balances?.destination && (
+          <DetailFact label={`${e.destination.name} balance`} value={<BalanceFact balance={e.balances.destination} />} />
+        )}
         {e.referenceId && (
           <DetailFact label={referenceLabel(e.referenceTable)} value={<CopyId value={e.referenceId} className="text-xs text-zinc-200" />} />
         )}

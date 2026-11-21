@@ -7,6 +7,7 @@ import {
   CheckCircle2,
   Crown,
   Download,
+  EyeOff,
   Heart,
   Loader2,
   Lock,
@@ -17,7 +18,6 @@ import {
   RefreshCw,
   Search,
   Shield,
-  Trash2,
   Undo2,
   Unlock,
   Users,
@@ -63,6 +63,10 @@ type ForumComment = {
   attachmentCount: number;
   isDeleted: boolean;
   deletedAt: string | null;
+  removedBy?: string | null;
+  removalReason?: string | null;
+  canRestore?: boolean;
+  restoreBlockedReason?: string | null;
   createdAt: string | null;
   updatedAt: string | null;
 };
@@ -88,6 +92,10 @@ type ForumDiscussion = {
   createdAt: string | null;
   updatedAt: string | null;
   removedAt: string | null;
+  removedBy?: string | null;
+  removalReason?: string | null;
+  canRestore?: boolean;
+  restoreBlockedReason?: string | null;
   lastCommentAt: string | null;
   lastActivityAt: string | null;
   comments?: ForumComment[];
@@ -116,6 +124,10 @@ type ForumGroup = {
   lastActivityAt: string | null;
   createdAt: string | null;
   deletedAt: string | null;
+  archivedBy?: string | null;
+  archiveReason?: string | null;
+  canReactivate?: boolean;
+  reactivateBlockedReason?: string | null;
   members?: ForumMember[];
   discussions?: ForumDiscussion[];
 };
@@ -155,6 +167,24 @@ function discussionState(item: ForumDiscussion) {
   if (item.isLocked) parts.push('Locked');
   if (item.isSticky) parts.push('Pinned');
   return parts;
+}
+
+/** Who took content down. Only the author's own delete cannot be restored. */
+const REMOVED_BY_LABEL: Record<string, string> = {
+  author: 'Deleted by its author',
+  discussion_owner: 'Removed by the discussion author',
+  group_moderator: 'Removed by a group moderator',
+  staff: 'Removed by staff',
+};
+
+function removedByLabel(value?: string | null) {
+  return value ? REMOVED_BY_LABEL[value] || 'Removed' : 'Removed (source not recorded)';
+}
+
+function archivedByLabel(value?: string | null) {
+  if (value === 'owner') return 'Deleted by its owner';
+  if (value === 'staff') return 'Archived by staff';
+  return 'Archived (source not recorded)';
 }
 
 function groupParams(search: string, status: string) {
@@ -437,18 +467,21 @@ export default function ForumModerationDesk({
     }
   };
 
-  const removeComment = async (commentId: string) => {
+  // Hiding keeps the comment's text on the server, so restore can bring it back.
+  const setCommentHidden = async (commentId: string, hidden: boolean) => {
     if (!discussionDetail) return;
     setSaving(true);
     try {
-      const res = await api.delete(
-        `${FORUM_DISCUSSIONS_URL}/${discussionDetail.id}/comments/${commentId}`
+      const res = await api.patch(
+        `${FORUM_DISCUSSIONS_URL}/${discussionDetail.id}/comments/${commentId}`,
+        { hidden, reason: reason.trim() || undefined }
       );
       setDiscussionDetail(res.data?.data || null);
-      showSuccessToast(res.data?.message || 'Comment removed');
+      setReason('');
+      showSuccessToast(res.data?.message || (hidden ? 'Comment hidden' : 'Comment restored'));
       await load('discussions', query, status);
     } catch (err) {
-      showErrorToast(apiMessage(err, 'Failed to remove comment'));
+      showErrorToast(apiMessage(err, hidden ? 'Failed to hide comment' : 'Failed to restore comment'));
     } finally {
       setSaving(false);
     }
@@ -579,7 +612,7 @@ export default function ForumModerationDesk({
         <StatTile
           label="Comments"
           value={formatNumber(stats?.comments.visible ?? 0)}
-          hint={`${formatNumber(stats?.comments.removed ?? 0)} removed by moderators`}
+          hint={`${formatNumber(stats?.comments.removed ?? 0)} hidden or deleted`}
         />
       </div>
 
@@ -744,7 +777,7 @@ export default function ForumModerationDesk({
               onReasonChange={setReason}
               onClose={closeDetail}
               onSave={saveDiscussion}
-              onRemoveComment={removeComment}
+              onCommentHidden={setCommentHidden}
               onOpenGroup={openGroup}
             />
           ) : null}
@@ -1261,12 +1294,23 @@ function GroupDetail({
             Archiving takes the group and all of its discussions out of the public forums. Nothing is
             deleted, so reactivating brings everything back.
           </p>
+          {group.status !== 'active' ? (
+            <p className="mt-2 text-xs text-zinc-300">
+              {archivedByLabel(group.archivedBy)}
+              {group.archiveReason ? ` · “${group.archiveReason}”` : ''}
+            </p>
+          ) : null}
           <div className="mt-3 space-y-3">
             <ReasonField
               value={reason}
               onChange={onReasonChange}
               hint="Why is this group being archived or restored?"
             />
+            {group.status !== 'active' && group.canReactivate === false ? (
+              <p className="text-xs text-amber-200/80">
+                {group.reactivateBlockedReason || 'This group cannot be reactivated.'}
+              </p>
+            ) : null}
             <div className="flex justify-end">
               {group.status === 'active' ? (
                 <button
@@ -1281,7 +1325,7 @@ function GroupDetail({
               ) : (
                 <button
                   type="button"
-                  disabled={saving}
+                  disabled={saving || group.canReactivate === false}
                   onClick={() => onStatusChange('active')}
                   className="inline-flex items-center gap-1.5 rounded-xl border border-white/10 px-4 py-2 text-sm text-white hover:bg-white/5 disabled:opacity-50"
                 >
@@ -1304,7 +1348,7 @@ function DiscussionDetail({
   onReasonChange,
   onClose,
   onSave,
-  onRemoveComment,
+  onCommentHidden,
   onOpenGroup,
 }: {
   discussion: ForumDiscussion;
@@ -1313,12 +1357,14 @@ function DiscussionDetail({
   onReasonChange: (value: string) => void;
   onClose: () => void;
   onSave: (patch: { status?: string; isLocked?: boolean; isSticky?: boolean }) => void;
-  onRemoveComment: (commentId: string) => void;
+  onCommentHidden: (commentId: string, hidden: boolean) => void;
   onOpenGroup: (id: string) => void;
 }) {
   const comments = discussion.comments || [];
   const [showRemoved, setShowRemoved] = useState(true);
   const visibleComments = showRemoved ? comments : comments.filter((c) => !c.isDeleted);
+  const isRemoved = discussion.status === 'removed';
+  const restoreBlocked = isRemoved && discussion.canRestore === false;
 
   return (
     <>
@@ -1402,15 +1448,27 @@ function DiscussionDetail({
         <section className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
           <p className="text-sm font-medium text-white">Moderation actions</p>
           <p className="mt-1 text-xs leading-relaxed text-zinc-400">
-            Locking keeps the discussion readable but stops new replies. Removing hides it from the
-            forums while keeping it stored for audit. Both are logged against the author.
+            Locking keeps the discussion readable but stops new replies. Removing hides the post, and
+            Hide does the same for one comment. Nothing is deleted, so both can be restored. Every
+            action is logged against the author, with the reason below.
           </p>
+          {isRemoved ? (
+            <p className="mt-2 text-xs text-zinc-300">
+              {removedByLabel(discussion.removedBy)}
+              {discussion.removalReason ? ` · “${discussion.removalReason}”` : ''}
+            </p>
+          ) : null}
           <div className="mt-3 space-y-3">
             <ReasonField
               value={reason}
               onChange={onReasonChange}
               hint="Which rule does this breach, or why is it being restored?"
             />
+            {restoreBlocked ? (
+              <p className="text-xs text-amber-200/80">
+                {discussion.restoreBlockedReason || 'This discussion cannot be restored.'}
+              </p>
+            ) : null}
             <div className="flex flex-wrap gap-2">
               <button
                 type="button"
@@ -1440,20 +1498,16 @@ function DiscussionDetail({
               </button>
               <button
                 type="button"
-                disabled={saving}
-                onClick={() => onSave({ status: discussion.status === 'removed' ? 'active' : 'removed' })}
+                disabled={saving || restoreBlocked}
+                onClick={() => onSave({ status: isRemoved ? 'active' : 'removed' })}
                 className={`inline-flex items-center gap-1.5 rounded-xl border px-3 py-2 text-xs disabled:opacity-50 ${
-                  discussion.status === 'removed'
+                  isRemoved
                     ? 'border-white/10 text-white hover:bg-white/5'
                     : 'border-rose-500/40 text-rose-100 hover:bg-rose-500/10'
                 }`}
               >
-                {discussion.status === 'removed' ? (
-                  <Undo2 className="h-3.5 w-3.5" />
-                ) : (
-                  <Trash2 className="h-3.5 w-3.5" />
-                )}
-                {discussion.status === 'removed' ? 'Restore post' : 'Remove post'}
+                {isRemoved ? <Undo2 className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
+                {isRemoved ? 'Restore post' : 'Remove post'}
               </button>
             </div>
           </div>
@@ -1505,18 +1559,31 @@ function DiscussionDetail({
                     </p>
                   </div>
                   {comment.isDeleted ? (
-                    <span className="shrink-0 rounded-full border border-white/10 bg-white/[0.03] px-2 py-0.5 text-[10px] text-zinc-500">
-                      Removed
-                    </span>
+                    <div className="flex shrink-0 items-center gap-1.5">
+                      <span className="rounded-full border border-white/10 bg-white/[0.03] px-2 py-0.5 text-[10px] text-zinc-500">
+                        {removedByLabel(comment.removedBy)}
+                      </span>
+                      {comment.canRestore ? (
+                        <button
+                          type="button"
+                          disabled={saving}
+                          onClick={() => onCommentHidden(comment.commentId, false)}
+                          className="inline-flex items-center gap-1 rounded-lg border border-white/10 px-2 py-1 text-[11px] text-zinc-200 hover:bg-white/5 disabled:opacity-50"
+                        >
+                          <Undo2 className="h-3 w-3" />
+                          Restore
+                        </button>
+                      ) : null}
+                    </div>
                   ) : (
                     <button
                       type="button"
                       disabled={saving}
-                      onClick={() => onRemoveComment(comment.commentId)}
+                      onClick={() => onCommentHidden(comment.commentId, true)}
                       className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-rose-500/30 px-2 py-1 text-[11px] text-rose-200 hover:bg-rose-500/10 disabled:opacity-50"
                     >
-                      <Trash2 className="h-3 w-3" />
-                      Remove
+                      <EyeOff className="h-3 w-3" />
+                      Hide
                     </button>
                   )}
                 </div>
@@ -1525,6 +1592,13 @@ function DiscussionDetail({
                 >
                   {comment.comment}
                 </p>
+                {comment.isDeleted && (comment.removalReason || comment.restoreBlockedReason) ? (
+                  <p className="mt-1 text-[10px] text-zinc-500">
+                    {comment.removalReason ? `Reason: “${comment.removalReason}”` : ''}
+                    {comment.removalReason && comment.restoreBlockedReason ? ' · ' : ''}
+                    {comment.restoreBlockedReason || ''}
+                  </p>
+                ) : null}
               </li>
             ))}
             {visibleComments.length === 0 ? (

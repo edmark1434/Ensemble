@@ -761,11 +761,15 @@ async function getContractsByUserId(accountIds) {
             client_acc.display_name as client_name,
             client_acc.handle as client_handle,
             client_f.path as client_avatar,
+            COALESCE(client_ver.is_verified, false) as client_is_verified,
+            COALESCE(client_plan.name, 'Free') as client_subscription_plan,
             j.client_account_id,
             free_acc.display_name as freelancer_name,
             free_acc.handle as freelancer_handle,
             free_acc.type as freelancer_type,
             free_f.path as freelancer_avatar,
+            COALESCE(free_ver.is_verified, false) as freelancer_is_verified,
+            COALESCE(free_plan.name, 'Free') as freelancer_subscription_plan,
             p.freelancer_account_id,
             (
                 SELECT COALESCE(
@@ -814,8 +818,8 @@ async function getContractsByUserId(accountIds) {
             (SELECT json_build_object('rating', r.stars_out_of_five) FROM ratings r WHERE r.contract_id = c.contract_id AND r.account_id = p.freelancer_account_id LIMIT 1) as client_rating,
             (SELECT json_build_object('rating', r.stars_out_of_five) FROM ratings r WHERE r.contract_id = c.contract_id AND r.account_id = j.client_account_id LIMIT 1) as freelancer_rating,
             COALESCE(
-                (SELECT json_agg(json_build_object('id', cm.contract_milestone_id, 'name', cm.name, 'status', cm.status, 'revisions', cm.no_of_revisions_max, 'deadline', cm.deadline, 'deadline_at', cm.deadline_at, 'started_at', cm.started_at, 'credits', cm.credits)) FROM contract_milestones cm WHERE cm.contract_id = c.contract_id),
-                (SELECT json_agg(json_build_object('id', m.proposal_milestone_id, 'name', m.name, 'description', m.description, 'hours', m.duration_hrs, 'revisions', m.no_of_revisions_max, 'status', 'Locked')) FROM proposal_milestones m WHERE m.proposal_id = p.proposal_id)
+                (SELECT json_agg(json_build_object('id', cm.contract_milestone_id, 'index', cm.index, 'name', cm.name, 'status', cm.status, 'revisions', cm.no_of_revisions_max, 'deadline', cm.deadline, 'deadline_at', cm.deadline_at, 'started_at', cm.started_at, 'credits', cm.credits) ORDER BY cm.index ASC, cm.contract_milestone_id ASC) FROM contract_milestones cm WHERE cm.contract_id = c.contract_id),
+                (SELECT json_agg(json_build_object('id', m.proposal_milestone_id, 'index', m.index, 'name', m.name, 'description', m.description, 'hours', m.duration_hrs, 'revisions', m.no_of_revisions_max, 'status', 'Locked') ORDER BY m.index ASC, m.proposal_milestone_id ASC) FROM proposal_milestones m WHERE m.proposal_id = p.proposal_id)
             ) as milestones
         FROM contracts c
         JOIN job_contracts jc ON c.contract_id = jc.contract_id
@@ -824,8 +828,54 @@ async function getContractsByUserId(accountIds) {
         LEFT JOIN job_milestones jm ON p.job_milestone_id = jm.job_milestone_id
         JOIN accounts client_acc ON j.client_account_id = client_acc.account_id
         LEFT JOIN files client_f ON client_acc.avatar_file_id = client_f.file_id
+        LEFT JOIN verifications client_ver ON client_ver.account_id = client_acc.account_id
+        LEFT JOIN users client_user ON client_user.account_id = client_acc.account_id
+        LEFT JOIN LATERAL (
+            SELECT pl.name
+            FROM subscriptions s
+            JOIN plans pl ON pl.plan_id = s.plan_id
+            WHERE s.user_id = client_user.user_id
+              AND (s.status IS NULL OR UPPER(s.status) IN ('ACTIVE', 'TRIALING', 'TRIAL', 'PENDING'))
+              AND (
+                s.current_period_end IS NULL
+                OR s.current_period_end > CURRENT_TIMESTAMP
+                OR (s.trial_ends_at IS NOT NULL AND s.trial_ends_at > CURRENT_TIMESTAMP)
+              )
+            ORDER BY
+              CASE WHEN s.xendit_plan_id IS NOT NULL THEN 1 ELSE 2 END,
+              CASE
+                WHEN LOWER(pl.name) = 'business' THEN 1
+                WHEN LOWER(pl.name) = 'premium' THEN 2
+                ELSE 3
+              END,
+              s.updated_at DESC, s.created_at DESC
+            LIMIT 1
+        ) client_plan ON true
         JOIN accounts free_acc ON p.freelancer_account_id = free_acc.account_id
         LEFT JOIN files free_f ON free_acc.avatar_file_id = free_f.file_id
+        LEFT JOIN verifications free_ver ON free_ver.account_id = free_acc.account_id
+        LEFT JOIN users free_user ON free_user.account_id = free_acc.account_id
+        LEFT JOIN LATERAL (
+            SELECT pl.name
+            FROM subscriptions s
+            JOIN plans pl ON pl.plan_id = s.plan_id
+            WHERE s.user_id = free_user.user_id
+              AND (s.status IS NULL OR UPPER(s.status) IN ('ACTIVE', 'TRIALING', 'TRIAL', 'PENDING'))
+              AND (
+                s.current_period_end IS NULL
+                OR s.current_period_end > CURRENT_TIMESTAMP
+                OR (s.trial_ends_at IS NOT NULL AND s.trial_ends_at > CURRENT_TIMESTAMP)
+              )
+            ORDER BY
+              CASE WHEN s.xendit_plan_id IS NOT NULL THEN 1 ELSE 2 END,
+              CASE
+                WHEN LOWER(pl.name) = 'business' THEN 1
+                WHEN LOWER(pl.name) = 'premium' THEN 2
+                ELSE 3
+              END,
+              s.updated_at DESC, s.created_at DESC
+            LIMIT 1
+        ) free_plan ON true
         LEFT JOIN terms_of_service t ON p.terms_id = t.terms_id
         LEFT JOIN LATERAL (SELECT terms_title, terms_description FROM terms_of_service WHERE account_id IS NULL AND terms_type = 'jobs' LIMIT 1) global_t ON true
         WHERE j.client_account_id = ANY($1::uuid[])
@@ -866,11 +916,15 @@ async function getContractsByUserId(accountIds) {
             client_acc.display_name as client_name,
             client_acc.handle as client_handle,
             client_f.path as client_avatar,
+            COALESCE(client_ver.is_verified, false) as client_is_verified,
+            COALESCE(client_plan.name, 'Free') as client_subscription_plan,
             gr.client_account_id as client_account_id,
             free_acc.display_name as freelancer_name,
             free_acc.handle as freelancer_handle,
             free_acc.type as freelancer_type,
             free_f.path as freelancer_avatar,
+            COALESCE(free_ver.is_verified, false) as freelancer_is_verified,
+            COALESCE(free_plan.name, 'Free') as freelancer_subscription_plan,
             g.freelancer_account_id as freelancer_account_id,
             '[]'::json as included_team_members,
             COALESCE(t.terms_title, global_t.terms_title, 'Ensemble Standard Gig Terms') as terms_title,
@@ -884,7 +938,7 @@ async function getContractsByUserId(accountIds) {
             (SELECT json_build_object('rating', r.stars_out_of_five) FROM ratings r WHERE r.contract_id = c.contract_id AND r.account_id = g.freelancer_account_id LIMIT 1) as client_rating,
             (SELECT json_build_object('rating', r.stars_out_of_five) FROM ratings r WHERE r.contract_id = c.contract_id AND r.account_id = gr.client_account_id LIMIT 1) as freelancer_rating,
             COALESCE(
-                (SELECT json_agg(json_build_object('id', cm.contract_milestone_id, 'name', cm.name, 'status', cm.status, 'revisions', cm.no_of_revisions_max, 'deadline', cm.deadline, 'deadline_at', cm.deadline_at, 'started_at', cm.started_at, 'credits', cm.credits)) FROM contract_milestones cm WHERE cm.contract_id = c.contract_id),
+                (SELECT json_agg(json_build_object('id', cm.contract_milestone_id, 'index', cm.index, 'name', cm.name, 'status', cm.status, 'revisions', cm.no_of_revisions_max, 'deadline', cm.deadline, 'deadline_at', cm.deadline_at, 'started_at', cm.started_at, 'credits', cm.credits) ORDER BY cm.index ASC, cm.contract_milestone_id ASC) FROM contract_milestones cm WHERE cm.contract_id = c.contract_id),
                 '[]'::json
             ) as milestones
         FROM contracts c
@@ -894,8 +948,54 @@ async function getContractsByUserId(accountIds) {
         JOIN gigs g ON gt.gig_id = g.gig_id
         JOIN accounts client_acc ON gr.client_account_id = client_acc.account_id
         LEFT JOIN files client_f ON client_acc.avatar_file_id = client_f.file_id
+        LEFT JOIN verifications client_ver ON client_ver.account_id = client_acc.account_id
+        LEFT JOIN users client_user ON client_user.account_id = client_acc.account_id
+        LEFT JOIN LATERAL (
+            SELECT pl.name
+            FROM subscriptions s
+            JOIN plans pl ON pl.plan_id = s.plan_id
+            WHERE s.user_id = client_user.user_id
+              AND (s.status IS NULL OR UPPER(s.status) IN ('ACTIVE', 'TRIALING', 'TRIAL', 'PENDING'))
+              AND (
+                s.current_period_end IS NULL
+                OR s.current_period_end > CURRENT_TIMESTAMP
+                OR (s.trial_ends_at IS NOT NULL AND s.trial_ends_at > CURRENT_TIMESTAMP)
+              )
+            ORDER BY
+              CASE WHEN s.xendit_plan_id IS NOT NULL THEN 1 ELSE 2 END,
+              CASE
+                WHEN LOWER(pl.name) = 'business' THEN 1
+                WHEN LOWER(pl.name) = 'premium' THEN 2
+                ELSE 3
+              END,
+              s.updated_at DESC, s.created_at DESC
+            LIMIT 1
+        ) client_plan ON true
         JOIN accounts free_acc ON g.freelancer_account_id = free_acc.account_id
         LEFT JOIN files free_f ON free_acc.avatar_file_id = free_f.file_id
+        LEFT JOIN verifications free_ver ON free_ver.account_id = free_acc.account_id
+        LEFT JOIN users free_user ON free_user.account_id = free_acc.account_id
+        LEFT JOIN LATERAL (
+            SELECT pl.name
+            FROM subscriptions s
+            JOIN plans pl ON pl.plan_id = s.plan_id
+            WHERE s.user_id = free_user.user_id
+              AND (s.status IS NULL OR UPPER(s.status) IN ('ACTIVE', 'TRIALING', 'TRIAL', 'PENDING'))
+              AND (
+                s.current_period_end IS NULL
+                OR s.current_period_end > CURRENT_TIMESTAMP
+                OR (s.trial_ends_at IS NOT NULL AND s.trial_ends_at > CURRENT_TIMESTAMP)
+              )
+            ORDER BY
+              CASE WHEN s.xendit_plan_id IS NOT NULL THEN 1 ELSE 2 END,
+              CASE
+                WHEN LOWER(pl.name) = 'business' THEN 1
+                WHEN LOWER(pl.name) = 'premium' THEN 2
+                ELSE 3
+              END,
+              s.updated_at DESC, s.created_at DESC
+            LIMIT 1
+        ) free_plan ON true
         LEFT JOIN LATERAL (SELECT terms_title, terms_description FROM terms_of_service WHERE account_id = g.freelancer_account_id AND terms_type = 'gigs' AND is_default = true LIMIT 1) t ON true
         LEFT JOIN LATERAL (SELECT terms_title, terms_description FROM terms_of_service WHERE account_id IS NULL AND terms_type = 'gigs' LIMIT 1) global_t ON true
         LEFT JOIN LATERAL (

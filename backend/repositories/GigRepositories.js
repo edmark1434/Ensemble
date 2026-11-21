@@ -672,6 +672,12 @@ async function getAllGigsRepository(filters, accountId = null, actorIds = [], af
                 LIMIT 1
             ), 'Free') as "freelancerSubscriptionPlan",
 
+            EXISTS (
+                SELECT 1 FROM verifications v
+                WHERE v.account_id = g.freelancer_account_id
+                  AND v.is_verified = TRUE
+            ) as "freelancerIsVerified",
+
             (SELECT path FROM files WHERE file_id = a.avatar_file_id) as "clientAvatar",
 
             (SELECT f.path FROM gig_attachments ga JOIN files f ON ga.file_id = f.file_id WHERE ga.gig_id = g.gig_id AND ga.index = 0 LIMIT 1) as thumbnail,
@@ -821,9 +827,8 @@ async function getAllGigsRepository(filters, accountId = null, actorIds = [], af
 
             postedBy: row.postedBy || 'Unknown',
 
-        freelancerSubscriptionPlan: row.freelancerSubscriptionPlan || 'Free',
-
             freelancerSubscriptionPlan: row.freelancerSubscriptionPlan || 'Free',
+            freelancerIsVerified: Boolean(row.freelancerIsVerified),
 
             clientAvatar: row.clientAvatar || 'https://i.pravatar.cc/150',
 
@@ -1007,6 +1012,12 @@ async function getSavedGigsRepository(accountId) {
                 LIMIT 1
             ), 'Free') as "freelancerSubscriptionPlan",
 
+            EXISTS (
+                SELECT 1 FROM verifications v
+                WHERE v.account_id = g.freelancer_account_id
+                  AND v.is_verified = TRUE
+            ) as "freelancerIsVerified",
+
             ${FREELANCER_MERIT_SQL},
 
             (SELECT path FROM files WHERE file_id = a.avatar_file_id) as "clientAvatar",
@@ -1175,9 +1186,8 @@ async function getSavedGigsRepository(accountId) {
 
             postedBy: row.postedBy || 'Unknown',
 
-        freelancerSubscriptionPlan: row.freelancerSubscriptionPlan || 'Free',
-
             freelancerSubscriptionPlan: row.freelancerSubscriptionPlan || 'Free',
+            freelancerIsVerified: Boolean(row.freelancerIsVerified),
 
             clientAvatar: row.clientAvatar || 'https://i.pravatar.cc/150',
 
@@ -1961,6 +1971,12 @@ async function getGigByIdRepository(gigId, accountId = null, actorIds = [], affi
                 LIMIT 1
             ), 'Free') as "freelancerSubscriptionPlan",
 
+            EXISTS (
+                SELECT 1 FROM verifications v
+                WHERE v.account_id = g.freelancer_account_id
+                  AND v.is_verified = TRUE
+            ) as "freelancerIsVerified",
+
             g.freelancer_account_id,
 
             ${FREELANCER_MERIT_SQL},
@@ -2206,6 +2222,7 @@ async function getGigByIdRepository(gigId, accountId = null, actorIds = [], affi
         postedBy: row.postedBy || 'Unknown',
 
         freelancerSubscriptionPlan: row.freelancerSubscriptionPlan || 'Free',
+        freelancerIsVerified: Boolean(row.freelancerIsVerified),
 
         clientAvatar: row.clientAvatar || 'https://i.pravatar.cc/150',
 

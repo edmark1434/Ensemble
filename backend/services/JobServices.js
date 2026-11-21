@@ -2,6 +2,7 @@
 const JobRepositories = require('../repositories/JobRepositories');
 const { createNotificationServices } = require('./NotificationServices');
 const { getAccountById } = require('../repositories/AccountRepositories');
+const { getIo } = require('../lib/WebSocket');
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -269,7 +270,7 @@ async function createJobInvitationServices(jobId, clientAccountId, freelancerAcc
     const clientName = client ? (client.handle || client.display_name) : 'A client';
 
     // Send notification to freelancer
-    await createNotificationServices({
+    const notification = await createNotificationServices({
         account_id: freelancerAccountId,
         message: `@${clientName} invited you to apply for their job: ${job.title}`,
         is_read: false,
@@ -278,6 +279,17 @@ async function createJobInvitationServices(jobId, clientAccountId, freelancerAcc
         reference_path: `/jobs/postings/${jobId}`,
         reference_id: jobId
     });
+
+    if (notification) {
+        try {
+            const io = getIo();
+            if (io) {
+                io.to(String(freelancerAccountId)).emit('notification', notification);
+            }
+        } catch (err) {
+            console.error('Failed to emit job invitation notification:', err.message);
+        }
+    }
 
     return invite;
 }

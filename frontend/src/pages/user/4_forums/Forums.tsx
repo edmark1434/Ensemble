@@ -171,10 +171,10 @@ const tabOptions: { key: ForumTab; label: string }[] = [
 ];
 
 const sortOptions = [
-  { value: "latest", label: "Latest", icon: <Clock className="h-3 w-3" /> },
-  { value: "trending", label: "Trending", icon: <ThumbsUp className="h-3 w-3" /> },
-  { value: "popular", label: "Popular", icon: <ThumbsUp className="h-3 w-3" /> },
-  { value: "hot", label: "Hot", icon: <MessageCircle className="h-3 w-3" /> },
+  { value: "latest", label: "Latest", icon: <Clock className="h-3 w-3" />, tooltip: "Sort by newest discussions" },
+  { value: "most_saved", label: "Saved", icon: <Bookmark className="h-3 w-3" />, tooltip: "Sort by most saved discussions" },
+  { value: "popular", label: "Popular", icon: <ThumbsUp className="h-3 w-3" />, tooltip: "Sort by most liked discussions" },
+  { value: "hot", label: "Hot", icon: <MessageCircle className="h-3 w-3" />, tooltip: "Sort by most commented discussions" },
 ];
 
 const getTagColor = (tagId: number) => {
@@ -293,28 +293,77 @@ const ImageGallery = ({ attachments, imageKeys }: {
       ? filePath
       : `${import.meta.env.VITE_CLOUDFRONT_URL}/${filePath}`;
 
+  const renderTile = (filePath: string, idx: number, heightClass: string, extraClass = "", remainingCount = 0) => (
+    <button
+      key={idx}
+      type="button"
+      onClick={() => setSelectedImage(getImageUrl(filePath))}
+      className={`group relative overflow-hidden rounded-lg border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/5 shadow-sm dark:shadow-none transition-all hover:border-gray-300 dark:hover:border-white/20 ${extraClass}`}
+    >
+      <img
+        src={getImageUrl(filePath)}
+        alt={`Post image ${idx + 1}`}
+        className={`${heightClass} w-full transition-all group-hover:opacity-90`}
+        onError={(e) => {
+          (e.target as HTMLImageElement).src = "https://placehold.co/400x300?text=Image+Not+Found";
+        }}
+      />
+      {remainingCount > 0 ? (
+        <div className="absolute inset-0 flex items-center justify-center bg-black/60 text-white text-xl font-bold transition group-hover:bg-black/70">
+          +{remainingCount}
+        </div>
+      ) : (
+        <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 transition group-hover:opacity-100">
+          <ImageIcon className="h-6 w-6 text-white" />
+        </div>
+      )}
+    </button>
+  );
+
+  const count = allImages.length;
+
   return (
     <>
-      <div className={`mt-3 grid gap-2 ${allImages.length === 1 ? 'grid-cols-1' : allImages.length === 2 ? 'grid-cols-2' : 'grid-cols-2 sm:grid-cols-3'}`}>
-        {allImages.map((filePath, idx) => (
-          <button
-            key={idx}
-            onClick={() => setSelectedImage(getImageUrl(filePath))}
-            className="group relative overflow-hidden rounded-lg border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/5 shadow-sm dark:shadow-none transition-all hover:border-gray-300 dark:hover:border-white/20"
-          >
-            <img
-              src={getImageUrl(filePath)}
-              alt={`Post image ${idx + 1}`}
-              className={`${allImages.length === 1 ? 'max-h-[500px] w-full object-contain' : 'h-48 w-full object-cover'} transition-all group-hover:opacity-90`}
-              onError={(e) => {
-                (e.target as HTMLImageElement).src = "https://placehold.co/400x300?text=Image+Not+Found";
-              }}
-            />
-            <div className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 transition group-hover:opacity-100">
-              <ImageIcon className="h-6 w-6 text-gray-900 dark:text-white" />
+      <div className="mt-3 w-full">
+        {count === 1 && (
+          <div className="grid grid-cols-1 gap-2">
+            {renderTile(allImages[0], 0, "max-h-[500px] object-contain")}
+          </div>
+        )}
+
+        {count === 2 && (
+          <div className="grid grid-cols-2 gap-2">
+            {allImages.map((filePath, idx) => renderTile(filePath, idx, "aspect-square object-cover"))}
+          </div>
+        )}
+
+        {count === 3 && (
+          <div className="grid grid-cols-2 gap-2">
+            {renderTile(allImages[0], 0, "aspect-[2/1] object-cover", "col-span-2")}
+            {renderTile(allImages[1], 1, "aspect-square object-cover")}
+            {renderTile(allImages[2], 2, "aspect-square object-cover")}
+          </div>
+        )}
+
+        {count === 4 && (
+          <div className="grid grid-cols-2 gap-2">
+            {allImages.map((filePath, idx) => renderTile(filePath, idx, "aspect-square object-cover"))}
+          </div>
+        )}
+
+        {count >= 5 && (
+          <div className="space-y-2">
+            <div className="grid grid-cols-2 gap-2">
+              {renderTile(allImages[0], 0, "aspect-square object-cover")}
+              {renderTile(allImages[1], 1, "aspect-square object-cover")}
             </div>
-          </button>
-        ))}
+            <div className="grid grid-cols-3 gap-2">
+              {renderTile(allImages[2], 2, "aspect-square object-cover")}
+              {renderTile(allImages[3], 3, "aspect-square object-cover")}
+              {renderTile(allImages[4], 4, "aspect-square object-cover", "", count > 5 ? count - 5 : 0)}
+            </div>
+          </div>
+        )}
       </div>
 
       {selectedImage && (
@@ -2263,6 +2312,7 @@ const Forums = () => {
               <button
                 key={option.value}
                 type="button"
+                title={option.tooltip}
                 onClick={() => { if (isForumAuthenticated) setSortBy(option.value); }}
                 disabled={!isForumAuthenticated}
                 className={`${chipBase} flex items-center justify-center gap-1.5 disabled:cursor-default ${

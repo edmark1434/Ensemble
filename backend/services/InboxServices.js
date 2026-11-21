@@ -3341,6 +3341,30 @@ async function authorizeSocketRoomServices(roomId, accountId) {
 
 
 
+/**
+ * A staff console following one dispute live (`dispute:staff:<id>`). Only staff accounts,
+ * and only for a dispute that exists; members are refused.
+ */
+async function authorizeDisputeStaffRoomServices(disputeId, accountId) {
+
+    requireValue(disputeId, 'Dispute ID is required');
+
+    const { findStaffDisputeRoom } = require('../repositories/DisputeChatRepositories');
+
+    const roomId = await findStaffDisputeRoom(String(disputeId), accountId);
+
+    if (!roomId) {
+
+        throw new ChatServiceError('Only staff can follow this dispute live.', 403);
+
+    }
+
+    return { room_type: 'dispute_staff', room_id: roomId };
+
+}
+
+
+
 async function typingEventServices(conversationId, isTyping, accountId) {
 
     await requireConversationMember(conversationId, accountId);
@@ -4610,6 +4634,8 @@ module.exports = {
     authorizeConversationServices,
 
     authorizeSocketRoomServices,
+
+    authorizeDisputeStaffRoomServices,
 
     typingEventServices,
 

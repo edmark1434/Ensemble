@@ -114,6 +114,8 @@ export const DiscoveryTeamsTab: React.FC = () => {
     Math.floor(100000 + Math.random() * 900000)
   );
   const [sortBy, setSortBy] = useState<"smart_discovery" | "pure_random" | "members" | "rating" | "name">("smart_discovery");
+  const [currentPage, setCurrentPage] = useState(1);
+  const TEAMS_PER_PAGE = 9;
 
   const handleReshuffle = () => {
     const nextSeed = Math.floor(100000 + Math.random() * 900000);
@@ -197,6 +199,16 @@ export const DiscoveryTeamsTab: React.FC = () => {
     listWithScore.sort((a, b) => b.totalScore - a.totalScore);
     return listWithScore.map((item) => item.team);
   }, [teams, sortBy, shuffleSeed]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, selectedCategory, sortBy, shuffleSeed]);
+
+  const totalPages = Math.ceil(sortedTeams.length / TEAMS_PER_PAGE);
+  const paginatedTeams = useMemo(() => {
+    const start = (currentPage - 1) * TEAMS_PER_PAGE;
+    return sortedTeams.slice(start, start + TEAMS_PER_PAGE);
+  }, [sortedTeams, currentPage]);
 
   return (
     <div className="space-y-6">
@@ -284,7 +296,6 @@ export const DiscoveryTeamsTab: React.FC = () => {
             <span className="font-medium mr-1 hidden sm:inline">Sort by:</span>
             {[
               { id: "smart_discovery", label: "Discover", icon: Sparkles },
-              { id: "pure_random", label: "Random", icon: Dices },
               { id: "members", label: "Most Members" },
               { id: "rating", label: "Top Rated" },
               { id: "name", label: "Name" },
@@ -356,8 +367,9 @@ export const DiscoveryTeamsTab: React.FC = () => {
           )}
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-          {sortedTeams.map((team) => {
+        <>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+            {paginatedTeams.map((team) => {
             // 1. Banner = Team thumbnail (the team's uploaded photo/banner itself)
             const teamThumbnailBanner =
               resolveAvatarPath(team.avatar_path) ||
@@ -533,7 +545,68 @@ export const DiscoveryTeamsTab: React.FC = () => {
               </div>
             );
           })}
-        </div>
+          </div>
+
+          {!loading && totalPages > 1 && (
+            <div className="sticky bottom-6 z-50 mx-auto w-fit flex items-center justify-center gap-1 rounded-full border border-gray-200 dark:border-white/20 bg-white/90 dark:bg-zinc-900/90 backdrop-blur-md p-1.5 shadow-2xl shadow-blue-500/10 mt-8 mb-4">
+              <button
+                type="button"
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                disabled={currentPage === 1}
+                className="px-3 py-1.5 text-sm text-gray-500 dark:text-zinc-400 font-medium disabled:opacity-50 cursor-pointer"
+              >
+                Prev
+              </button>
+
+              {[...Array(totalPages)].map((_, i) => {
+                const page = i + 1;
+                const isActive = page === currentPage;
+                if (
+                  totalPages > 5 &&
+                  page !== 1 &&
+                  page !== totalPages &&
+                  Math.abs(page - currentPage) > 1
+                ) {
+                  if (
+                    page === currentPage - 2 ||
+                    page === currentPage + 2
+                  )
+                    return (
+                      <span key={page} className="px-1 text-gray-400">
+                        ...
+                      </span>
+                    );
+                  return null;
+                }
+                return (
+                  <button
+                    type="button"
+                    key={page}
+                    onClick={() => setCurrentPage(page)}
+                    className={`w-8 h-8 flex items-center justify-center rounded-full text-sm font-medium transition-colors cursor-pointer ${
+                      isActive
+                        ? "bg-blue-600 text-white"
+                        : "text-gray-700 dark:text-zinc-300 hover:bg-gray-100 dark:hover:bg-white/10"
+                    }`}
+                  >
+                    {page}
+                  </button>
+                );
+              })}
+
+              <button
+                type="button"
+                onClick={() =>
+                  setCurrentPage((p) => Math.min(totalPages, p + 1))
+                }
+                disabled={currentPage === totalPages}
+                className="px-3 py-1.5 text-sm text-gray-700 dark:text-zinc-300 hover:text-gray-900 dark:hover:text-white font-medium transition-colors disabled:opacity-50 cursor-pointer"
+              >
+                Next
+              </button>
+            </div>
+          )}
+        </>
       )}
     </div>
   );

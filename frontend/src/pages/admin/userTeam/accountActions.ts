@@ -9,6 +9,8 @@ type ActionOptions = {
   reason?: string;
   punishmentId?: string;
   customDuration?: boolean;
+  /** Team targets: also apply the penalty to (or lift it from) the team leader. */
+  includeLeader?: boolean;
 };
 
 export async function setAccountStatus(accountId: string, action: string, options?: ActionOptions) {
@@ -20,6 +22,7 @@ export async function setAccountStatus(accountId: string, action: string, option
     reason: options?.reason,
     punishmentId: options?.punishmentId,
     customDuration: options?.customDuration,
+    includeLeader: options?.includeLeader,
   });
   if (!res.data?.success) throw new Error(res.data?.message || 'Status update failed');
   if (!options?.silent) {
@@ -216,6 +219,22 @@ export async function unfreezeAccount(accountId: string, input: { reason: string
   return res.data.data;
 }
 
+export type TeamOwnershipTransferInput = {
+  newOwnerAccountId: string;
+  /** What the current owner becomes: a team Admin, a Member, or removed from the team. */
+  previousOwnerRole: 'Admin' | 'Member' | 'Removed';
+  /** Staff note, also shown to both owners. */
+  reason: string;
+};
+
+/** Admin / Support: move a team's ownership (e.g. the leader is banned or gone). */
+export async function transferTeamOwnership(teamAccountId: string, input: TeamOwnershipTransferInput) {
+  const res = await api.post(`/api/admin/teams/${teamAccountId}/transfer-ownership`, input);
+  if (!res.data?.success) throw new Error(res.data?.message || 'Could not transfer ownership');
+  showSuccessToast(res.data.message || 'Ownership transferred');
+  return res.data.data;
+}
+
 export async function pardonAccount(accountId: string, note?: string) {
   const res = await api.post(`/api/admin/accounts/${accountId}/pardon`, { note });
   if (!res.data?.success) throw new Error(res.data?.message || 'Pardon failed');
@@ -227,7 +246,8 @@ export async function runBulkAccountAction(
   accountIds: string[],
   kind: 'status' | 'verification',
   action: string,
-  reason?: string
+  reason?: string,
+  extra?: { includeLeader?: boolean }
 ) {
   let ok = 0;
   let failed = 0;
@@ -236,7 +256,7 @@ export async function runBulkAccountAction(
   for (const accountId of accountIds) {
     try {
       if (kind === 'status') {
-        await setAccountStatus(accountId, action, { silent: true, reason });
+        await setAccountStatus(accountId, action, { silent: true, reason, includeLeader: extra?.includeLeader });
       } else {
         await setAccountVerification(accountId, action, { silent: true });
       }

@@ -54,6 +54,13 @@ async function resolveMarketplaceActor(
     if (String(actor.account_status).toLowerCase() !== 'active') {
         throw new MarketplaceActorError('The selected team account is not active.', 403, 'TEAM_ACCOUNT_INACTIVE');
     }
+    // The team needs an accountable leader: nobody posts or proposes "as" a team whose
+    // owner is banned, locked or gone (docs/punishment-system.md §8.10).
+    try {
+        await require('./TeamStandingServices').assertTeamAllows(actor.team_id, 'marketplace');
+    } catch (err) {
+        throw new MarketplaceActorError(err.message, err.statusCode || 403, err.code || 'TEAM_ACCOUNT_INACTIVE');
+    }
     if (requireVerified && !allowUnverifiedTeam && !actor.is_verified) {
         throw new MarketplaceActorError(
             'Verify the selected team before using it in the marketplace.',

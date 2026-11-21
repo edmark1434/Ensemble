@@ -21,6 +21,7 @@ const {
   getConversationByConvoId,
 } = require('./InboxRepositories');
 const { createNotificationServices } = require('../services/NotificationServices');
+const { listOwnedUploadKeysRepository } = require('./FileRepositories');
 const { buildReportSubject, snapshotTitle } = require('../lib/ReportSubject');
 const { CLOSED_REPORT_STATUSES } = require('../lib/ReportEnums');
 const {
@@ -58,8 +59,13 @@ const {
   DISPUTE_REOPEN_REASONS,
   DISPUTE_PAYOUT_DEFAULT_DAYS,
   DISPUTE_PAYOUT_MAX_DAYS,
+  escrowKeptLine,
 } = require('../lib/DisputeResolutions');
-const { listDisputePayouts, planReversalRoute } = require('./DisputeFinancialRepositories');
+const {
+  listDisputePayouts,
+  planReversalRoute,
+  pendingDisputeEscrow,
+} = require('./DisputeFinancialRepositories');
 const {
   milestonePaidOutSql,
   milestoneEscrowState,
@@ -327,60 +333,74 @@ async function createSupportTicket(input, session = null) {
   if (formAnswers.length) {
     formAnswers = await resolveFormAnswers(requesterAccountId, type, formAnswers);
   }
+  const authorSession = session || {
+    account_id: requesterAccountId,
+    type: 'User',
+    username: sessionDisplayName(session),
+  };
+  // Checked before the ticket exists, so a bad file never leaves a ticket without its message.
+  const screenshots = description ? await resolveTicketAttachments(input?.attachments, authorSession) : [];
   const submissionContext = await buildSubmissionContext(requesterAccountId, input.context, input?.email);
-  const ticketNumber = await nextTicketNumber();
   const handledBy =
     input?.handledByStaffId ?? input?.assignedStaffId ?? null;
   const status = handledBy ? 'In Progress' : 'Open';
   // An account-penalty appeal names the one penalty it is about (checked by assertCanFileAppeal).
   const appealTarget = type === APPEAL_TICKET_TYPE && input?.appealTarget?.type ? input.appealTarget : null;
-  const params = [
-    ticketNumber,
-    reason,
-    type,
-    priority,
-    status,
-    requesterAccountId,
-    handledBy,
-    JSON.stringify(formAnswers),
-    JSON.stringify(submissionContext),
-  ];
-  if (appealTarget) {
-    params.push(
-      appealTarget.type,
-      String(appealTarget.id),
-      appealTarget.label ? String(appealTarget.label).slice(0, 200) : null,
-      appealTarget.startedAt || null
-    );
-  }
 
   let insert;
-  try {
-    insert = await pool.query(
-      `
-      INSERT INTO tickets (
-        ticket_number, reason, type, priority, status,
-        account_id, handled_by_staff_id,
-        message_count, last_message_at,
-        form_answers, submission_context
-        ${appealTarget ? ', appeal_target_type, appeal_target_id, appeal_target_label, appeal_target_started_at' : ''}
-      ) VALUES (
-        $1, $2, $3, $4, $5,
-        $6, $7,
-        0, NULL,
-        $8::jsonb, $9::jsonb
-        ${appealTarget ? ', $10, $11, $12, $13::timestamptz' : ''}
-      )
-      RETURNING ticket_id
-      `,
-      params
-    );
-  } catch (err) {
-    // Two submits for the same penalty at once: the partial unique index keeps one.
-    if (err?.code === '23505' && String(err.constraint || '').includes('penalty_appeal')) {
-      throw ticketError('This penalty already has an open appeal. Reply on that ticket instead.', 409);
+  let ticketNumber;
+  // Ticket numbers are MAX + 1, so two submits at the same moment can pick the same one.
+  for (let attempt = 1; ; attempt += 1) {
+    ticketNumber = await nextTicketNumber();
+    const params = [
+      ticketNumber,
+      reason,
+      type,
+      priority,
+      status,
+      requesterAccountId,
+      handledBy,
+      JSON.stringify(formAnswers),
+      JSON.stringify(submissionContext),
+    ];
+    if (appealTarget) {
+      params.push(
+        appealTarget.type,
+        String(appealTarget.id),
+        appealTarget.label ? String(appealTarget.label).slice(0, 200) : null,
+        appealTarget.startedAt || null
+      );
     }
-    throw err;
+    try {
+      insert = await pool.query(
+        `
+        INSERT INTO tickets (
+          ticket_number, reason, type, priority, status,
+          account_id, handled_by_staff_id,
+          message_count, last_message_at,
+          form_answers, submission_context
+          ${appealTarget ? ', appeal_target_type, appeal_target_id, appeal_target_label, appeal_target_started_at' : ''}
+        ) VALUES (
+          $1, $2, $3, $4, $5,
+          $6, $7,
+          0, NULL,
+          $8::jsonb, $9::jsonb
+          ${appealTarget ? ', $10, $11, $12, $13::timestamptz' : ''}
+        )
+        RETURNING ticket_id
+        `,
+        params
+      );
+      break;
+    } catch (err) {
+      const constraint = String(err?.constraint || '');
+      // Two submits for the same penalty at once: the partial unique index keeps one.
+      if (err?.code === '23505' && constraint.includes('penalty_appeal')) {
+        throw ticketError('This penalty already has an open appeal. Reply on that ticket instead.', 409);
+      }
+      if (err?.code === '23505' && constraint.includes('ticket_number') && attempt < 4) continue;
+      throw err;
+    }
   }
 
   const ticketId = insert.rows[0].ticket_id;
@@ -396,14 +416,10 @@ async function createSupportTicket(input, session = null) {
   } catch {}
 
   if (description) {
-    const authorSession = session || {
-      account_id: requesterAccountId,
-      type: 'User',
-      username: sessionDisplayName(session),
-    };
     try {
-      await addTicketMessage(ticketId, description, authorSession, false, input?.attachments || [], null, {
+      await addTicketMessage(ticketId, description, authorSession, false, [], null, {
         initial: true,
+        screenshots,
       });
     } catch (err) {
       // Ticket metadata still exists; chat can be started later when Mongo is up.
@@ -1195,6 +1211,56 @@ function ticketError(message, statusCode) {
   const error = new Error(message);
   error.statusCode = statusCode;
   return error;
+}
+
+const TICKET_ATTACHMENT_LIMIT = 4;
+
+/**
+ * The files on a new ticket message. A member may only attach files their own account
+ * uploaded: otherwise a key seen elsewhere (a shared chat, say) would become readable
+ * through the ticket. Members get a 400 for anything unusable instead of a silent drop.
+ * Staff messages keep the plain key check.
+ */
+async function resolveTicketAttachments(rawAttachments, session) {
+  if (isStaffSession(session)) return normalizeTicketScreenshots(rawAttachments);
+  const requested = Array.isArray(rawAttachments) ? rawAttachments.filter(Boolean) : [];
+  if (!requested.length) return [];
+  if (requested.length > TICKET_ATTACHMENT_LIMIT) {
+    throw ticketError(`Attach up to ${TICKET_ATTACHMENT_LIMIT} files per message`, 400);
+  }
+  const screenshots = normalizeTicketScreenshots(requested);
+  const unusable = ticketError('One of the attachments could not be used. Remove it and upload it again.', 400);
+  if (screenshots.length !== requested.length) throw unusable;
+  const owned = new Set(
+    await listOwnedUploadKeysRepository(
+      sessionAccountId(session),
+      screenshots.map((item) => item.attachment_key)
+    )
+  );
+  if (screenshots.some((item) => !owned.has(item.attachment_key))) throw unusable;
+  return screenshots;
+}
+
+/** An open ticket this account filed with the same type and subject in the last few minutes. */
+async function findRecentOpenTicketLike(accountId, type, reason, minutes = 10) {
+  if (!accountId || !type || !reason) return null;
+  const result = await pool.query(
+    `
+    SELECT ticket_id, ticket_number
+    FROM tickets
+    WHERE account_id = $1
+      AND type = $2
+      AND LOWER(reason) = LOWER($3)
+      AND deleted_at IS NULL
+      AND LOWER(status) NOT IN ('closed', 'resolved')
+      AND created_at > NOW() - ($4::int * INTERVAL '1 minute')
+    ORDER BY created_at DESC
+    LIMIT 1
+    `,
+    [accountId, type, reason, minutes]
+  );
+  const row = result.rows[0];
+  return row ? { id: String(row.ticket_id), number: row.ticket_number } : null;
 }
 
 async function loadTicketInbox(chatId) {
@@ -2778,6 +2844,8 @@ async function applyTicketAssignmentAction(ticketId, patch, staffSession) {
       summary: 'Released the ticket',
       actorStaffId: staff.staff_id,
     });
+    // Unassigned (and maybe back to Open): every desk and the member see it straight away.
+    await announceTicketState(ticketId);
     return getTicketDetail(ticketId, staffSession);
   }
 
@@ -3249,6 +3317,15 @@ async function addTicketMessage(ticketId, body, staffSession, isInternal = false
     }
   }
 
+  // Validate the message before it touches the chat (membership, inbox preview).
+  const screenshots = Array.isArray(options.screenshots)
+    ? options.screenshots
+    : await resolveTicketAttachments(rawAttachments, staffSession);
+  const messageBody = String(body || '').trim();
+  if (!messageBody && !screenshots.length) {
+    throw ticketError('Message body is required', 400);
+  }
+
   const chatId = await ensureTicketChat(ticketId, ticketResult.rows[0]);
   const now = new Date();
   const accountId = sessionAccountId(staffSession);
@@ -3268,11 +3345,6 @@ async function addTicketMessage(ticketId, body, staffSession, isInternal = false
     }
   }
 
-  const screenshots = normalizeTicketScreenshots(rawAttachments);
-  const messageBody = String(body || '').trim();
-  if (!messageBody && !screenshots.length) {
-    throw new Error('Message body is required');
-  }
   let replyParentId = null;
   const requestedReply = String(replyToMessageId || '').trim();
   if (requestedReply) {
@@ -3359,6 +3431,8 @@ async function addTicketMessage(ticketId, body, staffSession, isInternal = false
       }
 
       if (!isInternal) announceTicketCase(ticketId, 'message');
+      // Internal notes never reach members, but other staff desks still show the activity.
+      else require('../lib/WebSocket').emitStaffCaseChange({ kind: 'ticket', id: ticketId, reason: 'internal_note' });
 
       void Promise.all(
         recipients.map(async (member) => {
@@ -3971,6 +4045,10 @@ async function updateDispute(disputeId, patch, staffSession) {
       throw new Error(`"${resolution.label}" needs a short note explaining what happened.`);
     }
     if (notes.length > 2000) throw new Error('Resolution notes are too long.');
+    // Escrow first: a case never closes with credits frozen unless staff chose to leave them
+    // with the contract, and only for outcomes where nobody forfeits them.
+    const frozen = await pendingDisputeEscrow(refreshed);
+    assertEscrowDecided(frozen, patch, resolution);
 
     // Guarded on status so a settle or second resolve landing at the same moment wins once.
     const closedNow = await pool.query(
@@ -4001,7 +4079,10 @@ async function updateDispute(disputeId, patch, staffSession) {
       metadata: { status: 'closed', outcome: resolution.key },
     });
 
-    const body = buildDisputeResolutionMessage(resolution, {
+    const ruled = frozen > 0
+      ? { ...resolution, finding: (names) => `${resolution.finding(names)} ${escrowKeptLine(frozen)}` }
+      : resolution;
+    const body = buildDisputeResolutionMessage(ruled, {
       disputer: refreshed.initiator_handle
         ? `@${refreshed.initiator_handle}`
         : refreshed.initiator_name || 'The disputer',
@@ -4040,6 +4121,8 @@ async function updateDispute(disputeId, patch, staffSession) {
     if (!actPerms.canAct) throw new Error('Assign yourself to this dispute before dismissing.');
     const notes = String(patch.resolution_notes || '').trim();
     if (notes.length > 2000) throw disputeDecisionError('Resolution notes are too long.');
+    // A dismissed claim leaves the escrow with the contract, and staff must say so.
+    assertEscrowDecided(await pendingDisputeEscrow(refreshed), patch, null);
     // Dismissing keeps the case's visibility. A private complaint that goes nowhere must not
     // land on both profiles and the public page just because it was closed.
     const dismissed = await pool.query(
@@ -4658,6 +4741,17 @@ async function getDisputeDetail(disputeId, staffSession = null) {
   const waiting = payouts.filter((p) => ['scheduled', 'failed'].includes(p.status));
   const closed = String(row.status || '').toLowerCase() === 'closed';
 
+  // Escrow the case still holds. The console decides it first; the decisions refuse otherwise.
+  let escrowPending = 0;
+  if (!closed) {
+    try {
+      escrowPending = await pendingDisputeEscrow(row);
+    } catch (err) {
+      console.error('Error loading dispute escrow:', err.message);
+      escrowPending = Number(row.credit_amount_involved || 0);
+    }
+  }
+
   // What happened to the contract after this case: on hold, the parties' continue-or-end
   // answers, or how that question was settled.
   let contractAfterCase = null;
@@ -4721,6 +4815,7 @@ async function getDisputeDetail(disputeId, staffSession = null) {
       defaultDays: DISPUTE_PAYOUT_DEFAULT_DAYS,
       maxDays: DISPUTE_PAYOUT_MAX_DAYS,
     },
+    escrowPending,
     contractAfterCase,
     // Drive the Resolve / Reopen prompts, so the console never hardcodes these lists.
     resolutionOptions: withPreview(
@@ -5004,6 +5099,118 @@ function decisionReason(patch) {
   return reason;
 }
 
+function creditCount(amount) {
+  return `${Number(amount || 0).toLocaleString('en-US')} credit${Number(amount) === 1 ? '' : 's'}`;
+}
+
+/**
+ * Escrow first. While a case still holds frozen escrow it may only close without a money
+ * ruling when staff explicitly leave the credits with the contract (`escrow: "keep"`), and
+ * only for an outcome where nobody forfeits them. A disputee who would not take part loses
+ * the escrow to the disputer, which is a Settle escrow ruling (`award: "disputer"`).
+ * @param {number} frozen credits the case still holds (`pendingDisputeEscrow`)
+ * @param {object} patch the request body
+ * @param {object|null} resolution the picked DISPUTE_RESOLUTIONS entry (null for dismiss)
+ */
+function assertEscrowDecided(frozen, patch, resolution) {
+  if (!(frozen > 0)) return;
+  if (resolution?.escrow === 'disputer') {
+    throw disputeDecisionError(
+      `${creditCount(frozen)} are still frozen. "${resolution.label}" sends them to the disputer, so settle the escrow: Resolve → Disputee did not cooperate.`
+    );
+  }
+  if (String(patch?.escrow || '').toLowerCase() !== 'keep') {
+    throw disputeDecisionError(
+      `Decide the escrow first: ${creditCount(frozen)} are still frozen. Settle them, or confirm they stay with the contract.`
+    );
+  }
+}
+
+/** Checks a dispute ban before anything changes, so a money ruling never lands without it. */
+async function assertDisputeBanAllowed(row, staff) {
+  if (!row?.for_account_id) {
+    throw disputeDecisionError('Invalid ban: this dispute has no respondent to sanction.');
+  }
+  if (String(row.sanction_type || '').toLowerCase() === 'ban') {
+    throw disputeDecisionError('Cannot ban again. This dispute already ended in a permanent ban. Reopen it first.');
+  }
+  const { assertCanSanctionTarget } = require('../lib/SuspendGuards');
+  await assertCanSanctionTarget({
+    actorStaffId: staff.staff_id,
+    targetAccountId: row.for_account_id,
+    action: 'ban',
+  });
+}
+
+/**
+ * Permanently ban a dispute's respondent and record it on the case: the case becomes public,
+ * `sanction_type = 'ban'`, and the ban ruling is posted in the discussion.
+ * `closeCase` also closes the case with the reason as its notes (the plain ban decision).
+ * After a money ruling the case is already closed and keeps the ruling's notes.
+ * Call `assertDisputeBanAllowed` first. Does not broadcast; the caller does.
+ */
+async function banDisputeRespondent(row, { reason, staff, staffSession, closeCase = false }) {
+  const disputeId = row.dispute_id;
+  const accountId = row.for_account_id;
+  const name = row.respondent_name || 'The respondent';
+  const message = buildDisputeSanctionMessage({
+    disputee: row.respondent_handle ? `@${row.respondent_handle}` : name,
+    reason,
+    disputeNumber: row.dispute_number || null,
+  });
+
+  const { updateAccountStatus } = require('./AdminUserTeamRepositories');
+  await updateAccountStatus(accountId, 'ban', staff.staff_id, {
+    reason,
+    duration: 'permanent',
+    punishmentId: 'ban_dispute_conviction',
+    disputeId,
+    disputeNumber: row.dispute_number || null,
+  });
+
+  if (closeCase) {
+    await pool.query(
+      `
+      UPDATE disputes
+      SET status = 'closed',
+          visibility = TRUE,
+          sanction_type = 'ban',
+          resolution_notes = $1,
+          resolved_at = NOW(),
+          updated_at = NOW()
+      WHERE dispute_id = $2
+      `,
+      [reason, disputeId]
+    );
+  } else {
+    await pool.query(
+      `UPDATE disputes SET visibility = TRUE, sanction_type = 'ban', updated_at = NOW() WHERE dispute_id = $1`,
+      [disputeId]
+    );
+  }
+
+  await recordAccountActivity({
+    accountId,
+    action: `Dispute ${row.dispute_number || disputeId} closed with a permanent ban`,
+    eventCode: 'DISPUTE_SANCTIONED',
+    referenceTable: 'disputes',
+    referencePrefix: 'DIS',
+    referenceId: disputeId,
+    actorStaffId: staff.staff_id,
+    metadata: { status: 'closed', sanctionType: 'ban', reason },
+  });
+
+  try {
+    await postDisputeDecisionMessage(row, staffSession, message, { asSystem: true });
+  } catch (err) {
+    const wrapped = new Error(
+      `${err.message || 'Could not post the discussion message.'} The account was still banned and the dispute was closed.`
+    );
+    wrapped.statusCode = /MongoDB/i.test(err.message || '') ? 503 : 500;
+    throw wrapped;
+  }
+}
+
 async function postDisputeDecisionMessage(
   row,
   staffSession,
@@ -5052,70 +5259,25 @@ async function convictDispute(disputeId, row, patch, staff, staffSession, perms)
     throw disputeDecisionError('Assign yourself to this dispute before you can ban.');
   }
   const reason = decisionReason(patch);
-  const accountId = row.for_account_id;
-  if (!accountId) {
-    throw disputeDecisionError('Invalid ban: this dispute has no respondent to sanction.');
-  }
-  if (String(row.sanction_type || '').toLowerCase() === 'ban') {
-    throw disputeDecisionError('Cannot ban again. This dispute already ended in a permanent ban. Reopen it first.');
-  }
   if (String(row.status || '').toLowerCase() === 'closed') {
     throw disputeDecisionError('This dispute is closed. Reopen it before deciding it again.');
   }
-
-  const handle = row.respondent_handle ? `@${row.respondent_handle}` : 'the respondent';
-  const name = row.respondent_name || 'The respondent';
-  const message = buildDisputeSanctionMessage({
-    disputee: row.respondent_handle ? `@${row.respondent_handle}` : name,
-    reason,
-    disputeNumber: row.dispute_number || null,
-  });
-
-  const { updateAccountStatus } = require('./AdminUserTeamRepositories');
-  await updateAccountStatus(accountId, 'ban', staff.staff_id, {
-    reason,
-    duration: 'permanent',
-    punishmentId: 'ban_dispute_conviction',
-    disputeId: row.dispute_id,
-    disputeNumber: row.dispute_number || null,
-  });
-
-  await pool.query(
-    `
-    UPDATE disputes
-    SET status = 'closed',
-        visibility = TRUE,
-        sanction_type = 'ban',
-        resolution_notes = $1,
-        resolved_at = NOW(),
-        updated_at = NOW()
-    WHERE dispute_id = $2
-    `,
-    [reason, disputeId]
-  );
+  // Escrow first: banning with credits still frozen would leave them in a contract with a
+  // banned party. Settle escrow returns them to the disputer and bans in one step.
+  const frozen = await pendingDisputeEscrow(row);
+  if (frozen > 0) {
+    throw disputeDecisionError(
+      `Settle the escrow before banning: ${creditCount(frozen)} are still frozen. Use Resolve → Disputee did not cooperate to return them to the disputer and ban in one step.`
+    );
+  }
+  await assertDisputeBanAllowed(row, staff);
 
   try {
-    await postDisputeDecisionMessage(row, staffSession, message, { asSystem: true });
-  } catch (err) {
-    const wrapped = new Error(
-      `${err.message || 'Could not post the discussion message.'} The account was still banned and the dispute was closed.`
-    );
-    wrapped.statusCode = /MongoDB/i.test(err.message || '') ? 503 : 500;
-    throw wrapped;
+    await banDisputeRespondent(row, { reason, staff, staffSession, closeCase: true });
+  } finally {
+    // The ban and the closed case are saved even if the ruling message could not be posted.
+    await emitDisputeState(disputeId);
   }
-
-  await recordAccountActivity({
-    accountId,
-    action: `Dispute ${row.dispute_number || disputeId} closed with a permanent ban`,
-    eventCode: 'DISPUTE_SANCTIONED',
-    referenceTable: 'disputes',
-    referencePrefix: 'DIS',
-    referenceId: disputeId,
-    actorStaffId: staff.staff_id,
-    metadata: { status: 'closed', sanctionType: 'ban', reason },
-  });
-
-  await emitDisputeState(disputeId);
   return getDisputeDetail(disputeId, staffSession);
 }
 
@@ -6082,7 +6244,8 @@ async function buildSubmissionContext(accountId, clientContext, explicitEmail = 
   };
   assign('accountId', accountId, 80);
   assign('username', row.handle);
-  assign('email', explicitEmail || clientContext?.email || row.email_address || null);
+  // The account's own address: a client-sent email would let anyone pose as another inbox.
+  assign('email', explicitEmail || row.email_address || null);
   assign('plan', row.subscription_plan || 'Free', 80);
   assign('submittedAt', new Date().toISOString(), 40);
   assign('browser', clientContext?.browser);
@@ -6584,6 +6747,7 @@ module.exports = {
   respondTicketInvite,
   getTicketCatalog,
   createSupportTicket,
+  findRecentOpenTicketLike,
   createStaffTicketForAccount,
   findAccountByEmailOrUsername,
   getTicketPickers,
@@ -6605,6 +6769,8 @@ module.exports = {
   updateDispute,
   getDisputeDetail,
   addDisputeMessage,
+  assertDisputeBanAllowed,
+  banDisputeRespondent,
   setDisputeMessageAudience,
   fetchDisputesList,
   fetchReportsList,

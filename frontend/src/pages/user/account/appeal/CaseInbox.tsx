@@ -716,6 +716,7 @@ export default function CaseInbox({
       stats={derived.stats}
       lastAt={updatedAt}
       reopened={derived.reopened}
+      onPreview={setPreviewUrl}
     />
   ) : thread.ticket ? (
     <TicketSidePanels
