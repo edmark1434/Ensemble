@@ -87,7 +87,7 @@ async function listRestrictedPartyContracts({ limit = 50, offset = 0, status = '
          FROM disputes d
          WHERE d.contract_id = pt.contract_id
            AND d.deleted_at IS NULL
-           AND LOWER(COALESCE(d.status, '')) <> 'closed'
+           AND d.status <> 'closed'
          ORDER BY d.created_at DESC
          LIMIT 1
        ) open_dispute ON TRUE
@@ -159,7 +159,7 @@ async function countStaleRestrictedContracts({ days = STALE_RESTRICTED_DAYS } = 
            SELECT 1 FROM disputes d
            WHERE d.contract_id = pt.contract_id
              AND d.deleted_at IS NULL
-             AND LOWER(COALESCE(d.status, '')) <> 'closed'
+             AND d.status <> 'closed'
          )
        )
        SELECT COUNT(*)::int AS n

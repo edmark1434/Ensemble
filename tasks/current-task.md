@@ -1,5 +1,29 @@
 # Current Task
 
+# Parallel task: Restricted parties loads, and explains itself
+
+## Objective
+
+The staff "Live work with a restricted party" queue (Jobs, Support, Admin) loads instead of failing, and tells staff what it holds, what already happened on its own and what they can do.
+
+## Acceptance Criteria
+
+- **Loads.** `disputes.status` is the `dispute_status` enum, so `LOWER(COALESCE(d.status, ''))` failed the whole query. `RestrictedWorkRepositories` (list + stale-contract dashboard alert) and `MissedReviewRepositories` compare `d.status <> 'closed'` directly.
+- **Guide.** A hideable "How this queue works" panel (kept per browser): what's listed, what was already done automatically, what staff can do, what each reason means, and the 7-day stale rule.
+- **Rows.** Each contract shows a "Next:" step for its situation (open dispute, nothing in escrow, banned, locked, team leader, suspended with its end date) and a "7+ days, no dispute" marker matching the dashboard alert.
+
+# Parallel task: admin badge grant reaches every member
+
+## Objective
+
+Admin → Badges → Grant can find and grant a badge to any member, not just the first 20 users by display name.
+
+## Acceptance Criteria
+
+- **Paged search.** `GET /api/admin/badges/recipients` takes `limit` (1–100, default 50) and `offset` and returns `{ recipients, hasMore }`. The Grant tab shows "Load more users" while there are more.
+- **Better matching.** Search matches handle, display name, first/last name and email. An exact handle comes first, then handle and display-name prefixes, then the rest alphabetically.
+- **Unchanged rules.** Members who already hold the badge (pending or claimed) stay disabled. Only `User` accounts can be granted.
+
 # Parallel task: one report dialog for members
 
 ## Objective

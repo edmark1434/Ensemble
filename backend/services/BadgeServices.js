@@ -354,8 +354,14 @@ async function deleteBadgeService(badgeId) {
     return deleted;
 }
 
-async function searchBadgeRecipientsService(search, registryId) {
-    return await searchBadgeRecipients(search, registryId);
+async function searchBadgeRecipientsService(search, registryId, { limit, offset } = {}) {
+    const term = typeof search === 'string' ? search.slice(0, 100) : '';
+    const pageSize = Math.min(Math.max(Number.parseInt(limit, 10) || 50, 1), 100);
+    const start = Math.max(Number.parseInt(offset, 10) || 0, 0);
+    return await searchBadgeRecipients(term, registryId ? String(registryId) : null, {
+        limit: pageSize,
+        offset: start,
+    });
 }
 
 async function getBadgeHoldersService(registryId) {

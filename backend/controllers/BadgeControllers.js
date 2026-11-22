@@ -88,7 +88,10 @@ async function deleteAdminBadge(req, res) {
 
 async function getAdminBadgeRecipients(req, res) {
     try {
-        const data = await searchBadgeRecipientsService(req.query.search, req.query.registryId);
+        const data = await searchBadgeRecipientsService(req.query.search, req.query.registryId, {
+            limit: req.query.limit,
+            offset: req.query.offset,
+        });
         return res.status(200).json({ success: true, data });
     } catch (err) {
         return sendError(res, err, 'Unable to search users');

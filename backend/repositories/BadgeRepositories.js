@@ -284,21 +284,37 @@ async function getBadgeByRegistryId(registryId) {
     return rows[0] || null;
 }
 
-async function searchBadgeRecipients(search, registryId, limit = 20) {
-    const term = String(search || '').replace(/^@/, '').trim().replace(/[\\%_]/g, '\\$&');
+async function searchBadgeRecipients(search, registryId, { limit = 50, offset = 0 } = {}) {
+    const raw = String(search || '').replace(/^@/, '').trim().toLowerCase();
+    const term = raw.replace(/[\\%_]/g, '\\$&');
     const { rows } = await pool.query(`
         SELECT a.account_id, a.handle, a.display_name, f.path AS avatar_preset_url, ab.status AS badge_status
         FROM accounts a
+        LEFT JOIN users u ON u.account_id = a.account_id
         LEFT JOIN files f ON f.file_id = a.avatar_file_id
-        LEFT JOIN badges b ON b.registry_id = $2
+        LEFT JOIN badges b ON b.registry_id = $2 AND b.deleted_at IS NULL
         LEFT JOIN account_badges ab ON ab.account_id = a.account_id AND ab.badge_id = b.badge_id
         WHERE a.type = 'User' AND a.deleted_at IS NULL
-          AND ($1 = '' OR LOWER(a.handle) LIKE '%' || LOWER($1) || '%' ESCAPE '\\'
-                       OR LOWER(a.display_name) LIKE '%' || LOWER($1) || '%' ESCAPE '\\')
-        ORDER BY a.display_name NULLS LAST
-        LIMIT $3
-    `, [term, registryId || null, limit]);
-    return rows;
+          AND ($1 = ''
+               OR LOWER(COALESCE(a.handle, '')) LIKE '%' || $1 || '%' ESCAPE '\\'
+               OR LOWER(COALESCE(a.display_name, '')) LIKE '%' || $1 || '%' ESCAPE '\\'
+               OR LOWER(CONCAT_WS(' ', u.first_name, u.last_name)) LIKE '%' || $1 || '%' ESCAPE '\\'
+               OR LOWER(COALESCE(u.email_address, '')) LIKE '%' || $1 || '%' ESCAPE '\\')
+        ORDER BY
+          CASE
+            WHEN $5 <> '' AND LOWER(a.handle) = $5 THEN 0
+            WHEN $1 <> '' AND LOWER(a.handle) LIKE $1 || '%' ESCAPE '\\' THEN 1
+            WHEN $1 <> '' AND LOWER(a.display_name) LIKE $1 || '%' ESCAPE '\\' THEN 2
+            ELSE 3
+          END,
+          LOWER(COALESCE(NULLIF(a.display_name, ''), a.handle)) NULLS LAST,
+          a.account_id
+        LIMIT $3 OFFSET $4
+    `, [term, registryId || null, limit + 1, offset, raw]);
+    return {
+        recipients: rows.slice(0, limit),
+        hasMore: rows.length > limit,
+    };
 }
 
 async function getBadgeHolders(registryId) {

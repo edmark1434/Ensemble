@@ -62,7 +62,7 @@ async function listPendingReviewers({ endedBefore, endedAfter, stage, remindedBe
           SELECT 1 FROM disputes d
           WHERE d.contract_id = c.contract_id
             AND d.deleted_at IS NULL
-            AND LOWER(COALESCE(d.status, '')) <> 'closed'
+            AND d.status <> 'closed'
         )
     ),
     reviewers AS (

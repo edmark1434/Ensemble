@@ -26,6 +26,7 @@ interface Holder extends Omit<Recipient, 'badge_status'> {
 }
 
 const MAX_MESSAGE = 500;
+const RECIPIENT_PAGE_SIZE = 50;
 
 const avatarUrl = (path?: string | null, name?: string | null) => {
   if (!path) return `https://ui-avatars.com/api/?name=${encodeURIComponent(name || 'User')}&background=71717a&color=fff&size=64`;
@@ -52,6 +53,8 @@ export default function BadgeGrantTab() {
   const [search, setSearch] = useState('');
   const [results, setResults] = useState<Recipient[]>([]);
   const [searching, setSearching] = useState(false);
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
   const [selected, setSelected] = useState<Recipient[]>([]);
   const [message, setMessage] = useState('');
@@ -117,19 +120,49 @@ export default function BadgeGrantTab() {
 
   useEffect(() => {
     if (!selectedId) return;
+    let cancelled = false;
     const handle = setTimeout(async () => {
       setSearching(true);
       try {
-        const res = await api.get('/api/admin/badges/recipients', { params: { search, registryId: selectedId } });
-        setResults(res.data?.data || []);
+        const res = await api.get('/api/admin/badges/recipients', {
+          params: { search, registryId: selectedId, limit: RECIPIENT_PAGE_SIZE, offset: 0 },
+        });
+        if (cancelled) return;
+        setResults(res.data?.data?.recipients || []);
+        setHasMore(Boolean(res.data?.data?.hasMore));
       } catch {
+        if (cancelled) return;
         setResults([]);
+        setHasMore(false);
       } finally {
-        setSearching(false);
+        if (!cancelled) setSearching(false);
       }
     }, 300);
-    return () => clearTimeout(handle);
+    return () => {
+      cancelled = true;
+      clearTimeout(handle);
+    };
   }, [search, selectedId, refreshKey]);
+
+  const loadMoreRecipients = async () => {
+    if (!selectedId || loadingMore) return;
+    setLoadingMore(true);
+    try {
+      const res = await api.get('/api/admin/badges/recipients', {
+        params: { search, registryId: selectedId, limit: RECIPIENT_PAGE_SIZE, offset: results.length },
+      });
+      const next: Recipient[] = res.data?.data?.recipients || [];
+      setResults((current) => {
+        const seen = new Set(current.map((r) => r.account_id));
+        return [...current, ...next.filter((r) => !seen.has(r.account_id))];
+      });
+      setHasMore(Boolean(res.data?.data?.hasMore));
+    } catch (err) {
+      setFeedback({ type: 'error', text: errorMessage(err, 'Unable to load more users') });
+    } finally {
+      setLoadingMore(false);
+    }
+  };
 
   const toggleRecipient = (recipient: Recipient) => {
     setSelected((current) =>
@@ -241,7 +274,7 @@ export default function BadgeGrantTab() {
                 <input
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Search users by name or @handle"
+                  placeholder="Search users by name, @handle, or email"
                   className="w-full rounded-xl border border-white/10 bg-white/[0.03] py-2.5 pl-9 pr-3 text-sm text-white placeholder:text-zinc-500 focus:border-white/20 focus:outline-none"
                 />
                 {searching && <Loader2 className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-zinc-500" />}
@@ -287,6 +320,16 @@ export default function BadgeGrantTab() {
                     </button>
                   );
                 })}
+                {hasMore && (
+                  <button
+                    onClick={() => void loadMoreRecipients()}
+                    disabled={loadingMore}
+                    className="flex w-full items-center justify-center gap-2 px-3 py-2.5 text-xs font-medium text-zinc-400 hover:bg-white/[0.03] hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {loadingMore && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                    Load more users
+                  </button>
+                )}
               </div>
             </div>
 
