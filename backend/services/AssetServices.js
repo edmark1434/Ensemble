@@ -709,6 +709,14 @@ async function assignAssetLicenseServices(assetId, licenseId, accountId, payload
   }
 }
 
+function assetFileLockedError() {
+  return new AssetError(
+    'The asset file cannot be replaced once the asset is live. You can still edit its title, price, description, tags and showcase images.',
+    409,
+    'ASSET_FILE_LOCKED'
+  );
+}
+
 async function updateAssetServices(assetId, accountId, payload) {
   requireUuid(assetId);
   const data = validateAssetPayload(payload);
@@ -719,6 +727,12 @@ async function updateAssetServices(assetId, accountId, payload) {
     // ownership check.
     if (!currentAsset?.is_owner) {
       throw new AssetError('Asset not found or you cannot edit it.', 404, 'ASSET_NOT_FOUND');
+    }
+    // Asset files can be swapped only before the asset goes live (draft, under review, scheduled,
+    // rejected or delisted); saving then sends the new files through review. A live asset's
+    // files stay as buyers and the review team saw them.
+    if (data.contentUpdate?.replaceMedia && String(currentAsset.status).toLowerCase() === 'published') {
+      throw assetFileLockedError();
     }
     // Saving a rejected or delisted asset resubmits it, and the review team needs to know
     // what changed: a message is required then, optional while it is pending or scheduled.
@@ -769,6 +783,7 @@ async function updateAssetServices(assetId, accountId, payload) {
     if (error.code === 'ASSET_CONTENT_LOCKED_AFTER_PURCHASE') {
       throw new AssetError('Asset files, thumbnails, and the template snapshot cannot be changed after a purchase.', 409, error.code);
     }
+    if (error.code === 'ASSET_FILE_LOCKED') throw assetFileLockedError();
     if (error.code === 'ASSET_TYPE_IMMUTABLE') {
       throw new AssetError('An existing asset type cannot be changed.', 409, error.code);
     }

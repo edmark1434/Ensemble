@@ -18,6 +18,15 @@ import {
   usePendingFiles,
 } from "@/pages/user/account/appeal/appealAttachments";
 import {
+  DisputeMemberPicker,
+  defaultMemberValue,
+  memberRequest,
+  memberValueReady,
+  namedPeople,
+  type DisputeMemberOptions,
+  type DisputeMemberValue,
+} from "./DisputeMemberPicker";
+import {
   CONTRACT_DISPUTE_FILING_CODES,
   type ContractActiveDispute,
   type ContractDisputeFiling,
@@ -78,6 +87,38 @@ export const DisputeFormPage: React.FC = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const submittingRef = useRef(false);
   const evidenceFiles = usePendingFiles();
+  // Who answers on the freelancer side (team / contract workspace). Client filers only.
+  const [memberOptions, setMemberOptions] = useState<DisputeMemberOptions | null>(null);
+  const [memberOptionsLoading, setMemberOptionsLoading] = useState(false);
+  const [memberValue, setMemberValue] = useState<DisputeMemberValue>({ scope: "leader", memberAccountIds: [] });
+  const [memberReloadKey, setMemberReloadKey] = useState(0);
+
+  useEffect(() => {
+    if (!selectedContractId) {
+      setMemberOptions(null);
+      return;
+    }
+    let cancelled = false;
+    setMemberOptionsLoading(true);
+    api
+      .get(`/api/contracts/${selectedContractId}/dispute-members`)
+      .then((res) => {
+        if (cancelled) return;
+        const data = res.data?.success ? (res.data.data as DisputeMemberOptions) : null;
+        setMemberOptions(data);
+        setMemberValue(defaultMemberValue(data));
+      })
+      .catch(() => {
+        // Filing still works without it: the server then names the leader by default.
+        if (!cancelled) setMemberOptions(null);
+      })
+      .finally(() => {
+        if (!cancelled) setMemberOptionsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedContractId, memberReloadKey]);
 
   useEffect(() => {
     const fetchContracts = async () => {
@@ -167,8 +208,13 @@ export const DisputeFormPage: React.FC = () => {
   let myName = "Me";
   let myAvatar = "";
   
+  // The server knows which side the viewer files for (also when filing for a team they own).
+  const sideInfo = memberOptions && memberOptions.contractId === selectedContractId ? memberOptions : null;
   if (selectedContract) {
-    if (user?.account_id === selectedContract.clientAccountId) {
+    const filingAsClient = sideInfo
+      ? sideInfo.viewerSide === "client"
+      : user?.account_id === selectedContract.clientAccountId;
+    if (filingAsClient) {
       opponentName = selectedContract.freelancerName || "Freelancer";
       opponentAvatar = selectedContract.freelancerAvatar || "";
       myName = selectedContract.clientName || "Me";
@@ -179,11 +225,26 @@ export const DisputeFormPage: React.FC = () => {
       myName = selectedContract.freelancerName || "Me";
       myAvatar = selectedContract.freelancerAvatar || "";
     }
+    if (sideInfo?.filingAs) {
+      myName = sideInfo.filingAs.name || myName;
+      myAvatar = sideInfo.filingAs.avatar || myAvatar;
+    }
+    if (sideInfo?.respondent) {
+      opponentName = sideInfo.respondent.name || opponentName;
+      opponentAvatar = sideInfo.respondent.avatar || opponentAvatar;
+    }
   }
+  const canNameMembers = Boolean(sideInfo?.canNameMembers && sideInfo.group);
+  const membersReady = memberValueReady(sideInfo, memberValue);
+  const namedSummary = canNameMembers ? namedPeople(sideInfo, memberValue) : [];
 
   const handleSubmit = async () => {
     if (submittingRef.current) return;
     if (!selectedContractId || !reason || !details || existingDispute || filingBlocked) return;
+    if (!membersReady) {
+      toast.error("Pick at least one person on their side, or choose the team leader.");
+      return;
+    }
     submittingRef.current = true;
     setIsSubmitting(true);
     
@@ -198,6 +259,7 @@ export const DisputeFormPage: React.FC = () => {
         reason,
         details: formattedDetails,
         ...(attachments.length ? { attachments } : {}),
+        ...memberRequest(sideInfo, memberValue),
       });
       if (res.data?.success) {
         evidenceFiles.clear();
@@ -229,6 +291,13 @@ export const DisputeFormPage: React.FC = () => {
         );
         toast.error("This contract can't be disputed right now. See the note above the form.");
         window.scrollTo({ top: 0, behavior: "smooth" });
+        return;
+      }
+      // The other side's roster changed while the form was open: reload it and let them pick again.
+      const rawCode = String(err.response?.data?.code || "");
+      if (rawCode.startsWith("DISPUTE_MEMBER")) {
+        toast.error(message || "Their team changed. Check who you named and submit again.");
+        setMemberReloadKey((key) => key + 1);
         return;
       }
       // An upload failure throws a plain Error naming the file (see uploadPendingFiles).
@@ -474,9 +543,49 @@ export const DisputeFormPage: React.FC = () => {
                           <span className="font-semibold">{contestedMilestone.credits?.toLocaleString()} Credits</span>
                         </div>
                       )}
+
+                      {canNameMembers && namedSummary.length ? (
+                        <p className="text-xs text-gray-500 dark:text-zinc-400">
+                          Named with {sideInfo?.group?.team ? `Team ${sideInfo.group.team.name}` : opponentName}:{" "}
+                          <span className="font-semibold text-gray-800 dark:text-zinc-200">
+                            {namedSummary
+                              .slice(0, 4)
+                              .map((person) => (person.handle ? `@${person.handle}` : person.name))
+                              .join(", ")}
+                            {namedSummary.length > 4 ? ` and ${namedSummary.length - 4} more` : ""}
+                          </span>
+                        </p>
+                      ) : null}
                     </motion.div>
                   )}
                 </AnimatePresence>
+
+                {selectedContract && !existingDispute && !filingBlocked ? (
+                  memberOptionsLoading && !sideInfo ? (
+                    <div className="flex items-center gap-2 rounded-xl border border-dashed border-gray-200 px-4 py-3 text-xs text-gray-500 dark:border-white/10 dark:text-zinc-400">
+                      <Loader2 className="h-3.5 w-3.5 animate-spin text-rose-500" />
+                      Checking who works on this contract…
+                    </div>
+                  ) : canNameMembers && sideInfo ? (
+                    <div className="space-y-2">
+                      <div>
+                        <span className="block text-xs font-bold uppercase tracking-wider text-gray-700 dark:text-zinc-300">
+                          Who answers on their side
+                        </span>
+                        <p className="mt-1 text-xs text-gray-500 dark:text-zinc-400">
+                          You hired a team. The team leader answers for it unless you name specific people or
+                          everyone. Staff can change this while they review the case.
+                        </p>
+                      </div>
+                      <DisputeMemberPicker
+                        options={sideInfo}
+                        value={memberValue}
+                        onChange={setMemberValue}
+                        disabled={isSubmitting}
+                      />
+                    </div>
+                  ) : null
+                ) : null}
 
                 <div className="space-y-2">
                   <label className="block text-xs font-bold uppercase tracking-wider text-gray-700 dark:text-zinc-300">
@@ -557,7 +666,15 @@ export const DisputeFormPage: React.FC = () => {
             <button
               type="button"
               onClick={handleSubmit}
-              disabled={!selectedContractId || !reason || !details || isSubmitting || Boolean(existingDispute) || filingBlocked}
+              disabled={
+                !selectedContractId ||
+                !reason ||
+                !details ||
+                isSubmitting ||
+                Boolean(existingDispute) ||
+                filingBlocked ||
+                !membersReady
+              }
               className="flex items-center justify-center gap-2 rounded-xl bg-red-600 hover:bg-red-700 px-8 py-2.5 text-sm font-bold text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-[0_0_15px_rgba(220,38,38,0.3)]"
             >
               {isSubmitting ? <Loader2 className="h-5 w-5 animate-spin" /> : "Submit Dispute"}

@@ -39,7 +39,7 @@ export type ModerationAccount = {
       forumTimeout: boolean;
       forumTimeoutEndsAt: string | null;
     } | null;
-    /** Active members (leader included), for "who else gets it". */
+    /** Active members (leader included), for "who gets it". */
     members?: {
       accountId: string;
       name: string;
@@ -47,7 +47,20 @@ export type ModerationAccount = {
       role: string;
       status: string;
       isLeader: boolean;
+      merit?: number | null;
+      forumTimeout?: boolean;
+      forumTimeoutViaTeam?: boolean;
     }[];
+    /** Members' merit added up; `percent` is the team merit (teams have none of their own). */
+    memberMerit?: {
+      total: number;
+      max: number;
+      percent: number | null;
+      members: number;
+      average: number | null;
+      lowest: { accountId: string; name: string; merit: number } | null;
+      below60: number;
+    } | null;
   } | null;
   actions: Record<AccountActionId, ActionRule>;
 };
@@ -135,7 +148,7 @@ export type AccountActionInput = {
   customDuration?: boolean;
   duration?: "temporary" | "permanent";
   endsAt?: string | null;
-  /** Team targets: who else gets it (leader | selected | all; never the team alone). */
+  /** Team targets: who gets it (leader | selected | all; never the team alone). Warnings and timeouts too. */
   memberScope?: "leader" | "selected" | "all";
   memberAccountIds?: string[];
 };

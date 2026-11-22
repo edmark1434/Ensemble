@@ -17,7 +17,7 @@ const {
   applyAdminDiditVerificationAction,
 } = require('../services/AdminVerificationServices');
 const { getAdminAccountProfile } = require('../services/AdminAccountProfileServices');
-const { transferTeamOwnership } = require('../services/TeamSanctionServices');
+const { transferTeamOwnershipByStaff: transferTeamOwnership } = require('../services/TeamOwnershipServices');
 const { getWarningLiftPreview, liftWarningPoints } = require('../services/WarningLiftServices');
 const {
   listAccountMeritPenalties,
@@ -243,15 +243,18 @@ async function postAdminAccountWarn(req, res) {
         duration: req.body?.duration,
         days: req.body?.days,
         endsAt: req.body?.endsAt,
+        // Team targets: who gets the warning (leader | selected | all); the team service validates.
+        memberScope: req.body?.memberScope ? String(req.body.memberScope).slice(0, 20) : undefined,
+        memberAccountIds: Array.isArray(req.body?.memberAccountIds)
+          ? req.body.memberAccountIds.slice(0, 501).map(String)
+          : undefined,
       },
       staffIdFromSession(req.session)
     );
     res.status(200).json({
       success: true,
       data,
-      message: data.issuedTo
-        ? `Warning issued to team leader ${data.issuedTo.name}. Teams have no Platform Merit, so the leader carries the points.`
-        : 'Warning issued',
+      message: data.isTeam && data.summary ? data.summary : 'Warning issued',
     });
   } catch (err) {
     console.error('Error issuing warning:', err);

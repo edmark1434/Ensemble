@@ -1,15 +1,74 @@
+/** A running automatic merit punishment, as staff desks show it. */
+export type MeritPenaltyChip = {
+  id: string;
+  effect: string;
+  label: string;
+  ruleLabel?: string | null;
+  startsAt?: string | null;
+  endsAt: string | null;
+  durationDays?: number | null;
+  triggerMerit?: number | null;
+  meritAtStart?: number | null;
+};
+
 export type TeamMember = {
   id: string | number;
   accountId?: string;
   name: string;
   email: string;
   username: string;
+  avatarPath?: string | null;
   role: string;
   /** The member's own account standing (Active, Suspended, Banned, Locked). */
   accountStatus?: string;
+  /** The team's leader (first active Owner). */
+  isLeader?: boolean;
+  /** The member's own Platform Merit (teams have none). */
+  merit?: number;
+  forumTimeout?: boolean;
+  /** The running forum timeout was set together with this team. */
+  forumTimeoutViaTeam?: boolean;
+  meritPenalties?: MeritPenaltyChip[];
+  activeWarnings?: number;
+  openDisputes?: number;
 };
 
-/** The team's leader (first active Owner). Warnings and timeouts aimed at the team land here. */
+/**
+ * Members' merit added up. Teams have no Platform Merit of their own: `percent` is the members'
+ * total out of 100 each (5 members at 100 → 100%; one at 50 → 90%).
+ */
+export type TeamMemberMerit = {
+  total: number;
+  /** 100 per member. */
+  max: number;
+  /** total / max, rounded down; null with no members. */
+  percent: number | null;
+  members: number;
+  average: number | null;
+  lowest: { accountId: string; name: string; merit: number } | null;
+  /** Members at merit 60 or below (automatic punishments start there). */
+  below60: number;
+};
+
+/** One member's line on the team record. */
+export type TeamMemberRecord = {
+  accountId: string;
+  name: string;
+  handle: string | null;
+  role: string;
+  isLeader: boolean;
+  status: string;
+  merit: number;
+  forumTimeout: boolean;
+  meritPenalties: MeritPenaltyChip[];
+  activeWarnings: number;
+  activeWarningPoints: number;
+  totalWarnings: number;
+  openDisputes: number;
+  totalDisputes: number;
+};
+
+/** The team's leader (first active Owner): the default person a team penalty reaches. */
 export type TeamLeader = {
   userId: string | null;
   accountId: string;
@@ -25,17 +84,7 @@ export type TeamLeader = {
   forumTimeout: boolean;
   /** The leader's current penalty was applied together with this team (lifting the team can lift it). */
   penaltyLinkedToTeam: boolean;
-  meritPenalties?: {
-    id: string;
-    effect: string;
-    label: string;
-    ruleLabel?: string | null;
-    startsAt?: string | null;
-    endsAt: string | null;
-    durationDays?: number | null;
-    triggerMerit?: number | null;
-    meritAtStart?: number | null;
-  }[];
+  meritPenalties?: MeritPenaltyChip[];
 };
 
 /** Team wallet: spendable, held by staff, escrow and the part owed to members from contract payouts. */
@@ -81,6 +130,11 @@ export type PlatformTeam = {
   leaderEmail: string;
   memberCount: number;
   members: TeamMember[];
+  /** Members' merit added up (teams have no merit). */
+  memberMerit?: TeamMemberMerit;
+  /** Members with a running forum timeout, and how many of those were set with this team. */
+  membersTimedOut?: number;
+  membersTimedOutViaTeam?: number;
   email: string;
   verificationStatus: string;
   status: string;
@@ -223,6 +277,9 @@ export type AdminVerificationDetails = {
   } | null;
 };
 
+/** A member a dispute on a team record concerns: they filed it, or it is against them. */
+export type DisputeParty = { accountId: string; name: string; side: 'filed' | 'against' };
+
 export type ActiveDispute = {
   id?: string;
   title: string;
@@ -232,6 +289,8 @@ export type ActiveDispute = {
   status: string;
   by?: string;
   timeAgo?: string;
+  /** Team records: the members it concerns. */
+  parties?: DisputeParty[];
 };
 
 export type AccountActivityItem = {
@@ -256,6 +315,11 @@ export type TeamHistory = {
   summaryLabel: string;
   /** Members only. Null for teams: they have no Platform Merit. */
   merit?: number | null;
+  /** Team records: the members' merit added up, and each member's line. */
+  memberMerit?: TeamMemberMerit;
+  members?: TeamMemberRecord[];
+  /** Team records: active warnings across current members. */
+  activeWarnings?: number;
   activeWarningPoints?: number;
   totalViolations: number;
   totalDisputes: number;
@@ -279,11 +343,28 @@ export type TeamHistory = {
     accountId?: string;
     issuedToName?: string | null;
     issuedToHandle?: string | null;
-    /** Set when the warning was issued against a team and landed on its leader. */
+    /** Set when the warning was issued through a team and landed on one of its people. */
     viaTeamAccountId?: string | null;
     viaTeamName?: string | null;
+    createdAt?: string | null;
+    /** Team records: the member's role, and whether they lead the team. */
+    memberRole?: string | null;
+    isLeader?: boolean;
+    /** Team records: issued through this team (not the member's own conduct elsewhere). */
+    viaThisTeam?: boolean;
   }[];
-  disputes: { id: string; title: string; description: string; status: string; by: string; timeAgo: string }[];
+  disputes: {
+    id: string;
+    title: string;
+    description: string;
+    status: string;
+    by: string;
+    timeAgo: string;
+    against?: string;
+    filedByName?: string | null;
+    createdAt?: string | null;
+    parties?: DisputeParty[];
+  }[];
   activity?: AccountActivityItem[];
 };
 

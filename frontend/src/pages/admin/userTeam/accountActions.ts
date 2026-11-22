@@ -101,7 +101,19 @@ export async function freezeAccountCredits(
 
 export async function warnAccount(
   accountId: string,
-  payload: { warningId?: string; type?: string; reason?: string; points?: number; expiresAt?: string; endsAt?: string | null; duration?: 'temporary' | 'permanent'; days?: number | null },
+  payload: {
+    warningId?: string;
+    type?: string;
+    reason?: string;
+    points?: number;
+    expiresAt?: string;
+    endsAt?: string | null;
+    duration?: 'temporary' | 'permanent';
+    days?: number | null;
+    /** Team targets: who gets the warning (teams have no merit, so it always lands on people). */
+    memberScope?: 'leader' | 'selected' | 'all';
+    memberAccountIds?: string[];
+  },
   options?: ActionOptions
 ) {
   const res = await api.post(`/api/admin/accounts/${accountId}/warn`, payload);

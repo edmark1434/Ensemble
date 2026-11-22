@@ -211,12 +211,18 @@ function buildDisputeResolutionMessage(
 }
 
 /** The ruling posted when a dispute ends in a permanent ban. */
-function buildDisputeSanctionMessage({ disputee, reason, disputeNumber } = {}) {
+/**
+ * The ban ruling. `alsoBanned` names the people banned together with the disputee (team members
+ * or people named on the case), e.g. "@lead (leader), @maria".
+ */
+function buildDisputeSanctionMessage({ disputee, reason, disputeNumber, alsoBanned = null } = {}) {
   return buildDisputeRulingMessage(
     {
       label: 'Permanent ban',
       finding: ({ disputee: name }) =>
-        `${name} has been permanently banned from the platform as a result of this dispute.`,
+        `${name} has been permanently banned from the platform as a result of this dispute.${
+          alsoBanned ? ` Also banned with them: ${alsoBanned}.` : ''
+        }`,
     },
     {
       disputee,
@@ -245,12 +251,16 @@ function buildDisputeReopenMessage(reason, { disputer, disputee, notes, disputeN
 }
 
 /** The notice posted when staff swap who is the disputer and who is the disputee. */
-function buildDisputePartySwapMessage({ disputer, disputee, notes, disputeNumber } = {}) {
+function buildDisputePartySwapMessage({ disputer, disputee, notes, disputeNumber, membersCleared = 0 } = {}) {
   return buildDisputeRulingMessage(
     {
       label: 'Disputer and disputee swapped',
       finding: ({ disputer: filer, disputee: named }) =>
-        `${filer} is now the disputer and ${named} is now the disputee. Staff found the roles on this case were the wrong way round.`,
+        `${filer} is now the disputer and ${named} is now the disputee. Staff found the roles on this case were the wrong way round.${
+          membersCleared
+            ? ` The ${membersCleared === 1 ? 'person' : `${membersCleared} people`} named with the old disputee ${membersCleared === 1 ? 'is' : 'are'} no longer named on this case.`
+            : ''
+        }`,
     },
     {
       disputer,
@@ -472,6 +482,12 @@ function buildDisputeFiledMessage({
   creditsAtStake,
   creditsFrozen,
   contractEnded,
+  /** "@lead (leader), @a, @b": who the filer named on the freelancer side. */
+  namedMembers = null,
+  /** "Team Nova", or "the freelancer side" on a personal contract with helpers. */
+  namedSide = null,
+  /** leader | selected | all */
+  namedScope = null,
 } = {}) {
   const orderKind = String(contractType || '').toLowerCase().includes('gig') ? 'Gig order' : 'Job contract';
   const issue = clipText(reason, 200);
@@ -482,9 +498,17 @@ function buildDisputeFiledMessage({
     'Status: Submitted for staff review',
     '',
     `${disputer || 'You'} filed this dispute against ${disputee || 'the other party'}.`,
-    '',
-    `Order: ${orderKind}${contractTitle ? ` "${clipText(contractTitle, 120)}"` : ''}`,
   ];
+  if (namedMembers) {
+    const how =
+      namedScope === 'all'
+        ? 'everyone on'
+        : namedScope === 'leader'
+          ? 'the leader of'
+          : 'these people from';
+    lines.push(`You named ${how} ${namedSide || 'the other side'}: ${namedMembers}.`);
+  }
+  lines.push('', `Order: ${orderKind}${contractTitle ? ` "${clipText(contractTitle, 120)}"` : ''}`);
   if (Number(creditsAtStake) > 0) lines.push(`Contract value: ${credits(creditsAtStake)}`);
   if (Number(creditsFrozen) > 0) {
     lines.push(`Escrow on hold: ${credits(creditsFrozen)}. Neither side can move these credits until the case is decided.`);

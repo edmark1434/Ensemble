@@ -551,12 +551,17 @@ async function emitDisputeState(disputeId, { reason = null } = {}) {
     console.warn('Dispute state broadcast could not list staff:', error.message);
   }
 
+  // Team parties are their Owners and Admins; named people follow a public case too.
+  let partyIds = [row.by_account_id, row.for_account_id];
+  try {
+    partyIds = await require('../services/DisputeMemberServices').disputeSideRecipients(row, 'both');
+  } catch (error) {
+    console.warn('Dispute state recipients fell back to the party accounts:', error.message);
+  }
   emitDisputeChat('disputeUpdated', {
     disputeId: payload.disputeId,
     payload,
-    accountIds: [row.by_account_id, row.for_account_id, row.handler_account_id, ...staffIds].filter(
-      Boolean
-    ),
+    accountIds: [...partyIds, row.handler_account_id, ...staffIds].filter(Boolean),
     includePublicRoom: true,
     includeStaffRoom: true,
   });
@@ -643,20 +648,23 @@ async function postDisputeFiledSummary(row, context = {}) {
  * Private to the filer and staff, like any party reply. Null when nothing valid was attached.
  * @param {object} row the inserted dispute row
  * @param {Array<object>} attachments staged uploads (see `normalizeDisputeAttachments`)
+ * @param {{ senderAccountId?: string|null }} [options] the person who filed; differs from
+ *   `by_account_id` when they filed for a team, and must be them so they can read it back.
  */
-async function postDisputeFiledEvidence(row, attachments) {
+async function postDisputeFiledEvidence(row, attachments, { senderAccountId = null } = {}) {
   const files = normalizeDisputeAttachments(attachments);
   if (!row?.dispute_id || !row.by_account_id || !files.length) return null;
   const chatId = await ensureDisputeChat(row.dispute_id, row);
+  const sender = senderAccountId || row.by_account_id;
   const account = await pool.query(
     `SELECT display_name, handle FROM accounts WHERE account_id = $1`,
-    [row.by_account_id]
+    [sender]
   );
   const profile = account.rows[0] || {};
   return createDisputeMessage({
     chatId,
     body: '',
-    senderId: row.by_account_id,
+    senderId: sender,
     authorName: profile.display_name || profile.handle || 'Member',
     authorType: 'user',
     authorRole: 'disputer',
@@ -749,37 +757,59 @@ async function postDisputePublicInvite(row) {
   return postDisputeSystemMessage(row, body, { audience: 'public' });
 }
 
-/** One notification to one party about a dispute, with a live push. It opens the case in Cases. */
+/**
+ * One notification to one party about a dispute, with a live push. It opens the case in Cases.
+ * A team account has no inbox, so a notice for a team goes to its active Owners and Admins.
+ */
 async function notifyDisputeAccount(accountId, disputeId, { message } = {}) {
   if (!accountId || !disputeId || !message) return;
+  let recipients = [String(accountId)];
   try {
-    const NotificationRepositories = require('./NotificationRepositories');
-    const notification = await NotificationRepositories.createNotification({
-      account_id: accountId,
-      message,
-      reference_table: 'disputes',
-      reference_prefix: 'DIS',
-      reference_path: require('../services/CaseServices').casePath('dispute', disputeId),
-      reference_id: disputeId,
-    });
-    let io = null;
-    try {
-      io = require('../lib/WebSocket').getIo();
-    } catch {
-      io = null;
-    }
-    if (io && notification) io.to(String(accountId)).emit('notification', notification);
+    recipients = await require('../services/DisputeMemberServices').expandPartyAccounts([accountId]);
   } catch (err) {
-    console.warn('Dispute notification skipped:', err.message);
+    console.warn('Dispute notice recipients fell back to the account:', err.message);
+  }
+  const NotificationRepositories = require('./NotificationRepositories');
+  let io = null;
+  try {
+    io = require('../lib/WebSocket').getIo();
+  } catch {
+    io = null;
+  }
+  for (const recipient of recipients) {
+    try {
+      const notification = await NotificationRepositories.createNotification({
+        account_id: recipient,
+        message,
+        reference_table: 'disputes',
+        reference_prefix: 'DIS',
+        reference_path: require('../services/CaseServices').casePath('dispute', disputeId),
+        reference_id: disputeId,
+      });
+      if (io && notification) io.to(String(recipient)).emit('notification', notification);
+    } catch (err) {
+      console.warn('Dispute notification skipped:', err.message);
+    }
   }
 }
 
 /**
  * The money side of a ruling, shaped for one of the two parties. Each payout says how much
- * goes to whom and when; `isYou` marks the viewer's own. Null when there is no ruling, or
- * when the payouts table is not there yet (migration not applied).
+ * goes to whom and when; `isYou` marks the viewer's own (also a payout to a team the viewer
+ * manages, among `partyAccountIds`). Null when there is no ruling, or when the payouts table is
+ * not there yet (migration not applied).
  */
-async function getDisputeSettlementForParty(disputeId, accountId) {
+async function getDisputeSettlementForParty(disputeId, accountId, { partyAccountIds = [] } = {}) {
+  let mine = new Set(accountId ? [String(accountId)] : []);
+  if (accountId && partyAccountIds.length) {
+    try {
+      const { accountsActedForBy } = require('./DisputeMemberRepositories');
+      const actedFor = await accountsActedForBy(accountId, partyAccountIds);
+      mine = new Set([...mine, ...actedFor]);
+    } catch (error) {
+      console.warn('Dispute settlement team lookup skipped:', error.message);
+    }
+  }
   try {
     const result = await pool.query(
       `
@@ -814,7 +844,7 @@ async function getDisputeSettlementForParty(disputeId, accountId) {
         recipientRole: row.recipient_role || null,
         recipientName: row.recipient_name || 'Member',
         recipientHandle: row.recipient_handle || null,
-        isYou: Boolean(accountId && String(row.recipient_account_id) === String(accountId)),
+        isYou: Boolean(row.recipient_account_id && mine.has(String(row.recipient_account_id))),
       })),
     };
   } catch (error) {
@@ -992,8 +1022,20 @@ async function createDisputeMessage({
 
   const authorNotify =
     normalizedAudience === 'author_and_staff' && accountId ? [accountId] : [];
+  // Party accounts that are teams become their Owners and Admins, and a message that reaches the
+  // disputee side also reaches the people named on it.
+  let partyTargets = notifyAccountIds || [];
+  try {
+    partyTargets = await require('../services/DisputeMemberServices').expandMessageTargets(
+      disputeId,
+      partyTargets,
+      normalizedAudience
+    );
+  } catch (error) {
+    console.warn('Dispute message targets fell back to the party accounts:', error.message);
+  }
   const targets = await resolveDisputeRealtimeTargets(chatId, normalizedAudience, [
-    ...(notifyAccountIds || []),
+    ...partyTargets,
     ...authorNotify,
   ]);
   emitDisputeChat('disputeMessage', {
@@ -1206,14 +1248,30 @@ async function broadcastInboxDisputeMessage(io, event, message) {
  * view gives them the case number, the contract, the outcome and the payouts only: never the
  * complaint, its title, or the discussion.
  */
-function isLimitedDisputeeView(row, accountId) {
-  return Boolean(
-    accountId &&
-      !row.visibility &&
-      String(row.for_account_id) === String(accountId) &&
-      String(row.by_account_id) !== String(accountId) &&
-      row.financial_resolution_at
-  );
+function isLimitedDisputeeView(row, accountId, viewer = null) {
+  const respondent = viewer
+    ? Boolean(viewer.actsForRespondent)
+    : String(row.for_account_id) === String(accountId);
+  const filer = viewer ? Boolean(viewer.isFiler) : String(row.by_account_id) === String(accountId);
+  // Only the disputee account (or a team's Owners and Admins) gets the limited view; people
+  // merely named on a private case never learn it exists.
+  return Boolean(accountId && !row.visibility && respondent && !filer && row.financial_resolution_at);
+}
+
+/**
+ * The viewer flags a member read needs, from SQL columns (`viewer_is_filer`,
+ * `viewer_acts_for_respondent`, `viewer_named`) when the query selected them, else by account id.
+ */
+function viewerFromRow(row, accountId) {
+  if (row && 'viewer_is_filer' in row) {
+    const isFiler = Boolean(row.viewer_is_filer);
+    const actsForRespondent = !isFiler && Boolean(row.viewer_acts_for_respondent);
+    const namedMember = !isFiler && Boolean(row.viewer_named);
+    return { isFiler, actsForRespondent, namedMember, isRespondent: actsForRespondent || namedMember };
+  }
+  const isFiler = Boolean(accountId && String(row.by_account_id) === String(accountId));
+  const actsForRespondent = Boolean(!isFiler && accountId && String(row.for_account_id) === String(accountId));
+  return { isFiler, actsForRespondent, namedMember: false, isRespondent: actsForRespondent };
 }
 
 function financialOutcomeLabel(kind) {
@@ -1222,16 +1280,23 @@ function financialOutcomeLabel(kind) {
   return null;
 }
 
-function mapDisputeSummary(row, accountId) {
-  const filedByMe = Boolean(accountId && String(row.by_account_id) === String(accountId));
-  const namesMe = Boolean(
-    accountId && row.for_account_id && String(row.for_account_id) === String(accountId)
-  );
+function mapDisputeSummary(row, accountId, viewer = null) {
+  const who = viewer || viewerFromRow(row, accountId);
+  const filedByMe = Boolean(who.isFiler);
+  const namesMe = Boolean(who.isRespondent);
   const closed = String(row.status || '').toLowerCase() === 'closed';
   const visibility = Boolean(row.visibility);
-  const limited = isLimitedDisputeeView(row, accountId);
+  const limited = isLimitedDisputeeView(row, accountId, who);
   return {
     viewerRole: filedByMe ? 'disputer' : namesMe ? 'disputee' : null,
+    // Named with a team on the disputee side (not the disputee account or its manager).
+    namedMember: Boolean(who.namedMember && !who.actsForRespondent),
+    // Filing or answering for a team account the viewer manages.
+    viaTeam: Boolean(
+      accountId &&
+        ((filedByMe && String(row.by_account_id) !== String(accountId)) ||
+          (who.actsForRespondent && String(row.for_account_id) !== String(accountId)))
+    ),
     id: row.dispute_id,
     number: row.dispute_number,
     // The title carries the filer's complaint headline, so the limited view replaces it.
@@ -1266,24 +1331,45 @@ const CONTRACT_TITLE_SQL = `
   )
 `;
 
+/**
+ * Cases a member can see: ones they filed or answer (for themself, or for a team where they are
+ * an active Owner or Admin), and public ones they are named on with a team.
+ */
 async function listAccountDisputes(accountId) {
+  const { caseAccountIdsFor, disputeMembersReady } = require('./DisputeMemberRepositories');
+  const [accountIds, membersReady] = await Promise.all([
+    caseAccountIdsFor(accountId).catch(() => [String(accountId)]),
+    disputeMembersReady(),
+  ]);
+  const namedSql = membersReady
+    ? `EXISTS (
+         SELECT 1 FROM dispute_members dm
+         WHERE dm.dispute_id = d.dispute_id AND dm.account_id = $2::uuid AND dm.removed_at IS NULL
+       )`
+    : // Before the migration: still references $2, so the parameter count matches.
+      '($2::uuid IS NULL AND FALSE)';
   const result = await pool.query(
     `
     SELECT d.dispute_id, d.dispute_number, d.title, d.type, d.status, d.description, d.visibility,
            d.by_account_id, d.for_account_id, d.created_at, d.updated_at,
            d.financial_resolution_at, d.financial_resolution_kind,
-           ${CONTRACT_TITLE_SQL} AS contract_title
+           ${CONTRACT_TITLE_SQL} AS contract_title,
+           d.by_account_id = ANY($1::uuid[]) AS viewer_is_filer,
+           d.for_account_id = ANY($1::uuid[]) AS viewer_acts_for_respondent,
+           ${namedSql} AS viewer_named
     FROM disputes d
     WHERE d.deleted_at IS NULL
       AND (
-        d.by_account_id = $1
-        OR (d.for_account_id = $1 AND d.visibility IS TRUE)
+        d.by_account_id = ANY($1::uuid[])
+        OR (d.for_account_id = ANY($1::uuid[]) AND d.visibility IS TRUE)
         -- A private case shows up for the disputee once a money ruling touches them.
-        OR (d.for_account_id = $1 AND d.financial_resolution_at IS NOT NULL)
+        OR (d.for_account_id = ANY($1::uuid[]) AND d.financial_resolution_at IS NOT NULL)
+        -- People named with a team follow the case once it is public.
+        OR (d.visibility IS TRUE AND ${namedSql})
       )
     ORDER BY d.updated_at DESC NULLS LAST, d.created_at DESC
     `,
-    [accountId]
+    [accountIds, accountId]
   );
   return result.rows.map((row) => mapDisputeSummary(row, accountId));
 }
@@ -1359,18 +1445,14 @@ async function getPublicDisputeDiscussion(disputeId, viewerAccountId = null) {
   const row = result.rows[0];
   if (!row || !row.visibility) return null;
 
-  const isParty = Boolean(
-    viewerAccountId
-    && (String(row.by_account_id) === String(viewerAccountId)
-      || String(row.for_account_id) === String(viewerAccountId))
-  );
+  // A party may be acting for a team (Owner or Admin), or be named with the disputee's team.
+  const viewer = viewerAccountId
+    ? await require('../services/DisputeMemberServices').resolveDisputeViewer(disputeId, viewerAccountId)
+    : { isFiler: false, isRespondent: false, actsForRespondent: false, namedMember: false };
+  const isFiler = Boolean(viewer.isFiler);
+  const isRespondent = Boolean(viewer.isRespondent);
+  const isParty = isFiler || isRespondent;
   const chatId = await getDisputeChatId(disputeId);
-  const isFiler = Boolean(
-    viewerAccountId && String(row.by_account_id) === String(viewerAccountId)
-  );
-  const isRespondent = Boolean(
-    viewerAccountId && String(row.for_account_id) === String(viewerAccountId)
-  );
   const closed = String(row.status || '').toLowerCase() === 'closed';
   // Forum view: everyone sees the open discussion. A staff reply aimed at one party or at
   // `parties` stays with its audience, so the "only you and staff" badge means what it says.
@@ -1421,11 +1503,16 @@ async function getPublicDisputeDiscussion(disputeId, viewerAccountId = null) {
     isParty,
     // Lets the client say who else can read each message it was given.
     viewerRole: isFiler ? 'disputer' : isRespondent ? 'disputee' : viewerAccountId ? 'community' : null,
+    namedMember: Boolean(viewer.namedMember && !viewer.actsForRespondent),
     canComment: Boolean(viewerAccountId) && !closed,
     // Replies from people outside the dispute are held for staff review before they appear.
     commentsNeedApproval: Boolean(viewerAccountId) && !isParty,
     // Only the two parties see how the money was split and when it lands.
-    settlement: isParty ? await getDisputeSettlementForParty(disputeId, viewerAccountId) : null,
+    settlement: isParty
+      ? await getDisputeSettlementForParty(disputeId, viewerAccountId, {
+          partyAccountIds: [row.by_account_id, row.for_account_id],
+        })
+      : null,
     // The files behind the complaint, so the disputee can answer them. Never for the community:
     // they may hold chat logs, receipts or other private material.
     evidence: isParty ? await loadDisputeFilingEvidence(chatId, row) : null,
@@ -1444,24 +1531,25 @@ async function getAccountDispute(disputeId, accountId) {
     FROM disputes d
     WHERE d.dispute_id = $1
       AND d.deleted_at IS NULL
-      AND (
-        d.by_account_id = $2
-        OR d.for_account_id = $2
-      )
     `,
-    [disputeId, accountId]
+    [disputeId]
   );
   const row = result.rows[0];
   if (!row) return null;
-  const filer = String(row.by_account_id) === String(accountId);
-  const isRespondent = String(row.for_account_id) === String(accountId);
+  // The filer or disputee account, a team's Owner or Admin acting for it, or a person named
+  // with the disputee's team.
+  const viewer = await require('../services/DisputeMemberServices').resolveDisputeViewer(disputeId, accountId);
+  const filer = Boolean(viewer.isFiler);
+  const isRespondent = Boolean(viewer.isRespondent);
   const isParty = filer || isRespondent;
-  if (isLimitedDisputeeView(row, accountId)) {
+  if (!isParty) return null;
+  const partyAccountIds = [row.by_account_id, row.for_account_id];
+  if (isLimitedDisputeeView(row, accountId, viewer)) {
     // Outcome and payouts only. No complaint, no discussion, no chat id to join.
     return {
-      ...mapDisputeSummary(row, accountId),
+      ...mapDisputeSummary(row, accountId, viewer),
       decidedAt: row.financial_resolution_at,
-      settlement: await getDisputeSettlementForParty(disputeId, accountId),
+      settlement: await getDisputeSettlementForParty(disputeId, accountId, { partyAccountIds }),
       chatId: null,
       messages: [],
     };
@@ -1482,9 +1570,9 @@ async function getAccountDispute(disputeId, accountId) {
     texts: [row.description],
   });
   return {
-    ...mapDisputeSummary(row, accountId),
+    ...mapDisputeSummary(row, accountId, viewer),
     details: await loadDisputeCaseDetails(disputeId),
-    settlement: await getDisputeSettlementForParty(disputeId, accountId),
+    settlement: await getDisputeSettlementForParty(disputeId, accountId, { partyAccountIds }),
     chatId,
     messages,
     mentions,
@@ -1537,6 +1625,22 @@ async function loadDisputeCaseDetails(disputeId) {
     const evidence = await loadDisputeFilingEvidence(await getDisputeChatId(disputeId), r);
     const outcomeKey = r.resolution_outcome || null;
     const closed = String(r.status || '').toLowerCase() === 'closed';
+    // The people the filer (or staff) named with the disputee's team. Parties only.
+    let namedMembers = [];
+    try {
+      const { listDisputeMembers } = require('./DisputeMemberRepositories');
+      namedMembers = (await listDisputeMembers(disputeId)).map((member) => ({
+        accountId: String(member.account_id),
+        name: member.display_name || member.handle || 'Member',
+        handle: member.handle || null,
+        avatar: member.avatar_path || null,
+        role: member.team_role || null,
+        isLeader: Boolean(member.is_leader),
+        teamName: member.team_name || null,
+      }));
+    } catch (error) {
+      console.warn('Dispute named members skipped:', error.message);
+    }
     return {
       type: r.type || 'Contract',
       title: r.title || null,
@@ -1548,6 +1652,8 @@ async function loadDisputeCaseDetails(disputeId) {
       openedAt: r.opened_at || null,
       disputer: caseParty(r.by_account_id, r.initiator_name, r.initiator_handle, avatars),
       disputee: caseParty(r.for_account_id, r.respondent_name, r.respondent_handle, avatars),
+      namedMembers,
+      namedScope: r.respondent_member_scope || null,
       contract: r.contract_id
         ? {
             id: String(r.contract_id),
@@ -1617,8 +1723,10 @@ async function postPublicDisputeComment(
     throw error;
   }
 
-  const isFiler = String(row.by_account_id) === String(accountId);
-  const isRespondent = String(row.for_account_id) === String(accountId);
+  // A party may reply for a team they manage, or as someone named with the disputee's team.
+  const viewer = await require('../services/DisputeMemberServices').resolveDisputeViewer(disputeId, accountId);
+  const isFiler = Boolean(viewer.isFiler);
+  const isRespondent = Boolean(viewer.isRespondent);
   const isParty = isFiler || isRespondent;
   const closed = String(row.status || '').toLowerCase() === 'closed';
 
@@ -1751,9 +1859,12 @@ async function notifyDisputeParties(row, { message, path, excludeAccountId = nul
   }
 
   const disputeId = row.dispute_id;
-  const recipients = onlyFiler
-    ? [row.by_account_id]
-    : [row.by_account_id, row.for_account_id];
+  // Team parties reach their Owners and Admins; the disputee side also reaches the people named
+  // on it once the case is public (they cannot open a private one).
+  const recipients = await require('../services/DisputeMemberServices').disputeSideRecipients(
+    row,
+    onlyFiler ? 'disputer' : 'both'
+  );
   // A party's notice opens the case in Cases, which links on to the public page when there is
   // one. `path` from older callers (the public page or the contract disputes list) is ignored.
   void path;

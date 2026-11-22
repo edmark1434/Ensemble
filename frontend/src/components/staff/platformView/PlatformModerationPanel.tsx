@@ -100,8 +100,17 @@ function AccountCard({
               {account.team.leader.forumTimeout ? " · timed out" : ""}
             </>
           ) : (
-            <span className="text-amber-200">No active leader. Warnings and timeouts have nobody to go to.</span>
+            <span className="text-amber-200">No active leader. Pick specific members or all members when acting.</span>
           )}
+          {account.team.memberMerit?.members ? (
+            <span className="block">
+              Team merit:{" "}
+              <span className="text-zinc-200">{account.team.memberMerit.percent ?? "—"}%</span> (
+              {account.team.memberMerit.total}/{account.team.memberMerit.max} across {account.team.memberMerit.members} member
+              {account.team.memberMerit.members === 1 ? "" : "s"})
+              {account.team.memberMerit.below60 ? ` · ${account.team.memberMerit.below60} at low merit` : ""}
+            </span>
+          ) : null}
         </p>
       ) : null}
       <div className="mt-2.5 flex flex-wrap gap-1.5">

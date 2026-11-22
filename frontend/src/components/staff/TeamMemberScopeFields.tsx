@@ -2,8 +2,10 @@ import { useMemo, useState, type ComponentType } from 'react';
 import { Check, Crown, Info, ListChecks, Search, Users } from 'lucide-react';
 
 /**
- * Who besides the team account a team ban / suspend / lock (or its lift) reaches. A team penalty
- * always reaches people: there is no "team only" choice (the server refuses one too).
+ * Who a team penalty reaches: the team leader, specific members or all members. Ban / suspend /
+ * lock (and their lifts) also change the team account; warnings and forum timeouts land only on
+ * the people, because teams have no Platform Merit and never post. A team penalty always reaches
+ * people: there is no "team only" choice (the server refuses one too).
  */
 export type TeamMemberScope = 'leader' | 'selected' | 'all';
 export type TeamScopeValue = { scope: TeamMemberScope; memberAccountIds: string[] };
@@ -14,6 +16,11 @@ export type TeamScopeMember = {
   role?: string | null;
   /** The member's own account standing. */
   status?: string | null;
+  /** The member's own Platform Merit, shown beside them (warnings move it). */
+  merit?: number | null;
+  forumTimeout?: boolean;
+  /** The running forum timeout was set together with this team. */
+  forumTimeoutViaTeam?: boolean;
 };
 type ScopeLeader = { accountId: string; name: string; status?: string | null } | null | undefined;
 export type ScopeTone = 'rose' | 'amber' | 'zinc' | 'emerald';
@@ -178,6 +185,22 @@ const STATUS_CHIP: Record<string, string> = {
   suspended: 'border-amber-400/30 bg-amber-500/10 text-amber-200',
 };
 
+/** Members already timed out are left as they are by a team timeout. */
+export function timedOutAlready(member: TeamScopeMember) {
+  return member.forumTimeout ? 'Already timed out' : null;
+}
+
+/** Clearing a team's timeouts ends only those set together with the team. */
+export function timeoutLiftable(member: TeamScopeMember) {
+  return Boolean(member.forumTimeoutViaTeam);
+}
+
+function meritChipTone(merit: number) {
+  if (merit >= 80) return 'text-emerald-300';
+  if (merit > 60) return 'text-amber-200';
+  return 'text-rose-300';
+}
+
 export function TeamMemberScopeFields({
   mode,
   verb,
@@ -187,9 +210,17 @@ export function TeamMemberScopeFields({
   value,
   onChange,
   dense = false,
+  covered,
+  liftable,
+  teamIncluded = true,
+  tone: toneOverride,
+  title,
+  subtitle,
+  footnote,
+  showMerit = false,
 }: {
   mode: 'apply' | 'lift';
-  /** e.g. "ban", "suspend", "lock", "remove the ban from". */
+  /** e.g. "ban", "suspend", "lock", "warn", "time out", "remove the ban from". */
   verb: string;
   /** For `apply`: the standing the action sets, to mark members already as strict or stricter. */
   targetStatus?: 'banned' | 'suspended' | 'locked';
@@ -200,19 +231,42 @@ export function TeamMemberScopeFields({
   onChange: (next: TeamScopeValue) => void;
   /** Narrow dialogs: one card per row. */
   dense?: boolean;
+  /**
+   * For `apply`: a label when the member already has it and is left as is (e.g. "Already timed
+   * out"). Replaces the standing check `targetStatus` does.
+   */
+  covered?: (member: TeamScopeMember) => string | null;
+  /** For `lift`: who actually has something to lift (others are left alone). */
+  liftable?: (member: TeamScopeMember) => boolean;
+  /** False for warnings and timeouts: only the people change, never the team account. */
+  teamIncluded?: boolean;
+  tone?: ScopeTone;
+  title?: string;
+  subtitle?: string;
+  footnote?: string;
+  /** Show each member's Platform Merit (warnings move it). */
+  showMerit?: boolean;
 }) {
   const [query, setQuery] = useState('');
-  const tone = teamScopeTone(mode, targetStatus);
+  const tone = toneOverride || teamScopeTone(mode, targetStatus);
   const t = TONES[tone];
   const leaderId = leader?.accountId ? String(leader.accountId) : null;
+  const leaderMember = members.find((member) => member.accountId === leaderId) || null;
 
-  const alreadyStrict = (member: { status?: string | null }) =>
-    mode === 'apply' && targetStatus
-      ? (SEVERITY[standingOf(member.status)] ?? 0) >= SEVERITY[targetStatus]
-      : false;
+  /** Why a member is left as is by this action, or null. */
+  const coveredLabel = (member: TeamScopeMember): string | null => {
+    if (mode !== 'apply') return null;
+    if (covered) return covered(member);
+    if (targetStatus && (SEVERITY[standingOf(member.status)] ?? 0) >= SEVERITY[targetStatus]) {
+      return `Already ${standingOf(member.status)}`;
+    }
+    return null;
+  };
+  const alreadyStrict = (member: TeamScopeMember) => Boolean(coveredLabel(member));
   const eligible = members.filter((member) => !alreadyStrict(member));
   const strictCount = members.length - eligible.length;
-  const leaderStrict = Boolean(leader && alreadyStrict(leader));
+  const leaderStrict = Boolean(leader && alreadyStrict(leaderMember || { ...leader, accountId: String(leader.accountId), name: leader.name }));
+  const liftCount = mode === 'lift' && liftable ? members.filter(liftable).length : null;
 
   const filtered = useMemo(() => {
     const term = query.trim().toLowerCase().replace(/^@/, '');
@@ -226,10 +280,11 @@ export function TeamMemberScopeFields({
   const pickedCount = members.filter((member) => picked.has(member.accountId) && !alreadyStrict(member)).length;
   const setPicked = (ids: Iterable<string>) => onChange({ scope: 'selected', memberAccountIds: [...new Set(ids)] });
 
-  /** How many people besides the team the current choice changes (apply only). */
+  /** How many people the current choice changes (besides the team, when it changes too). */
   const reach =
     value.scope === 'leader' ? (leader && !leaderStrict ? 1 : 0) : value.scope === 'all' ? eligible.length : pickedCount;
   const verbTitle = verb.charAt(0).toUpperCase() + verb.slice(1);
+  const strictWord = covered ? 'already have it' : 'already as strict';
 
   const options: { id: TeamMemberScope; icon: ComponentType<{ className?: string }>; title: string; hint: string; disabled?: boolean }[] = [
     {
@@ -239,9 +294,9 @@ export function TeamMemberScopeFields({
       hint: !leader
         ? 'This team has no active leader.'
         : mode === 'lift'
-          ? `${leader.name}, if their penalty was set with the team.`
+          ? `${leader.name}, if theirs was set with the team.`
           : leaderStrict
-            ? `${leader.name} is already ${standingOf(leader.status)}, so stays as is.`
+            ? `${leader.name}: ${String(coveredLabel(leaderMember || { ...leader, accountId: String(leader.accountId) })).toLowerCase()}, so stays as is.`
             : `${leader.name} answers for the team.`,
       disabled: !leader,
     },
@@ -263,9 +318,11 @@ export function TeamMemberScopeFields({
       hint: !members.length
         ? 'No active members.'
         : mode === 'lift'
-          ? 'Everyone whose penalty was set with the team.'
+          ? liftCount != null
+            ? `${liftCount} ${liftCount === 1 ? 'has' : 'have'} one set with the team.`
+            : 'Everyone whose penalty was set with the team.'
           : strictCount
-            ? `Leader included. ${strictCount} already as strict stay as is.`
+            ? `Leader included. ${strictCount} ${strictWord} and stay as is.`
             : 'Every active member, leader included.',
       disabled: !members.length,
     },
@@ -282,18 +339,22 @@ export function TeamMemberScopeFields({
           </span>
           <div className="min-w-0">
             <p className="text-sm font-semibold text-white">
-              {mode === 'apply' ? `${verbTitle} with the team` : 'Lift member penalties too'}
+              {title || (mode === 'apply' ? `${verbTitle} with the team` : 'Lift member penalties too')}
             </p>
             <p className="mt-0.5 text-[11px] leading-snug text-zinc-500">
-              {mode === 'apply'
-                ? 'The team account always gets it. Choose the people who answer for it.'
-                : 'The team is restored. Choose whose team-linked penalty ends with it.'}
+              {subtitle ||
+                (mode === 'apply'
+                  ? teamIncluded
+                    ? 'The team account always gets it. Choose the people who answer for it.'
+                    : 'Only people get this; the team account does not change. Choose who.'
+                  : 'The team is restored. Choose whose team-linked penalty ends with it.')}
             </p>
           </div>
         </div>
         {mode === 'apply' && !nobody ? (
           <span className={`shrink-0 rounded-full border px-2.5 py-0.5 text-[11px] font-medium tabular-nums ${t.badge}`}>
-            Team + {reach} {reach === 1 ? 'person' : 'people'}
+            {teamIncluded ? 'Team + ' : ''}
+            {reach} {reach === 1 ? 'person' : 'people'}
           </span>
         ) : null}
       </header>
@@ -301,7 +362,9 @@ export function TeamMemberScopeFields({
       {nobody ? (
         <p className={`flex items-start gap-2 text-xs text-zinc-400 ${dense ? 'p-3' : 'px-4 py-3'}`}>
           <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-zinc-500" />
-          This team has no active leader or members, so only the team account changes.
+          {teamIncluded
+            ? 'This team has no active leader or members, so only the team account changes.'
+            : 'This team has no active members, so there is nobody to act on.'}
         </p>
       ) : (
         <div
@@ -361,6 +424,7 @@ export function TeamMemberScopeFields({
           <ul className="scroll-thin mt-2 max-h-60 space-y-1 overflow-y-auto pr-1">
             {filtered.map((member) => {
               const strict = alreadyStrict(member);
+              const strictLabel = coveredLabel(member);
               const status = standingOf(member.status);
               const isLeader = leaderId === String(member.accountId);
               const checked = !strict && picked.has(member.accountId);
@@ -405,13 +469,29 @@ export function TeamMemberScopeFields({
                         Leader
                       </span>
                     ) : null}
-                    {status !== 'active' ? (
+                    {showMerit && member.merit != null ? (
+                      <span className={`shrink-0 text-[10px] tabular-nums ${meritChipTone(member.merit)}`}>Merit {member.merit}</span>
+                    ) : null}
+                    {mode === 'lift' && liftable && liftable(member) ? (
+                      <span className="shrink-0 rounded-full border border-emerald-400/25 bg-emerald-500/10 px-2 py-0.5 text-[10px] text-emerald-200">
+                        Set with team
+                      </span>
+                    ) : null}
+                    {strictLabel ? (
+                      <span
+                        className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] ${
+                          STATUS_CHIP[status] || 'border-white/10 text-zinc-300'
+                        }`}
+                      >
+                        {strictLabel}
+                      </span>
+                    ) : status !== 'active' ? (
                       <span
                         className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] capitalize ${
                           STATUS_CHIP[status] || 'border-white/10 text-zinc-300'
                         }`}
                       >
-                        {strict ? `Already ${status}` : status}
+                        {status}
                       </span>
                     ) : null}
                   </label>
@@ -426,7 +506,7 @@ export function TeamMemberScopeFields({
           <div className="mt-2 flex items-center justify-between gap-2 text-[11px]">
             <span className="tabular-nums text-zinc-500">
               {pickedCount} of {eligible.length} picked
-              {strictCount ? ` · ${strictCount} already as strict` : ''}
+              {strictCount ? ` · ${strictCount} ${strictWord}` : ''}
             </span>
             {!pickedCount ? <span className="text-amber-300">Pick at least one member.</span> : null}
           </div>
@@ -440,9 +520,10 @@ export function TeamMemberScopeFields({
           }`}
         >
           <Info className="mt-px h-3.5 w-3.5 shrink-0 text-zinc-600" />
-          {mode === 'apply'
-            ? 'Each person gets the same penalty and length, and their reason says it came with the team. Accounts you may not act on stop the action, except with All members, where they are skipped.'
-            : 'Only penalties set together with this team are lifted. Other member penalties stay; change them from the Users tab.'}
+          {footnote ||
+            (mode === 'apply'
+              ? 'Each person gets the same penalty and length, and their reason says it came with the team. Accounts you may not act on stop the action, except with All members, where they are skipped.'
+              : 'Only penalties set together with this team are lifted. Other member penalties stay; change them from the Users tab.')}
         </p>
       ) : null}
     </section>

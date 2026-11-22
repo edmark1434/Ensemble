@@ -1,7 +1,8 @@
 import { useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
-import { BookOpen, ClipboardList, Eye, FileText, Headphones, MessagesSquare, Scale } from 'lucide-react';
+import { BookOpen, ClipboardList, Eye, FileText, Headphones, MessagesSquare, Scale, Users } from 'lucide-react';
 import type { CaseAccess } from '@/lib/cases';
+import { constructAvatarUrl, getFallbackAvatarUrl } from '@/lib/accountAvatars';
 import { formatStandingWhen } from '@/lib/standing';
 import {
   Avatar,
@@ -39,6 +40,9 @@ export type DisputeCaseDetails = {
   filedAt?: string | null;
   disputer?: CaseParty | null;
   disputee?: CaseParty | null;
+  /** People the filer (or staff) named with the disputee's team. */
+  namedMembers?: (CaseParty & { role: string | null; isLeader: boolean; teamName: string | null })[];
+  namedScope?: 'leader' | 'selected' | 'all' | null;
   contract?: { id: string; title: string | null; kind: string; status: string | null; rateCredits: number } | null;
   creditsInvolved?: number;
   conductOnly?: boolean;
@@ -96,17 +100,73 @@ export function StageChip({ access }: { access?: CaseAccess | null }) {
   );
 }
 
-/** Disputer vs disputee, from the case details. */
-export function DisputeParties({ details, viewerRole }: { details: DisputeCaseDetails; viewerRole?: string | null }) {
+/** Disputer vs disputee, from the case details, with the people named with the disputee's team. */
+export function DisputeParties({
+  details,
+  viewerRole,
+  viewerAccountId,
+  namedMember = false,
+}: {
+  details: DisputeCaseDetails;
+  viewerRole?: string | null;
+  viewerAccountId?: string | null;
+  /** The viewer is named with the team rather than being the disputee account. */
+  namedMember?: boolean;
+}) {
   const person = (party?: CaseParty | null) =>
     party ? { accountId: party.accountId, name: party.name, handle: party.handle, avatar: party.avatar || null } : undefined;
+  const named = details.namedMembers || [];
+  const teamName = named.find((member) => member.teamName)?.teamName || details.disputee?.name || 'their team';
   return (
-    <div className="grid grid-cols-1 items-center gap-2 sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]">
-      <PartyTile role="disputer" person={person(details.disputer)} isYou={viewerRole === 'disputer'} />
-      <span className="mx-auto flex h-8 w-8 items-center justify-center rounded-full border border-gray-200 bg-white text-[10px] font-black tracking-widest text-gray-400 dark:border-white/10 dark:bg-dark-surface dark:text-zinc-500">
-        VS
-      </span>
-      <PartyTile role="disputee" person={person(details.disputee)} isYou={viewerRole === 'disputee'} align="right" />
+    <div className="space-y-2">
+      <div className="grid grid-cols-1 items-center gap-2 sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]">
+        <PartyTile role="disputer" person={person(details.disputer)} isYou={viewerRole === 'disputer'} />
+        <span className="mx-auto flex h-8 w-8 items-center justify-center rounded-full border border-gray-200 bg-white text-[10px] font-black tracking-widest text-gray-400 dark:border-white/10 dark:bg-dark-surface dark:text-zinc-500">
+          VS
+        </span>
+        <PartyTile
+          role="disputee"
+          person={person(details.disputee)}
+          isYou={viewerRole === 'disputee' && !namedMember}
+          align="right"
+        />
+      </div>
+      {named.length ? (
+        <div className="flex flex-wrap items-center justify-end gap-1.5 rounded-xl border border-cyan-200 bg-cyan-50/60 px-3 py-2 dark:border-cyan-500/20 dark:bg-cyan-500/[0.06]">
+          <span className="mr-auto text-[11px] font-semibold text-cyan-800 dark:text-cyan-200">
+            <Users className="mr-1 inline h-3.5 w-3.5 align-[-2px]" />
+            {details.namedScope === 'all' ? `Everyone on ${teamName}` : `Named with ${teamName}`}
+          </span>
+          {named.slice(0, 8).map((member) => {
+            const you = Boolean(viewerAccountId && member.accountId === viewerAccountId);
+            return (
+              <span
+                key={member.accountId}
+                className={`inline-flex items-center gap-1.5 rounded-full border py-0.5 pl-0.5 pr-2 text-[11px] font-semibold ${
+                  you
+                    ? 'border-gray-900 bg-gray-900 text-white dark:border-white dark:bg-white dark:text-gray-900'
+                    : 'border-gray-200 bg-white text-gray-700 dark:border-white/10 dark:bg-white/5 dark:text-zinc-300'
+                }`}
+              >
+                <img
+                  src={constructAvatarUrl(member.avatar || null, member.name)}
+                  alt=""
+                  onError={(event) => {
+                    (event.target as HTMLImageElement).src = getFallbackAvatarUrl(member.name);
+                  }}
+                  className="h-5 w-5 rounded-full object-cover"
+                />
+                {member.handle ? `@${member.handle}` : member.name}
+                {member.isLeader ? <span className="text-[10px] font-bold text-amber-600 dark:text-amber-300">Leader</span> : null}
+                {you ? <span className="text-[9px] font-bold uppercase tracking-wide">You</span> : null}
+              </span>
+            );
+          })}
+          {named.length > 8 ? (
+            <span className="text-[11px] font-semibold text-gray-500 dark:text-zinc-400">+{named.length - 8} more</span>
+          ) : null}
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -213,9 +273,15 @@ function yourPart(access?: CaseAccess | null) {
   const role = access?.viewerRole;
   const title =
     role === 'disputer'
-      ? 'You filed this dispute'
+      ? access?.viaTeam
+        ? 'Your team filed this dispute'
+        : 'You filed this dispute'
       : role === 'disputee'
-        ? 'You’re named in this dispute'
+        ? access?.namedMember
+          ? 'You’re named with your team'
+          : access?.viaTeam
+            ? 'Your team is named in this dispute'
+            : 'You’re named in this dispute'
         : role === 'participant'
           ? 'You were added to this ticket'
           : 'You opened this ticket';

@@ -11,7 +11,7 @@ const {
   ticketStatusChart,
 } = require('./ModeratorSharedRepositories');
 const { fetchStaffWorkload } = require('./AdminTicketsRepositories');
-const { QUEUE_SCOPES } = require('../lib/TicketEnums');
+const { QUEUE_SCOPES, normalizeTicketType } = require('../lib/TicketEnums');
 const { FORUM_REPORT_TYPES } = require('../lib/ReportEnums');
 
 function forumDb() {
@@ -84,15 +84,24 @@ const REMOVED_COMMENTS_EXPR = {
   },
 };
 
+/** The identity lookup reads at most this many ids per call. */
+const IDENTITY_CHUNK = 500;
+
 /** Resolves forum user ids to the account identity shown on staff desks. */
 async function resolveForumIdentities(userIds) {
   const { getPublicForumUserIdentities } = require('./UserRepositories');
   const ids = [...new Set((userIds || []).filter((id) => id !== null && id !== undefined).map(String))];
   if (!ids.length) return new Map();
-  const identities = await getPublicForumUserIdentities(ids);
-  return new Map(identities.map((row) => [String(row.user_id), row]));
+  const chunks = [];
+  for (let i = 0; i < ids.length; i += IDENTITY_CHUNK) chunks.push(ids.slice(i, i + IDENTITY_CHUNK));
+  const rows = (await Promise.all(chunks.map((chunk) => getPublicForumUserIdentities(chunk)))).flat();
+  return new Map(rows.map((row) => [String(row.user_id), row]));
 }
 
+/**
+ * The person as members see them on the forum: name, handle, avatar (a storage path the
+ * console resolves like the member site does), verification and plan.
+ */
 function identityPerson(userId, identities) {
   const identity = identities.get(String(userId ?? ''));
   return {
@@ -100,8 +109,30 @@ function identityPerson(userId, identities) {
     accountId: identity?.account_id || null,
     name: identity?.display_name || null,
     handle: identity?.handle || null,
+    avatarUrl: identity?.avatar_preset_url || null,
     isVerified: Boolean(identity?.is_verified),
+    subscriptionPlan: identity?.subscription_plan || null,
   };
+}
+
+/** Image paths on a post or comment, in the order the member forum shows them. */
+function contentImages(doc) {
+  const attachments = Array.isArray(doc?.attachments) ? doc.attachments : [];
+  const keys = Array.isArray(doc?.imageKeys) ? doc.imageKeys : [];
+  return [
+    ...attachments.map((attachment) => (typeof attachment === 'string' ? attachment : attachment?.file_path)),
+    ...keys,
+  ].filter((path) => typeof path === 'string' && path.trim() !== '');
+}
+
+/** How many members a group card previews (owner first). */
+const MEMBER_PREVIEW_SIZE = 5;
+
+function previewMembers(members) {
+  const list = (Array.isArray(members) ? members : []).filter((member) => member && !member.is_banned);
+  return [...list]
+    .sort((a, b) => (GROUP_ROLE_ORDER[a.role] ?? 9) - (GROUP_ROLE_ORDER[b.role] ?? 9))
+    .slice(0, MEMBER_PREVIEW_SIZE);
 }
 
 function toDate(value) {
@@ -310,7 +341,11 @@ async function getModeratorForumGroups({ search = '', status = 'all' } = {}) {
   const owners = groups.map((group) =>
     (Array.isArray(group.members) ? group.members : []).find((member) => member.role === 'Admin')
   );
-  const identities = await resolveForumIdentities(owners.map((owner) => owner?.userId));
+  const previews = groups.map((group) => previewMembers(group.members));
+  const identities = await resolveForumIdentities([
+    ...owners.map((owner) => owner?.userId),
+    ...previews.flat().map((member) => member.userId),
+  ]);
 
   return {
     available: true,
@@ -331,6 +366,10 @@ async function getModeratorForumGroups({ search = '', status = 'all' } = {}) {
           userId: member.userId,
           role: member.role || 'Member',
           isBanned: Boolean(member.is_banned),
+        })),
+        memberPreview: previews[index].map((member) => ({
+          ...identityPerson(member.userId, identities),
+          role: member.role || 'Member',
         })),
         owner: owner ? identityPerson(owner.userId, identities) : null,
         discussionCount: groupStats.total,
@@ -472,16 +511,22 @@ function commentStats(comments) {
 function mapDiscussionSummary(doc, identities, group = null) {
   const counts = commentStats(doc.comments);
   const removed = Boolean(doc.deleted_at) || doc.status === 'removed';
+  const images = contentImages(doc);
   return {
     id: String(doc._id),
     title: doc.title || 'Untitled discussion',
     description: doc.description || null,
+    // Posts store their body in `content`; older ones used `description`.
+    excerpt: snippet(doc.content ?? doc.description ?? '', 320) || null,
+    images: images.slice(0, 4),
+    imageCount: images.length,
     groupId: doc.forum_group_id ? String(doc.forum_group_id) : null,
     groupName: group ? group.group_name || 'Untitled group' : null,
     groupStatus: group ? group.status || 'active' : null,
+    groupImageUrl: group?.image_url || null,
     author: identityPerson(doc.user_id, identities),
     tags: Array.isArray(doc.tags) ? doc.tags : [],
-    attachmentCount: Array.isArray(doc.attachments) ? doc.attachments.length : 0,
+    attachmentCount: images.length,
     ...counts,
     likeCount: Array.isArray(doc.likes) ? doc.likes.length : 0,
     saveCount: Array.isArray(doc.saves) ? doc.saves.length : 0,
@@ -588,6 +633,7 @@ async function getModeratorForumDiscussionDetail(discussionId) {
     ...mapDiscussionSummary(doc, identities, group),
     // The post body as written (kept on removal), so staff evidence can quote it.
     content: typeof doc.content === 'string' ? doc.content : null,
+    images: contentImages(doc),
     comments: comments
       .map((comment) => ({
         commentId: comment.comment_id,
@@ -598,7 +644,9 @@ async function getModeratorForumDiscussionDetail(discussionId) {
         likeCount: Array.isArray(comment.likes)
           ? comment.likes.filter((like) => like && like.user_id).length
           : 0,
-        attachmentCount: Array.isArray(comment.attachments) ? comment.attachments.length : 0,
+        images: contentImages(comment),
+        attachmentCount: contentImages(comment).length,
+        isEdited: Boolean(comment.is_edited),
         isDeleted: Boolean(comment.deleted_at),
         deletedAt: comment.deleted_at || null,
         removedBy: comment.deleted_at ? comment.removed_by || null : null,
@@ -765,6 +813,7 @@ async function getForumContentStats() {
           {
             $project: {
               group_name: 1,
+              image_url: 1,
               status: 1,
               created_at: 1,
               memberCount: { $size: { $cond: [{ $isArray: '$members' }, '$members', []] } },
@@ -780,6 +829,7 @@ async function getForumContentStats() {
           {
             $project: {
               title: 1,
+              user_id: 1,
               forum_group_id: 1,
               status: 1,
               deleted_at: 1,
@@ -799,13 +849,20 @@ async function getForumContentStats() {
     ...new Set(recentDiscussions.map((x) => x.forum_group_id).filter(Boolean).map(String)),
   ];
   const groupNameMap = {};
-  if (groupIds.length) {
-    const linked = await db
-      .collection('forum_groups')
-      .find({ _id: { $in: groupIds.filter((id) => ObjectId.isValid(id)).map((id) => new ObjectId(id)) } })
-      .project({ group_name: 1 })
-      .toArray();
-    for (const g of linked) groupNameMap[String(g._id)] = g.group_name || 'Untitled group';
+  const groupImageMap = {};
+  const [linked, identities] = await Promise.all([
+    groupIds.length
+      ? db
+          .collection('forum_groups')
+          .find({ _id: { $in: groupIds.filter((id) => ObjectId.isValid(id)).map((id) => new ObjectId(id)) } })
+          .project({ group_name: 1, image_url: 1 })
+          .toArray()
+      : [],
+    resolveForumIdentities(recentDiscussions.map((x) => x.user_id)),
+  ]);
+  for (const g of linked) {
+    groupNameMap[String(g._id)] = g.group_name || 'Untitled group';
+    groupImageMap[String(g._id)] = g.image_url || null;
   }
 
   return {
@@ -821,6 +878,7 @@ async function getForumContentStats() {
     recentGroups: recentGroups.map((g) => ({
       id: String(g._id),
       name: g.group_name || 'Untitled group',
+      imageUrl: g.image_url || null,
       status: g.status || 'active',
       memberCount: g.memberCount || 0,
       createdAt: g.created_at || null,
@@ -828,8 +886,10 @@ async function getForumContentStats() {
     recentDiscussions: recentDiscussions.map((x) => ({
       id: String(x._id),
       title: x.title || 'Untitled discussion',
+      author: identityPerson(x.user_id, identities),
       groupId: x.forum_group_id ? String(x.forum_group_id) : null,
       groupName: x.forum_group_id ? groupNameMap[String(x.forum_group_id)] || null : null,
+      groupImageUrl: x.forum_group_id ? groupImageMap[String(x.forum_group_id)] || null : null,
       commentCount: x.commentCount || 0,
       status: x.deleted_at || x.status === 'removed' ? 'removed' : x.status || 'active',
       isLocked: Boolean(x.is_locked),
@@ -1044,6 +1104,436 @@ async function getForumOverview() {
       tables: ['tickets', 'reports', 'forum_groups (mongo)', 'forum_discussions (mongo)'],
       persisted: true,
     },
+  };
+}
+
+// ─── Trends (Forum dashboard, one date range) ──────────────────────────
+
+const DAY_MS = 86_400_000;
+
+function utcDay(day) {
+  return new Date(`${day}T00:00:00Z`);
+}
+
+function dayString(date) {
+  return date.toISOString().slice(0, 10);
+}
+
+function shiftDay(day, n) {
+  return dayString(new Date(utcDay(day).getTime() + n * DAY_MS));
+}
+
+/** First day of the chart bucket `day` falls in. Matches Postgres `date_trunc` (weeks start Monday). */
+function bucketStart(day, bucket) {
+  if (bucket === 'day') return day;
+  if (bucket === 'month') return `${day.slice(0, 7)}-01`;
+  const sinceMonday = (utcDay(day).getUTCDay() + 6) % 7;
+  return shiftDay(day, -sinceMonday);
+}
+
+function bucketLastDay(start, bucket) {
+  if (bucket === 'day') return start;
+  if (bucket === 'week') return shiftDay(start, 6);
+  const d = utcDay(start);
+  return dayString(new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0)));
+}
+
+/** Buckets covering `from`–`to`; `partial` marks one that runs past either end. */
+function trendSpine(from, to, bucket) {
+  const spine = [];
+  let start = bucketStart(from, bucket);
+  while (start <= to) {
+    const end = bucketLastDay(start, bucket);
+    spine.push({ start, end, partial: start < from || end > to });
+    start = shiftDay(end, 1);
+  }
+  return spine;
+}
+
+/** Staff forum actions in `account_activity`, grouped the way the dashboard shows them. */
+const FORUM_ACTION_KINDS = [
+  { key: 'removed', label: 'Posts removed', color: '#f87171', codes: ['FORUM_DISCUSSION_REMOVED'] },
+  { key: 'hidden', label: 'Comments hidden', color: '#fb923c', codes: ['FORUM_COMMENT_REMOVED'] },
+  { key: 'locked', label: 'Threads locked', color: '#fbbf24', codes: ['FORUM_DISCUSSION_LOCKED'] },
+  { key: 'pinned', label: 'Threads pinned', color: '#a78bfa', codes: ['FORUM_DISCUSSION_PINNED'] },
+  { key: 'banned', label: 'Group bans', color: '#f472b6', codes: ['FORUM_MEMBER_BANNED'] },
+  { key: 'archived', label: 'Groups archived', color: '#e879f9', codes: ['FORUM_GROUP_ARCHIVED'] },
+  { key: 'timeout', label: 'Forum timeouts', color: '#38bdf8', codes: ['FORUM_TIMEOUT'] },
+  {
+    key: 'reversed',
+    label: 'Restores and undos',
+    color: '#34d399',
+    codes: [
+      'FORUM_DISCUSSION_RESTORED',
+      'FORUM_COMMENT_RESTORED',
+      'FORUM_DISCUSSION_UNLOCKED',
+      'FORUM_DISCUSSION_UNPINNED',
+      'FORUM_MEMBER_UNBANNED',
+      'FORUM_GROUP_REACTIVATED',
+    ],
+  },
+];
+
+function actionKindFor(eventCode) {
+  const code = String(eventCode || '').toUpperCase();
+  return FORUM_ACTION_KINDS.find((kind) => kind.codes.includes(code)) || { key: 'other', label: 'Other', color: '#a1a1aa' };
+}
+
+/** Same groupings as `getForumReportBreakdown` and `ticketStatusChart`. */
+function reportStatusGroup(status) {
+  const s = String(status || 'open').toLowerCase();
+  if (['open', 'pending'].includes(s)) return 'Open';
+  if (['in_review', 'in review', 'in_progress', 'in progress', 'under_review', 'escalated'].includes(s)) return 'In review';
+  if (['resolved', 'closed', 'sanctioned'].includes(s)) return 'Resolved';
+  if (['dismissed', 'denied', 'archived'].includes(s)) return 'Dismissed';
+  return 'Open';
+}
+
+const REPORT_STATUS_COLORS = { Open: '#f87171', 'In review': '#fbbf24', Resolved: '#34d399', Dismissed: '#a1a1aa' };
+
+function ticketStatusGroup(status) {
+  if (status === 'Open') return 'Open';
+  if (['Resolved', 'Closed'].includes(status)) return 'Closed';
+  return 'In progress';
+}
+
+const TICKET_STATUS_COLORS = { Open: '#fb7185', 'In progress': '#fbbf24', Closed: '#a1a1aa' };
+
+const TARGET_COLORS = ['#a78bfa', '#818cf8', '#c084fc', '#f0abfc', '#67e8f9', '#94a3b8'];
+
+function labelWords(value) {
+  return String(value || 'other')
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, (ch) => ch.toUpperCase());
+}
+
+function toMix(map, colors) {
+  return [...map.entries()]
+    .filter(([, value]) => value > 0)
+    .sort((a, b) => b[1] - a[1])
+    .map(([label, value], i) => ({
+      label,
+      value,
+      color: Array.isArray(colors) ? colors[i % colors.length] : colors[label] || '#a1a1aa',
+    }));
+}
+
+/** Forum tickets, forum reports and staff forum actions per day across `since`–`to`. */
+async function fetchForumCaseDays(since, to) {
+  const range = 'created_at >= $1::date AND created_at < ($2::date + 1)';
+  const ticketTypes = FORUM_TICKET_SCOPE.typesIn.map((t) => normalizeTicketType(t));
+  const [tickets, reports, actions] = await Promise.all([
+    pool.query(
+      `
+      SELECT (created_at::timestamp)::date::text AS day, status, COUNT(*)::int AS n
+      FROM tickets
+      WHERE deleted_at IS NULL AND type = ANY($3) AND ${range}
+      GROUP BY 1, 2
+      `,
+      [since, to, ticketTypes]
+    ),
+    pool.query(
+      `
+      SELECT
+        (created_at::timestamp)::date::text AS day,
+        LOWER(COALESCE(target_type, type)) AS target,
+        LOWER(COALESCE(status, 'open')) AS status,
+        COUNT(*)::int AS n
+      FROM reports
+      WHERE deleted_at IS NULL AND LOWER(COALESCE(target_type, type)) = ANY($3) AND ${range}
+      GROUP BY 1, 2, 3
+      `,
+      [since, to, [...FORUM_REPORT_TYPES]]
+    ),
+    pool.query(
+      `
+      SELECT (created_at::timestamp)::date::text AS day, event_code, COUNT(*)::int AS n
+      FROM account_activity
+      WHERE actor_staff_id IS NOT NULL AND LEFT(event_code, 6) = 'FORUM_' AND ${range}
+      GROUP BY 1, 2
+      `,
+      [since, to]
+    ),
+  ]);
+  return { tickets: tickets.rows, reports: reports.rows, actions: actions.rows };
+}
+
+/**
+ * New discussions, comments and groups per day (with the group and member behind each
+ * post), and content moderation took down, across `since`–`to`. Days are UTC.
+ */
+async function fetchForumCommunityDays(db, since, to) {
+  const between = { $gte: utcDay(since), $lt: utcDay(shiftDay(to, 1)) };
+  const day = (path) => ({ $dateToString: { format: '%Y-%m-%d', date: path } });
+  const byDayGroupMember = { $group: { _id: { day: day('$d'), g: '$g', u: '$u' }, n: { $sum: 1 } } };
+  const byDay = { $group: { _id: day('$d'), n: { $sum: 1 } } };
+
+  const [posts, comments, groups, removedPosts, removedComments] = await Promise.all([
+    db
+      .collection('forum_discussions')
+      .aggregate([
+        {
+          $project: {
+            d: toDateExpression('$created_at'),
+            g: { $toString: '$forum_group_id' },
+            u: { $toString: '$user_id' },
+          },
+        },
+        { $match: { d: between } },
+        byDayGroupMember,
+      ])
+      .toArray(),
+    db
+      .collection('forum_discussions')
+      .aggregate([
+        { $match: { 'comments.0': { $exists: true } } },
+        { $project: { g: { $toString: '$forum_group_id' }, comments: 1 } },
+        { $unwind: '$comments' },
+        {
+          $project: {
+            g: 1,
+            u: { $toString: '$comments.user_id' },
+            d: toDateExpression('$comments.created_at'),
+          },
+        },
+        { $match: { d: between } },
+        byDayGroupMember,
+      ])
+      .toArray(),
+    db
+      .collection('forum_groups')
+      .aggregate([{ $project: { d: toDateExpression('$created_at') } }, { $match: { d: between } }, byDay])
+      .toArray(),
+    db
+      .collection('forum_discussions')
+      .aggregate([
+        {
+          $project: {
+            d: toDateExpression('$deleted_at'),
+            mod: removedByModerationExpression('$deleted_at', '$removed_by'),
+          },
+        },
+        { $match: { mod: true, d: between } },
+        byDay,
+      ])
+      .toArray(),
+    db
+      .collection('forum_discussions')
+      .aggregate([
+        { $match: { comments: { $elemMatch: { deleted_at: { $ne: null } } } } },
+        { $project: { comments: 1 } },
+        { $unwind: '$comments' },
+        {
+          $project: {
+            d: toDateExpression('$comments.deleted_at'),
+            mod: removedByModerationExpression('$comments.deleted_at', '$comments.removed_by'),
+          },
+        },
+        { $match: { mod: true, d: between } },
+        byDay,
+      ])
+      .toArray(),
+  ]);
+  return { posts, comments, groups, removedPosts, removedComments };
+}
+
+const TOP_LIST_SIZE = 6;
+
+function topEntries(map, size = TOP_LIST_SIZE) {
+  return [...map.entries()]
+    .filter(([id]) => id && id !== 'null')
+    .sort((a, b) => b[1].posts + b[1].comments - (a[1].posts + a[1].comments))
+    .slice(0, size);
+}
+
+/**
+ * Everything the Forum dashboard's Trends section draws for one range: a series per bucket,
+ * totals for the range and the period before it, status and target mixes for cases filed in
+ * the range, staff actions by kind, and the busiest groups and members. Either store failing
+ * leaves its half empty with a note instead of failing the whole response.
+ *
+ * @param range {{ from, to, bucket, previous }} from `resolveRange` (inclusive YYYY-MM-DD days)
+ */
+async function getForumTrends({ from, to, bucket, previous }) {
+  const since = previous?.from || from;
+  const spine = trendSpine(from, to, bucket);
+  const index = new Map(spine.map((point, i) => [point.start, i]));
+  const empty = () => spine.map(() => 0);
+  const series = {
+    discussions: empty(),
+    comments: empty(),
+    groups: empty(),
+    activeMembers: empty(),
+    takedowns: empty(),
+    reports: empty(),
+    tickets: empty(),
+    actions: empty(),
+  };
+  const totals = Object.fromEntries(Object.keys(series).map((key) => [key, 0]));
+  const previousTotals = Object.fromEntries(Object.keys(series).map((key) => [key, 0]));
+  const notes = [];
+
+  /** Adds `n` on `day` to a metric: the range's bucket, or the previous period's total. */
+  const add = (metric, day, n) => {
+    if (!day || n <= 0) return;
+    if (day < from) {
+      previousTotals[metric] += n;
+      return;
+    }
+    if (day > to) return;
+    const i = index.get(bucketStart(day, bucket));
+    if (i == null) return;
+    series[metric][i] += n;
+    totals[metric] += n;
+  };
+
+  const ticketStatus = new Map();
+  const reportStatus = new Map();
+  const reportTargets = new Map();
+  const actionKinds = new Map();
+
+  let casesAvailable = true;
+  try {
+    const cases = await fetchForumCaseDays(since, to);
+    for (const row of cases.tickets) {
+      add('tickets', row.day, Number(row.n));
+      if (row.day >= from) {
+        const label = ticketStatusGroup(row.status);
+        ticketStatus.set(label, (ticketStatus.get(label) || 0) + Number(row.n));
+      }
+    }
+    for (const row of cases.reports) {
+      add('reports', row.day, Number(row.n));
+      if (row.day >= from) {
+        const status = reportStatusGroup(row.status);
+        reportStatus.set(status, (reportStatus.get(status) || 0) + Number(row.n));
+        const target = labelWords(row.target);
+        reportTargets.set(target, (reportTargets.get(target) || 0) + Number(row.n));
+      }
+    }
+    for (const row of cases.actions) {
+      add('actions', row.day, Number(row.n));
+      if (row.day >= from) {
+        const kind = actionKindFor(row.event_code);
+        const current = actionKinds.get(kind.key) || { label: kind.label, color: kind.color, value: 0 };
+        current.value += Number(row.n);
+        actionKinds.set(kind.key, current);
+      }
+    }
+  } catch (err) {
+    console.error('Forum trends: ticket, report and action series failed:', err.message);
+    casesAvailable = false;
+    notes.push('Ticket, report and staff action trends could not be read just now.');
+  }
+
+  const db = forumDb();
+  let communityAvailable = Boolean(db);
+  let topGroups = [];
+  let topMembers = [];
+  if (!db) {
+    notes.push('MongoDB is not connected, so discussion, comment and group trends are unavailable.');
+  } else {
+    try {
+      const community = await fetchForumCommunityDays(db, since, to);
+      const groupTotals = new Map();
+      const memberTotals = new Map();
+      const membersByBucket = spine.map(() => new Set());
+      const membersNow = new Set();
+      const membersBefore = new Set();
+
+      const tally = (rows, metric) => {
+        for (const row of rows) {
+          const { day: rowDay, g, u } = row._id || {};
+          const n = Number(row.n || 0);
+          add(metric, rowDay, n);
+          if (!rowDay || rowDay > to) continue;
+          if (rowDay < from) {
+            if (u) membersBefore.add(u);
+            continue;
+          }
+          if (u) {
+            membersNow.add(u);
+            const i = index.get(bucketStart(rowDay, bucket));
+            if (i != null) membersByBucket[i].add(u);
+            const member = memberTotals.get(u) || { posts: 0, comments: 0 };
+            member[metric === 'discussions' ? 'posts' : 'comments'] += n;
+            memberTotals.set(u, member);
+          }
+          if (g) {
+            const group = groupTotals.get(g) || { posts: 0, comments: 0 };
+            group[metric === 'discussions' ? 'posts' : 'comments'] += n;
+            groupTotals.set(g, group);
+          }
+        }
+      };
+      tally(community.posts, 'discussions');
+      tally(community.comments, 'comments');
+      for (const row of community.groups) add('groups', row._id, Number(row.n || 0));
+      for (const row of [...community.removedPosts, ...community.removedComments]) {
+        add('takedowns', row._id, Number(row.n || 0));
+      }
+      series.activeMembers = membersByBucket.map((set) => set.size);
+      totals.activeMembers = membersNow.size;
+      previousTotals.activeMembers = membersBefore.size;
+
+      const groupTop = topEntries(groupTotals);
+      const memberTop = topEntries(memberTotals);
+      const groupIds = groupTop.map(([id]) => id).filter((id) => ObjectId.isValid(id));
+      const [groupDocs, identities] = await Promise.all([
+        groupIds.length
+          ? db
+              .collection('forum_groups')
+              .find({ _id: { $in: groupIds.map((id) => new ObjectId(id)) } })
+              .project({ group_name: 1, image_url: 1, status: 1, members: 1 })
+              .toArray()
+          : [],
+        resolveForumIdentities(memberTop.map(([id]) => id)),
+      ]);
+      const groupsById = new Map(groupDocs.map((group) => [String(group._id), group]));
+      topGroups = groupTop
+        .filter(([id]) => groupsById.has(id))
+        .map(([id, counts]) => {
+          const group = groupsById.get(id);
+          return {
+            id,
+            name: group.group_name || 'Untitled group',
+            imageUrl: group.image_url || null,
+            status: group.status || 'active',
+            memberCount: Array.isArray(group.members) ? group.members.length : 0,
+            posts: counts.posts,
+            comments: counts.comments,
+          };
+        });
+      topMembers = memberTop.map(([id, counts]) => ({
+        ...identityPerson(id, identities),
+        name: identities.get(String(id))?.display_name || 'Forum member',
+        posts: counts.posts,
+        comments: counts.comments,
+      }));
+    } catch (err) {
+      console.error('Forum trends: community series failed:', err.message);
+      communityAvailable = false;
+      notes.push('Discussion, comment and group trends could not be read just now.');
+    }
+  }
+
+  return {
+    points: spine.map((point, i) => ({
+      ...point,
+      ...Object.fromEntries(Object.entries(series).map(([key, values]) => [key, values[i]])),
+    })),
+    totals,
+    previousTotals: previous ? previousTotals : null,
+    mix: {
+      ticketStatus: toMix(ticketStatus, TICKET_STATUS_COLORS),
+      reportStatus: toMix(reportStatus, REPORT_STATUS_COLORS),
+      reportTargets: toMix(reportTargets, TARGET_COLORS),
+      actionKinds: [...actionKinds.values()].sort((a, b) => b.value - a.value),
+    },
+    topGroups,
+    topMembers,
+    available: { cases: casesAvailable, community: communityAvailable },
+    notes,
   };
 }
 
@@ -1279,6 +1769,7 @@ async function getForumMemberFootprint(userId, { limit = 5 } = {}) {
 
 module.exports = {
   getForumOverview,
+  getForumTrends,
   getForumTickets,
   getForumReports,
   getModeratorForumGroups,

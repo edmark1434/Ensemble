@@ -15,7 +15,10 @@ router.post('/:contractId/accept', requireAuth, ContractControllers.acceptJobOff
 // Reject a job offer (Applicant action)
 router.post('/:contractId/reject', requireAuth, ContractControllers.rejectJobOfferController);
 
-// Submit a dispute for a contract
+// Who a client can name on the freelancer side (team or contract workspace) before filing
+router.get('/:contractId/dispute-members', requireAuth, ContractControllers.getDisputeMemberOptionsController);
+
+// Submit a dispute for a contract ({ reason, details, attachments?, memberScope?, memberAccountIds? })
 router.post('/:contractId/dispute', requireAuth, ContractControllers.createContractDisputeController);
 
 // After its dispute closes, continue or end the contract ({ choice: 'continue' | 'end' })

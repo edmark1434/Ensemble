@@ -12,6 +12,7 @@ import {
   Lock,
   MessageSquare,
   Send,
+  Users,
   X,
 } from "lucide-react";
 import api from "@/lib/axios";
@@ -52,6 +53,15 @@ import {
   isDisputeDecision,
 } from "@/pages/user/disputes/disputeUi";
 import { BTN, BTN_BASE, ConfirmDialog, FIELD, Pill, SidebarSection } from "./staffCaseUi";
+import {
+  DisputeMemberScopeFields,
+  DisputeNamedPeople,
+  disputeBanScopeDefault,
+  disputeNamedScopeDefault,
+  disputeScopeReady,
+  disputeScopeRequest,
+  type DisputeScopeValue,
+} from "./DisputeTeamPanels";
 
 type DisputeSocketMessage = {
   id?: string;
@@ -521,6 +531,11 @@ export default function ModeratorDisputeDetailModal({
   const [awardOutcome, setAwardOutcome] = useState("disputee_refused");
   /** What happens to the disputee's account after an escrow ruling. */
   const [accountAction, setAccountAction] = useState<"none" | "ban">("none");
+  /** Who on the disputee's side a ban reaches besides the disputee account. */
+  const [banScope, setBanScope] = useState<DisputeScopeValue>({ scope: "leader", memberAccountIds: [] });
+  /** "Change who is named" dialog. */
+  const [membersPromptOpen, setMembersPromptOpen] = useState(false);
+  const [namedScope, setNamedScope] = useState<DisputeScopeValue>({ scope: "leader", memberAccountIds: [] });
   /** The escrow step the account step follows (and submits with). */
   const [accountFrom, setAccountFrom] = useState<"award" | "settle">("award");
   const [resolveOutcome, setResolveOutcome] = useState("");
@@ -746,6 +761,8 @@ export default function ModeratorDisputeDetailModal({
   }, [detail?.messages?.length, tab]);
 
   const perms = detail?.permissions;
+  /** The disputee side as people (team, contract workspace, named members). Null for one person. */
+  const respondentGroup = detail?.respondentGroup || null;
   const myStaffId = perms?.staffId != null ? String(perms.staffId) : "";
   const assigneeStaffId =
     detail?.dispute?.assignee?.staffId != null ? String(detail.dispute.assignee.staffId) : "";
@@ -795,11 +812,16 @@ export default function ModeratorDisputeDetailModal({
    * included) shows exactly what was saved. The modal stays open after every decision,
    * including ones that close the dispute, and shows the decided case; the desk list refreshes.
    */
-  const runAction = async (body: Record<string, unknown>, successMsg: string) => {
+  const runAction = async (
+    body: Record<string, unknown>,
+    successMsg: string | ((data: DisputeDetail | undefined) => string)
+  ) => {
     setSaving(true);
     try {
       const res = await api.patch(`${endpointBase}/${disputeId}`, body);
-      showSuccessToast(successMsg);
+      showSuccessToast(
+        typeof successMsg === "function" ? successMsg(res.data?.data as DisputeDetail | undefined) : successMsg
+      );
       onUpdated();
       if (res.data?.success && res.data.data) applyDetail(res.data.data as DisputeDetail);
       else await load();
@@ -833,7 +855,8 @@ export default function ModeratorDisputeDetailModal({
     setSaving(true);
     try {
       const res = await api.post(`${endpointBase}/${disputeId}/financial-resolution`, body);
-      showSuccessToast(successMsg);
+      const banSummary = (res.data?.data as DisputeDetail | undefined)?.banSummary;
+      showSuccessToast(banSummary ? `${successMsg}. ${banSummary}` : successMsg);
       // The money ruling went through but a follow-up step (the ban) did not.
       const warning = (res.data?.data as DisputeDetail | undefined)?.warning;
       if (warning) showErrorToast(warning);
@@ -903,6 +926,10 @@ export default function ModeratorDisputeDetailModal({
       showErrorToast("Write the ban reason the member will see (at least 8 characters).");
       return;
     }
+    if (banning && respondentGroup && !disputeScopeReady(respondentGroup, banScope, "ban")) {
+      showErrorToast("Pick who on the disputee's side is banned too, or choose the team leader.");
+      return;
+    }
     const body: Record<string, unknown> =
       from === "award"
         ? { action: "settle_escrow", award: "disputer", outcome: awardOutcome }
@@ -919,6 +946,7 @@ export default function ModeratorDisputeDetailModal({
     if (banning) {
       body.accountAction = "ban";
       body.banReason = banReason.trim();
+      if (respondentGroup) Object.assign(body, disputeScopeRequest(banScope));
     }
     const paid = settleTiming.mode === "now" ? "paid out" : "payout scheduled";
     const ok = await postFinancial(
@@ -1185,7 +1213,17 @@ export default function ModeratorDisputeDetailModal({
       showErrorToast("A reason is required");
       return;
     }
-    const ok = await runAction({ action: "convict", reason }, "Permanent ban applied — dispute closed");
+    if (respondentGroup && !disputeScopeReady(respondentGroup, banScope, "ban")) {
+      showErrorToast("Pick who on the disputee's side is banned too, or choose the team leader.");
+      return;
+    }
+    const ok = await runAction(
+      { action: "convict", reason, ...(respondentGroup ? disputeScopeRequest(banScope) : {}) },
+      (data) =>
+        data?.banSummary
+          ? `Permanent ban applied — dispute closed. ${data.banSummary}`
+          : "Permanent ban applied — dispute closed"
+    );
     if (!ok) return;
     setResolvePromptOpen(false);
     setResolveMode("choose");
@@ -1263,7 +1301,32 @@ export default function ModeratorDisputeDetailModal({
     setSettleNotes(resolutionNotes || "");
     setSettleTiming(initialPayoutTiming(payoutPolicy));
     setBanReason("");
+    // A ban reaches who the disputer named (else the leader) unless staff change it.
+    setBanScope(disputeBanScopeDefault(detail?.respondentGroup));
     setResolvePromptOpen(true);
+  };
+
+  const openMembersPrompt = () => {
+    setNamedScope(disputeNamedScopeDefault(detail?.respondentGroup));
+    setMembersPromptOpen(true);
+  };
+
+  const confirmMembers = async () => {
+    const group = detail?.respondentGroup;
+    if (!group || !disputeScopeReady(group, namedScope, "name")) {
+      showErrorToast("Pick at least one person, or choose the team leader.");
+      return;
+    }
+    const ok = await runAction({ action: "set_members", ...disputeScopeRequest(namedScope) }, (data) => {
+      const result = data?.membersResult;
+      if (!result?.changed) return "Nothing changed";
+      const parts = [
+        result.added.length ? `named ${result.added.join(", ")}` : "",
+        result.removed.length ? `took off ${result.removed.join(", ")}` : "",
+      ].filter(Boolean);
+      return parts.length ? `Updated: ${parts.join("; ")}` : "Named people updated";
+    });
+    if (ok) setMembersPromptOpen(false);
   };
 
   const closeResolvePrompt = () => {
@@ -1575,6 +1638,12 @@ export default function ModeratorDisputeDetailModal({
                       Hold {dispute.creditHold.amount.toLocaleString()} · {titleCaseLabel(dispute.creditHold.status)}
                     </Pill>
                   )}
+                  {respondentGroup ? (
+                    <Pill className="border-cyan-500/30 bg-cyan-500/10 text-cyan-200">
+                      <Users className="h-3 w-3" />
+                      {respondentGroup.team ? "Team disputee" : "Contract team"} · {respondentGroup.namedCount} named
+                    </Pill>
+                  ) : null}
                 </div>
               </>
             )}
@@ -1935,6 +2004,7 @@ export default function ModeratorDisputeDetailModal({
                     onReverseTransaction={openReverse}
                     payouts={payouts}
                     payoutState={payoutState}
+                    respondentGroup={respondentGroup}
                   />
                 </div>
               )}
@@ -2239,20 +2309,35 @@ export default function ModeratorDisputeDetailModal({
                           </p>
                         </div>
                       </div>
-                      {contractRole ? (
-                        <span
-                          className={`shrink-0 rounded border px-1.5 py-px text-[10px] ${
-                            contractRole === "Client"
-                              ? "border-amber-500/30 bg-amber-500/10 text-amber-200"
-                              : "border-sky-500/30 bg-sky-500/10 text-sky-200"
-                          }`}
-                        >
-                          {contractRole}
-                        </span>
-                      ) : null}
+                      <span className="flex shrink-0 items-center gap-1">
+                        {label === "Disputee" && respondentGroup?.respondent?.isTeam ? (
+                          <span className="rounded border border-cyan-500/30 bg-cyan-500/10 px-1.5 py-px text-[10px] text-cyan-200">
+                            Team
+                          </span>
+                        ) : null}
+                        {contractRole ? (
+                          <span
+                            className={`rounded border px-1.5 py-px text-[10px] ${
+                              contractRole === "Client"
+                                ? "border-amber-500/30 bg-amber-500/10 text-amber-200"
+                                : "border-sky-500/30 bg-sky-500/10 text-sky-200"
+                            }`}
+                          >
+                            {contractRole}
+                          </span>
+                        ) : null}
+                      </span>
                     </div>
                   );
                 })}
+                {respondentGroup ? (
+                  <DisputeNamedPeople
+                    group={respondentGroup}
+                    canEdit={Boolean(canDecide && !closed && respondentGroup.canName)}
+                    saving={saving}
+                    onEdit={openMembersPrompt}
+                  />
+                ) : null}
                 {canSwapParties ? (
                   <button
                     type="button"
@@ -2383,9 +2468,10 @@ export default function ModeratorDisputeDetailModal({
                 </>
               ) : resolveMode === "ban" ? (
                 <>
-                  This bans @{dispute.respondent.username} permanently, posts the reason in the
-                  discussion, and closes the case. Their open jobs, gigs and listings close and their
-                  pending proposals and orders are withdrawn. Live contracts stay for staff.
+                  This bans @{dispute.respondent.username} permanently
+                  {respondentGroup ? ", and the people you pick on their side," : ""} posts the reason
+                  in the discussion, and closes the case. Their open jobs, gigs and listings close and
+                  their pending proposals and orders are withdrawn. Live contracts stay for staff.
                 </>
               ) : resolveMode === "dismiss" ? (
                 <>
@@ -2453,9 +2539,10 @@ export default function ModeratorDisputeDetailModal({
                 : resolveMode === "award"
                   ? !awardReady
                   : resolveMode === "account"
-                    ? accountAction === "ban" && banReason.trim().length < 8
+                    ? accountAction === "ban" &&
+                      (banReason.trim().length < 8 || !disputeScopeReady(respondentGroup, banScope, "ban"))
                     : resolveMode === "ban"
-                      ? !banReason.trim()
+                      ? !banReason.trim() || !disputeScopeReady(respondentGroup, banScope, "ban")
                       : resolveMode === "outcome"
                         ? !selectedResolution ||
                           (Boolean(selectedResolution?.requiresNote) && !resolveNotes.trim())
@@ -2579,8 +2666,13 @@ export default function ModeratorDisputeDetailModal({
                   >
                     <p className="text-sm font-medium text-red-100">Permanent ban</p>
                     <p className="mt-1 text-[11px] leading-relaxed text-red-100/70">
-                      If the disputer is right, permanently ban @{dispute.respondent.username}. The
-                      reason is posted in the discussion and the case becomes public.
+                      If the disputer is right, permanently ban @{dispute.respondent.username}
+                      {respondentGroup
+                        ? respondentGroup.namedCount
+                          ? ` and the ${respondentGroup.namedCount} named with them (you can change who)`
+                          : " and, by default, their team leader (you can change who)"
+                        : ""}
+                      . The reason is posted in the discussion and the case becomes public.
                     </p>
                   </button>
                 ) : null}
@@ -2797,17 +2889,28 @@ export default function ModeratorDisputeDetailModal({
                   </p>
                 ) : null}
                 {accountAction === "ban" ? (
-                  <label className="block space-y-1 text-[11px] text-zinc-500">
-                    <span>Reason shown to {disputeeLabel} (at least 8 characters)</span>
-                    <textarea
-                      value={banReason}
-                      onChange={(event) => setBanReason(event.target.value)}
-                      rows={3}
-                      maxLength={2000}
-                      placeholder="Why this account is banned"
-                      className={`${FIELD} resize-none`}
-                    />
-                  </label>
+                  <>
+                    {respondentGroup ? (
+                      <DisputeMemberScopeFields
+                        mode="ban"
+                        group={respondentGroup}
+                        value={banScope}
+                        onChange={setBanScope}
+                        disabled={saving}
+                      />
+                    ) : null}
+                    <label className="block space-y-1 text-[11px] text-zinc-500">
+                      <span>Reason shown to {disputeeLabel} (at least 8 characters)</span>
+                      <textarea
+                        value={banReason}
+                        onChange={(event) => setBanReason(event.target.value)}
+                        rows={3}
+                        maxLength={2000}
+                        placeholder="Why this account is banned"
+                        className={`${FIELD} resize-none`}
+                      />
+                    </label>
+                  </>
                 ) : null}
               </>
             ) : null}
@@ -3199,17 +3302,28 @@ export default function ModeratorDisputeDetailModal({
             ) : null}
 
             {resolveMode === "ban" ? (
-              <label className="block space-y-1 text-[11px] text-zinc-500">
-                <span>Reason</span>
-                <textarea
-                  value={banReason}
-                  onChange={(event) => setBanReason(event.target.value)}
-                  rows={4}
-                  required
-                  placeholder="Why this ban is being applied"
-                  className={`${FIELD} resize-none`}
-                />
-              </label>
+              <>
+                {respondentGroup ? (
+                  <DisputeMemberScopeFields
+                    mode="ban"
+                    group={respondentGroup}
+                    value={banScope}
+                    onChange={setBanScope}
+                    disabled={saving}
+                  />
+                ) : null}
+                <label className="block space-y-1 text-[11px] text-zinc-500">
+                  <span>Reason</span>
+                  <textarea
+                    value={banReason}
+                    onChange={(event) => setBanReason(event.target.value)}
+                    rows={4}
+                    required
+                    placeholder="Why this ban is being applied"
+                    className={`${FIELD} resize-none`}
+                  />
+                </label>
+              </>
             ) : null}
 
             {resolveMode === "dismiss" ? (
@@ -3230,6 +3344,34 @@ export default function ModeratorDisputeDetailModal({
                 </p>
               </>
             ) : null}
+          </ConfirmDialog>
+        )}
+
+        {membersPromptOpen && dispute && respondentGroup && (
+          <ConfirmDialog
+            title="Change who is named"
+            description={
+              <>
+                Pick who answers for {respondentGroup.team ? `Team ${respondentGroup.team.name}` : disputeeLabel} on
+                this case. Named people can read and answer it once it is public, and a ban reaches them by default.
+                {!dispute.visibility ? " The case is private, so nobody is told until it is made public." : ""}
+              </>
+            }
+            confirmLabel="Save named people"
+            busyLabel="Saving…"
+            busy={saving}
+            confirmDisabled={!disputeScopeReady(respondentGroup, namedScope, "name")}
+            confirmClassName={`${BTN_BASE} border-transparent text-white ${ACCENT_BTN[accent]}`}
+            onCancel={() => setMembersPromptOpen(false)}
+            onConfirm={() => void confirmMembers()}
+          >
+            <DisputeMemberScopeFields
+              mode="name"
+              group={respondentGroup}
+              value={namedScope}
+              onChange={setNamedScope}
+              disabled={saving}
+            />
           </ConfirmDialog>
         )}
 

@@ -571,7 +571,21 @@ export type CaseAccountSummary = {
   joinedAt: string | null;
   status: string;
   statusEndsAt: string | null;
+  /** Null for teams: they have no Platform Merit of their own. */
   merit: number | null;
+  /**
+   * Teams only: the members' merit added up. `percent` is the team merit (5 members at 100 →
+   * 100%; one at 50 → 90%). Counts on a team summary are the members' too.
+   */
+  memberMerit?: {
+    total: number;
+    max: number;
+    percent: number | null;
+    members: number;
+    average: number | null;
+    lowest: { accountId: string; name: string; merit: number } | null;
+    below60: number;
+  } | null;
   warningPoints: number;
   warningBandLabel: string | null;
   warningBandEndsAt: string | null;

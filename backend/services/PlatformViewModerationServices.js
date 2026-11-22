@@ -635,9 +635,13 @@ function accountActionsFor({ session, viewer, row, summary, isTeam, team, leader
     if (id === 'warn') {
       if (!permissions.canWarn(session)) actions[id] = deny('Your role cannot issue warnings.');
       else if (row.staff_id) actions[id] = deny('Staff accounts have no Platform Merit, so they cannot be warned.');
-      else if (isTeam && !leader) actions[id] = deny('This team has no active leader to warn. Lock the team or assign an owner first.');
+      else if (isTeam && !(team?.members || []).length) actions[id] = deny('This team has no active members to warn.');
       else if (!isTeam && String(row.type || '').toLowerCase() !== 'user') actions[id] = deny('Only member accounts can be warned.');
-      else actions[id] = allow(isTeam ? `Teams have no Platform Merit, so the warning goes to the team leader, ${leader.name}.` : null);
+      else actions[id] = allow(
+        isTeam
+          ? `Teams have no Platform Merit, so the warning goes on the people you pick${leader ? ` (the leader, ${leader.name}, by default)` : ''}.`
+          : null
+      );
       continue;
     }
     if (!statusActions.has(id)) {
@@ -651,11 +655,14 @@ function accountActionsFor({ session, viewer, row, summary, isTeam, team, leader
       continue;
     }
     if (id === 'timeout') {
-      if (isTeam && !leader) actions[id] = deny('This team has no active leader to time out.');
-      else if (isTeam ? leaderAccess?.forumTimeout : summary?.forumTimeout) {
-        const ends = isTeam ? leaderAccess?.forumTimeoutEndsAt : summary?.forumTimeoutEndsAt;
-        actions[id] = deny(`${isTeam ? 'The team leader is' : 'Already'} timed out${whenLabel(ends)}. Change it in User & Team.`);
-      } else actions[id] = allow(isTeam ? `Teams never post, so the timeout goes to the team leader, ${leader.name}.` : null);
+      if (isTeam) {
+        const members = team?.members || [];
+        if (!members.length) actions[id] = deny('This team has no active members to time out.');
+        else if (members.every((member) => member.forumTimeout)) actions[id] = deny('Every member is already timed out. Change it in User & Team.');
+        else actions[id] = allow(`Teams never post, so the timeout goes on the people you pick${leader ? ` (the leader, ${leader.name}, by default)` : ''}. Members already timed out are left as they are.`);
+      } else if (summary?.forumTimeout) {
+        actions[id] = deny(`Already timed out${whenLabel(summary?.forumTimeoutEndsAt)}. Change it in User & Team.`);
+      } else actions[id] = allow();
       continue;
     }
     if (id === 'suspend') {
@@ -731,7 +738,9 @@ async function buildAccounts({ session, viewer, subject }) {
                     forumTimeoutEndsAt: leaderAccess?.forumTimeoutEndsAt || null,
                   }
                 : null,
+              // Active members (with merit and forum timeouts) and their merit added up.
               members: team.members || [],
+              memberMerit: team.memberMerit || null,
             }
           : null,
         actions: accountActionsFor({ session, viewer, row, summary, isTeam, team, leaderAccess, subject }),
@@ -909,7 +918,7 @@ function standingOptionsFrom(input = {}) {
     duration: custom || input.duration ? (input.duration === 'permanent' ? 'permanent' : 'temporary') : undefined,
     endsAt: input.endsAt ? String(input.endsAt) : undefined,
     includeLeader: input.includeLeader === undefined ? undefined : input.includeLeader === true,
-    // Team targets: who else gets it (none | leader | selected | all), checked by TeamSanctionServices.
+    // Team targets: who gets it (leader | selected | all), checked by TeamSanctionServices.
     memberScope: input.memberScope ? String(input.memberScope).slice(0, 20) : undefined,
     memberAccountIds: Array.isArray(input.memberAccountIds) ? input.memberAccountIds.slice(0, 501).map(String) : undefined,
   };
@@ -919,11 +928,38 @@ function standingOptionsFrom(input = {}) {
 async function prevalidateAccountAction(type, input, account, staff) {
   const actorRole = staff.role;
   const { assertCanSanctionTarget } = require('../lib/SuspendGuards');
-  await assertCanSanctionTarget({
-    actorStaffId: staff.staff_id,
-    targetAccountId: account.isTeam && ['warn', 'timeout'].includes(type) ? account.team?.leader?.accountId : account.accountId,
-    action: type === 'warn' ? 'warn' : type === 'timeout' ? 'timeout' : type,
-  });
+  const guardAction = type === 'warn' ? 'warn' : type === 'timeout' ? 'timeout' : type;
+  // Warnings and timeouts never touch the team account itself; the other actions do.
+  if (!account.isTeam || !['warn', 'timeout'].includes(type)) {
+    await assertCanSanctionTarget({ actorStaffId: staff.staff_id, targetAccountId: account.accountId, action: guardAction });
+  }
+  if (account.isTeam) {
+    // The people a team action reaches are checked before the content action runs, so a refused
+    // leader or chosen member never leaves half an action (with "all" the team service skips them).
+    const scope = String(input.memberScope || 'leader').toLowerCase();
+    const leader = account.team?.leader || null;
+    if (scope === 'leader' && !leader) {
+      throw serviceError('This team has no active leader. Pick specific members or all members instead.', 422, 'TEAM_NO_LEADER');
+    }
+    const members = new Map((account.team?.members || []).map((member) => [String(member.accountId), member]));
+    const chosen = scope === 'leader'
+      ? [leader.accountId]
+      : scope === 'selected'
+        ? (Array.isArray(input.memberAccountIds) ? input.memberAccountIds.map(String) : [])
+        : [];
+    if (scope === 'selected' && !chosen.length) throw serviceError('Pick at least one team member.', 422, 'TEAM_MEMBERS_REQUIRED');
+    for (const memberId of chosen) {
+      const member = members.get(memberId);
+      if (!member && memberId !== String(leader?.accountId)) {
+        throw serviceError('One chosen account is no longer an active member of this team. Refresh and pick again.', 422, 'TEAM_MEMBER_NOT_FOUND');
+      }
+      try {
+        await assertCanSanctionTarget({ actorStaffId: staff.staff_id, targetAccountId: memberId, action: guardAction });
+      } catch (err) {
+        throw serviceError(`${err.message} (${member?.name || 'the team leader'}). Leave them out or pick all members.`, err.statusCode || 403);
+      }
+    }
+  }
   if (type === 'warn') {
     const { resolveIssuedWarning } = require('./WarningDefServices');
     const warningId = String(input.warningId || '').trim();
@@ -1005,8 +1041,8 @@ function accountResultMessage(type, data) {
     const started = Array.isArray(data?.punishmentsStarted) && data.punishmentsStarted.length
       ? ` It started: ${data.punishmentsStarted.map((p) => p.label || p.effect).filter(Boolean).join(', ')}.`
       : '';
-    const to = data?.issuedTo ? ` to team leader ${data.issuedTo.name}` : '';
-    return `Warning issued${to} (${data?.points ?? '?'} pt).${started}`;
+    if (data?.isTeam && data?.summary) return `${data.summary}${started}`;
+    return `Warning issued (${data?.points ?? '?'} pt).${started}`;
   }
   if (data?.isTeam && data?.summary) return data.summary;
   if (type === 'timeout') return 'Forum timeout applied.';
@@ -1129,7 +1165,23 @@ async function performPlatformViewAction(session, body = {}) {
         const { warnAccount, updateAccountStatus } = require('../repositories/AdminUserTeamRepositories');
         const input = body.accountAction || {};
         const data = accountType === 'warn'
-          ? await warnAccount(account.accountId, { warningId: String(input.warningId), reason, activityContext }, staff.staff_id)
+          ? await warnAccount(
+              account.accountId,
+              {
+                warningId: String(input.warningId),
+                reason,
+                activityContext,
+                // Team targets: who gets the warning (leader | selected | all).
+                ...(account.isTeam
+                  ? {
+                      memberScope: standingOptionsFrom(input).memberScope,
+                      memberAccountIds: standingOptionsFrom(input).memberAccountIds,
+                      actorAccountId: staff.account_id,
+                    }
+                  : {}),
+              },
+              staff.staff_id
+            )
           : await updateAccountStatus(account.accountId, accountType, staff.staff_id, {
               ...standingOptionsFrom(input),
               reason,

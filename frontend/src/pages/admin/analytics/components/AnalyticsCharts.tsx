@@ -321,6 +321,7 @@ export function DonutChart({
   size = 160,
   formatValue = defaultFormat,
   centerLabel = 'total',
+  emptyMessage,
 }: {
   segments: { label: string; value: number; color: string }[];
   title?: string;
@@ -328,9 +329,10 @@ export function DonutChart({
   size?: number;
   formatValue?: Formatter;
   centerLabel?: string;
+  emptyMessage?: string;
 }) {
   const usable = useMemo(() => segments.filter((s) => s.value > 0), [segments]);
-  if (!usable.length) return <EmptyChart title={title} subtitle={subtitle} />;
+  if (!usable.length) return <EmptyChart title={title} subtitle={subtitle} message={emptyMessage} />;
 
   const total = usable.reduce((s, x) => s + x.value, 0) || 1;
   let offset = 0;

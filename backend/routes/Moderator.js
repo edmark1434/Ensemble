@@ -133,6 +133,7 @@ router.patch('/support/disputes/:id/messages/:messageId', [checkSession, support
 
 // ─── Forum Moderator ─────────────────────────────────────────────────────
 router.get('/forum/overview', [checkSession, forumModerator], ForumModerator.getOverview);
+router.get('/forum/trends', [checkSession, forumModerator], ForumModerator.getTrends);
 router.get('/forum/tickets', [checkSession, forumModerator], ForumModerator.getTickets);
 router.get('/forum/tickets/:id', [checkSession, forumModerator], ForumModerator.getTicket);
 router.patch('/forum/tickets/:id', [checkSession, forumModerator], ForumModerator.patchTicket);

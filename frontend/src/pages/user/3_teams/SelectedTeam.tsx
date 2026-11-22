@@ -9,6 +9,7 @@ import {
   Briefcase,
   Check,
   Copy,
+  Crown,
   Edit3,
   FileText,
   Flag,
@@ -56,6 +57,7 @@ import EditTeamModal, {
 import LeaveTeamModal from "./team_modals/LeaveTeamModal";
 import DeleteTeamModal from "./team_modals/DeleteTeamModal";
 import RemoveMemberModal from "./team_modals/RemoveMemberModal";
+import TransferOwnershipModal from "./team_modals/TransferOwnershipModal";
 import ReportTeamModal from "./team_modals/ReportTeamModal";
 import AddTeamReviewModal from "./team_modals/AddTeamReviewModal";
 import BusinessVerificationEligibilityModal from "./team_modals/BusinessVerificationEligibilityModal";
@@ -105,6 +107,8 @@ type Member = {
   status: string;
   avatar_path?: string;
   requested_at?: string;
+  /** The member's own account standing (only Active members can be handed the team). */
+  account_status?: string | null;
 };
 type Review = {
   team_review_id: string;
@@ -246,6 +250,8 @@ export default function SelectedTeam() {
     useState(false);
   const [codeCopied, setCodeCopied] = useState(false);
   const [memberToRemove, setMemberToRemove] = useState<Member | null>(null);
+  // Owner hands the team over: null = closed, "" = open with nobody picked, else the picked member.
+  const [transferTarget, setTransferTarget] = useState<string | null>(null);
   const [showDistribution, setShowDistribution] = useState(false);
   const [distributionRecipientId, setDistributionRecipientId] = useState('');
   const [distributionAmount, setDistributionAmount] = useState('');
@@ -985,6 +991,15 @@ export default function SelectedTeam() {
                           <Flag className="w-4 h-4" />
                           <span>Report Team</span>
                         </button>
+                        {activeMember && membership?.role === "Owner" && (
+                          <button
+                            onClick={() => { setShowMenu(false); setTransferTarget(""); }}
+                            className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-lg transition cursor-pointer text-left"
+                          >
+                            <ArrowRightLeft className="w-4 h-4 text-zinc-500" />
+                            <span>Transfer Ownership</span>
+                          </button>
+                        )}
                         {activeMember && membership?.role !== "Owner" && (
                           <button
                             onClick={() => { setShowMenu(false); setShowLeave(true); }}
@@ -1159,9 +1174,7 @@ export default function SelectedTeam() {
           onRole={(account, role) =>
             void mutate(`/members/${account}/role`, "patch", { role })
           }
-          onTransfer={(account) =>
-            void mutate("/transfer-ownership", "patch", { accountId: account })
-          }
+          onTransfer={(account) => setTransferTarget(account)}
           onDistributeFunds={() => setShowDistribution(true)}
           onRequestSearch={setRequestSearch}
           onApproveRequest={(account) => void manageJoinRequest(account, "approve")}
@@ -1206,6 +1219,21 @@ export default function SelectedTeam() {
         onInvited={() => void loadTeam(false)}
       />
 
+      <TransferOwnershipModal
+        isOpen={transferTarget !== null}
+        onClose={() => setTransferTarget(null)}
+        teamId={id}
+        teamName={team.display_name}
+        initialAccountId={transferTarget || null}
+        members={members.filter((member) => (member.status || "Active") === "Active" && member.role !== "Owner")}
+        blockedMessage={
+          team.standing?.restricted && String(team.standing.status || "").toLowerCase() !== "active"
+            ? team.standing.message || `This team is ${String(team.standing.status).toLowerCase()}, so it cannot change owner right now.`
+            : null
+        }
+        imageUrl={imageUrl}
+        onTransferred={() => void loadTeam(false)}
+      />
       <LeaveTeamModal
         isOpen={showLeave}
         onClose={() => setShowLeave(false)}
@@ -1731,6 +1759,7 @@ function TeamTabContent({
   onRestore: (account: string) => void;
   onRemove: (member: Member) => void;
   onRole: (account: string, role: string) => void;
+  /** Owner only: open the transfer dialog ("" = nobody picked yet). */
   onTransfer: (account: string) => void;
   onDistributeFunds: () => void;
   onRequestSearch: (value: string) => void;
@@ -2086,15 +2115,26 @@ function TeamTabContent({
         <h3 className="text-base font-bold text-gray-900 dark:text-white">
           Team Members ({activeMembers.length})
         </h3>
-        {canManage && (
-          <button
-            onClick={onOpenInviteModal}
-            className="cursor-pointer inline-flex items-center gap-1.5 rounded-full bg-blue-500 hover:bg-blue-400 active:scale-[0.98] px-4 py-2 text-xs font-bold text-white transition shadow-sm"
-          >
-            <UserPlus className="h-3.5 w-3.5" />
-            Invite Member
-          </button>
-        )}
+        <div className="flex flex-wrap items-center gap-2">
+          {isOwner && activeMembers.length > 1 && (
+            <button
+              onClick={() => onTransfer("")}
+              className="cursor-pointer inline-flex items-center gap-1.5 rounded-full border border-gray-200 dark:border-white/15 hover:bg-gray-100 dark:hover:bg-white/5 active:scale-[0.98] px-4 py-2 text-xs font-bold text-gray-700 dark:text-zinc-200 transition"
+            >
+              <Crown className="h-3.5 w-3.5 text-amber-500" />
+              Transfer ownership
+            </button>
+          )}
+          {canManage && (
+            <button
+              onClick={onOpenInviteModal}
+              className="cursor-pointer inline-flex items-center gap-1.5 rounded-full bg-blue-500 hover:bg-blue-400 active:scale-[0.98] px-4 py-2 text-xs font-bold text-white transition shadow-sm"
+            >
+              <UserPlus className="h-3.5 w-3.5" />
+              Invite Member
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -2114,21 +2154,38 @@ function TeamTabContent({
                   {member.display_name}
                 </p>
                 <p className="text-xs text-gray-500 dark:text-zinc-400 truncate">
-                  @{member.handle} · <span className="font-semibold text-blue-500">{member.role}</span>
+                  @{member.handle} ·{" "}
+                  <span className="inline-flex items-center gap-0.5 font-semibold text-blue-500">
+                    {member.role === "Owner" ? <Crown className="h-3 w-3 text-amber-500" /> : null}
+                    {member.role}
+                  </span>
                 </p>
               </div>
             </div>
 
-            {canManage && member.role !== "Owner" && (
-              <button
-                disabled={saving}
-                onClick={() => onRemove(member)}
-                className="cursor-pointer p-1.5 rounded-lg text-gray-400 hover:text-red-400 hover:bg-red-500/10 transition"
-                title="Remove Member"
-              >
-                <Trash2 className="h-4 w-4" />
-              </button>
-            )}
+            <div className="flex shrink-0 items-center gap-0.5">
+              {isOwner && member.role !== "Owner" && (
+                <button
+                  disabled={saving}
+                  onClick={() => onTransfer(member.account_id)}
+                  className="cursor-pointer p-1.5 rounded-lg text-gray-400 hover:text-amber-500 hover:bg-amber-500/10 transition"
+                  title={`Make ${member.display_name} the owner`}
+                  aria-label={`Make ${member.display_name} the owner`}
+                >
+                  <Crown className="h-4 w-4" />
+                </button>
+              )}
+              {canManage && member.role !== "Owner" && (
+                <button
+                  disabled={saving}
+                  onClick={() => onRemove(member)}
+                  className="cursor-pointer p-1.5 rounded-lg text-gray-400 hover:text-red-400 hover:bg-red-500/10 transition"
+                  title="Remove Member"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              )}
+            </div>
           </div>
         ))}
       </div>

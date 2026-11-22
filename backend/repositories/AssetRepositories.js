@@ -1707,6 +1707,10 @@ async function updateAssetRepository(assetId, accountId, data, derivatives = new
       await client.query('ROLLBACK');
       return null;
     }
+    // Re-checked on the locked row: the asset may have gone live since the service read it.
+    if (data.contentUpdate?.replaceMedia && owned.rows[0].current_status === 'published') {
+      throw repoError('ASSET_FILE_LOCKED');
+    }
     if (owned.rows[0].current_status === 'draft' && data.status === 'published') {
       const eligibility = await readAssetPostingEligibility(client, accountId, {
         lock: true,

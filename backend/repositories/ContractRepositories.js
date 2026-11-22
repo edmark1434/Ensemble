@@ -1,5 +1,6 @@
 const { pool } = require('../lib/Database');
 const { normalizeDisputePriority } = require('../lib/DisputeEnums');
+const { releaseCountsSql, netReleaseCreditsSql } = require('../lib/TeamContractReserve');
 const {
     freezeContractEscrowForDispute,
     assertNoOpenContractDispute,
@@ -1064,7 +1065,16 @@ async function getContractsByUserId(accountIds) {
     }));
 }
 
-async function createContractDispute(accountIds, contractId, { reason, details, attachments = [] }) {
+/**
+ * File a contract dispute. `personalAccountId` is the person filing (they may file for a team
+ * they own). A client disputing the freelancer side may name who answers for it
+ * (`memberScope` leader | selected | all, `memberAccountIds`; see DisputeMemberServices).
+ */
+async function createContractDispute(
+    accountIds,
+    contractId,
+    { reason, details, attachments = [], personalAccountId = null, memberScope = null, memberAccountIds = null }
+) {
     const contractQ = await pool.query(`
         SELECT
             c.contract_id,
@@ -1120,6 +1130,7 @@ async function createContractDispute(accountIds, contractId, { reason, details, 
 
     const client = await pool.connect();
     let createdDispute;
+    let memberChoice = null;
     try {
         await client.query('BEGIN');
         await client.query(
@@ -1183,6 +1194,22 @@ async function createContractDispute(accountIds, contractId, { reason, details, 
             throw error;
         }
 
+        // Who answers on the freelancer side, checked against the live roster under the lock.
+        // Before migration 1830500000000 the case is filed without named people.
+        const { disputeMembersReady, insertDisputeMembers, setRespondentMemberScope } = require('./DisputeMemberRepositories');
+        const membersReady = await disputeMembersReady(client);
+        memberChoice = membersReady
+            ? await require('../services/DisputeMemberServices').resolveFilingMembers({
+                db: client,
+                contractId,
+                parties: contract,
+                filerAccountId: userAccId,
+                personalAccountId,
+                memberScope,
+                memberAccountIds,
+            })
+            : null;
+
         const disputeRes = await client.query(`
             INSERT INTO disputes (
                 dispute_number,
@@ -1214,6 +1241,13 @@ async function createContractDispute(accountIds, contractId, { reason, details, 
             contractId,
             contractEndedAtFiling,
         ]);
+        if (memberChoice?.members?.length) {
+            await insertDisputeMembers(client, disputeRes.rows[0].dispute_id, memberChoice.members, {
+                namedBy: 'filer',
+                addedByAccountId: personalAccountId || userAccId,
+            });
+            await setRespondentMemberScope(client, disputeRes.rows[0].dispute_id, memberChoice.scope);
+        }
         const frozen = await freezeContractEscrowForDispute(client, {
             disputeId: disputeRes.rows[0].dispute_id,
             contractId,
@@ -1238,6 +1272,12 @@ async function createContractDispute(accountIds, contractId, { reason, details, 
         client.release();
     }
 
+    const { describePeople } = require('../services/DisputeMemberServices');
+    const namedPeople = memberChoice?.people?.length ? memberChoice.people : [];
+    const namedSide = memberChoice?.group?.team
+        ? `Team ${memberChoice.group.team.name}`
+        : memberChoice ? 'the freelancer side' : null;
+
     // The case is committed; the opening summary is a courtesy and must not fail the filing.
     try {
         const { postDisputeFiledSummary } = require('./DisputeChatRepositories');
@@ -1249,6 +1289,9 @@ async function createContractDispute(accountIds, contractId, { reason, details, 
             creditsAtStake: creditAmount,
             creditsFrozen: Number(createdDispute.credit_amount_involved || 0),
             contractEnded: Boolean(createdDispute.contract_ended_at_filing),
+            namedMembers: namedPeople.length ? describePeople(namedPeople) : null,
+            namedSide,
+            namedScope: memberChoice?.scope || null,
         });
     } catch (err) {
         console.warn('Dispute filing summary skipped:', err.message);
@@ -1259,15 +1302,19 @@ async function createContractDispute(accountIds, contractId, { reason, details, 
     if (evidence.sent) {
         try {
             const { postDisputeFiledEvidence } = require('./DisputeChatRepositories');
-            const message = await postDisputeFiledEvidence(createdDispute, attachments);
+            // Posted as the person who filed, so they can read it back when filing for a team.
+            const message = await postDisputeFiledEvidence(createdDispute, attachments, {
+                senderAccountId: personalAccountId || userAccId,
+            });
             evidence.posted = message?.attachments?.length || 0;
         } catch (err) {
             console.warn('Dispute filing attachments skipped:', err.message);
         }
         evidence.failed = evidence.posted === 0;
     }
+    // The person who filed hears about it (a team account has no inbox of its own).
     await require('../services/CaseServices').notifyCaseOpened({
-        accountId: userAccId,
+        accountId: personalAccountId || userAccId,
         kind: 'dispute',
         id: createdDispute.dispute_id,
         number: createdDispute.dispute_number,
@@ -1276,7 +1323,22 @@ async function createContractDispute(accountIds, contractId, { reason, details, 
     const { applyDisputeAutomations } = require('../lib/ModerationPolicy');
     const enrichedDispute = await applyDisputeAutomations(createdDispute);
 
-    return { ...(enrichedDispute || createdDispute), evidence };
+    return {
+        ...(enrichedDispute || createdDispute),
+        evidence,
+        namedMembers: memberChoice
+            ? {
+                scope: memberChoice.scope,
+                side: namedSide,
+                people: namedPeople.map((person) => ({
+                    accountId: person.accountId,
+                    name: person.name,
+                    handle: person.handle,
+                    isLeader: Boolean(person.isLeader),
+                })),
+            }
+            : null,
+    };
 }
 
 async function getContractWithParties(contractId) {
@@ -1361,11 +1423,12 @@ async function getContractSubcontractTeam(contractId) {
         ORDER BY csd.created_at DESC
     `, [contractId]);
 
+    // Net of dispute reversals (lib/TeamContractReserve.js).
     const releasedRes = await pool.query(`
-        SELECT COALESCE(SUM(ct.amount_credits), 0)::int AS released_credits
+        SELECT COALESCE(SUM(${netReleaseCreditsSql('ct')}), 0)::int AS released_credits
         FROM credit_transactions ct
         WHERE ct.type = 'Escrow Release'
-          AND LOWER(ct.status::text) = 'completed'
+          AND ${releaseCountsSql('ct')}
           AND (
             (ct.reference_table = 'contracts' AND ct.reference_id = $1)
             OR ct.reference_id IN (SELECT contract_milestone_id FROM contract_milestones WHERE contract_id = $1)
@@ -1430,11 +1493,12 @@ async function distributeContractSubcontractFunds({ contractId, distributorAccou
         if (!senderWallet) throw new Error('Distributor account wallet not found');
         if (String(senderWallet.status).toLowerCase() !== 'active') throw new Error('Distributor wallet is not active');
 
+        // Net of dispute reversals (lib/TeamContractReserve.js).
         const releasedRes = await client.query(`
-            SELECT COALESCE(SUM(ct.amount_credits), 0)::int AS released_credits
+            SELECT COALESCE(SUM(${netReleaseCreditsSql('ct')}), 0)::int AS released_credits
             FROM credit_transactions ct
             WHERE ct.type = 'Escrow Release'
-              AND LOWER(ct.status::text) = 'completed'
+              AND ${releaseCountsSql('ct')}
               AND (
                 (ct.reference_table = 'contracts' AND ct.reference_id = $1)
                 OR ct.reference_id IN (SELECT contract_milestone_id FROM contract_milestones WHERE contract_id = $1)

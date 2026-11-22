@@ -5,8 +5,10 @@ import type {
   DisputeCaseTransaction,
   DisputePayout,
   DisputePayoutState,
+  DisputeRespondentGroup,
 } from "./moderatorTypes";
 import { DisputePayoutsList } from "./DisputePayoutUi";
+import { DisputeTeamCaseSection } from "./DisputeTeamPanels";
 import GigOrderSummary from "./GigOrderSummary";
 import { StaffStandingSummary, StatusPill, caseWhen } from "./StaffStandingSummary";
 
@@ -134,6 +136,7 @@ export default function DisputeCaseFilePanel({
   onReverseTransaction,
   payouts = [],
   payoutState,
+  respondentGroup = null,
 }: {
   dispute: Dispute;
   caseFile?: DisputeCaseFile;
@@ -143,6 +146,8 @@ export default function DisputeCaseFilePanel({
   onReverseTransaction?: (tx: DisputeCaseTransaction) => void;
   payouts?: DisputePayout[];
   payoutState?: DisputePayoutState;
+  /** The disputee's team / contract workspace, named people and team wallet. */
+  respondentGroup?: DisputeRespondentGroup | null;
 }) {
   const contracts = caseFile?.contracts || [];
   const transactions = caseFile?.transactions || [];
@@ -189,6 +194,12 @@ export default function DisputeCaseFilePanel({
           </div>
         </div>
       </Section>
+
+      {respondentGroup ? (
+        <Section title="Disputee's team" count={respondentGroup.members.length}>
+          <DisputeTeamCaseSection group={respondentGroup} />
+        </Section>
+      ) : null}
 
       <Section title="Summary">
         <dl className="grid gap-2 sm:grid-cols-3">

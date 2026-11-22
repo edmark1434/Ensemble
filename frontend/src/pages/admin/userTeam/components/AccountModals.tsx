@@ -1,5 +1,18 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { AlertTriangle, Crown, Download, ExternalLink, Users, X } from 'lucide-react';
+import {
+  AlertTriangle,
+  ArrowRight,
+  Crown,
+  Download,
+  ExternalLink,
+  Info,
+  Search,
+  ShieldCheck,
+  User,
+  UserMinus,
+  Users,
+  X,
+} from 'lucide-react';
 import api from '@/lib/axios';
 import { useStaffLive } from '@/lib/staffLive';
 import { showErrorToast } from '@/components/utility/toast';
@@ -21,6 +34,8 @@ import type {
   PlatformUserAccount,
   TeamLeader,
   TeamMember,
+  TeamMemberMerit,
+  TeamMemberRecord,
   TeamWalletSummary,
   VerificationDetail,
 } from '../userTeamTypes';
@@ -40,6 +55,8 @@ import {
   teamScopeReady,
   teamScopeRequest,
   teamScopeTone,
+  timedOutAlready,
+  timeoutLiftable,
   type TeamMemberScope,
   type TeamScopeMember,
   type TeamScopeValue,
@@ -92,11 +109,19 @@ function ProfileAvatar({
 }: {
   path: string | null | undefined;
   name: string;
-  size?: 'lg' | 'xl';
+  size?: 'sm' | 'md' | 'lg' | 'xl';
 }) {
   const [failed, setFailed] = useState(false);
   const url = buildAvatarUrl(path);
-  const dims = size === 'xl' ? 'h-24 w-24 text-3xl' : 'h-16 w-16 text-2xl';
+  const dims =
+    size === 'xl'
+      ? 'h-24 w-24 text-3xl'
+      : size === 'md'
+        ? 'h-11 w-11 text-base'
+        : size === 'sm'
+          ? 'h-8 w-8 text-xs'
+          : 'h-16 w-16 text-2xl';
+  const radius = size === 'sm' || size === 'md' ? 'rounded-xl' : 'rounded-2xl';
 
   if (url && !failed) {
     return (
@@ -104,14 +129,14 @@ function ProfileAvatar({
         src={url}
         alt={`${name} avatar`}
         onError={() => setFailed(true)}
-        className={`${dims} shrink-0 rounded-2xl border border-white/[0.1] object-cover`}
+        className={`${dims} shrink-0 ${radius} border border-white/[0.1] object-cover`}
       />
     );
   }
 
   return (
     <div
-      className={`${dims} flex shrink-0 items-center justify-center rounded-2xl border border-white/[0.08] bg-rose-500/20 font-bold text-rose-100`}
+      className={`${dims} flex shrink-0 items-center justify-center ${radius} border border-white/[0.08] bg-rose-500/20 font-bold text-rose-100`}
     >
       {(name || '?').charAt(0).toUpperCase()}
     </div>
@@ -315,14 +340,14 @@ export function UnfreezeAccountModal({
 const SANCTION_RESULT: Record<string, 'banned' | 'suspended' | 'locked'> = { ban: 'banned', suspend: 'suspended', lock: 'locked' };
 const LIFT_ACTIONS = new Set(['unban', 'unsuspend', 'unlock', 'restore']);
 
-/** Whether a team action reaches members (apply / lift), or null (timeouts go to the leader). */
+/** Every team action reaches people: sanctions and timeouts apply to them, lifts end theirs. */
 function teamScopeMode(action: string): 'apply' | 'lift' | null {
-  if (SANCTION_RESULT[action]) return 'apply';
-  if (LIFT_ACTIONS.has(action)) return 'lift';
+  if (SANCTION_RESULT[action] || action === 'timeout') return 'apply';
+  if (LIFT_ACTIONS.has(action) || action === 'clear_timeout') return 'lift';
   return null;
 }
 
-function teamScopeMembers(members: TeamMember[] | undefined): TeamScopeMember[] {
+export function teamScopeMembers(members: TeamMember[] | undefined): TeamScopeMember[] {
   return (members || [])
     .filter((member) => member.accountId)
     .map((member) => ({
@@ -331,6 +356,9 @@ function teamScopeMembers(members: TeamMember[] | undefined): TeamScopeMember[] 
       handle: member.username || null,
       role: member.role || null,
       status: member.accountStatus || 'Active',
+      merit: member.merit ?? null,
+      forumTimeout: Boolean(member.forumTimeout),
+      forumTimeoutViaTeam: Boolean(member.forumTimeoutViaTeam),
     }));
 }
 
@@ -371,7 +399,8 @@ export function ConfirmStatusModal({
   const scopeMode = isTeam ? teamScopeMode(action) : null;
   const scopeMembers = teamScopeMembers(team?.members);
   const [memberScope, setMemberScope] = useState<TeamScopeValue>(() => defaultTeamScope(scopeMode || 'apply', leader));
-  const teamTimeoutWithoutLeader = isTeam && (action === 'timeout' || action === 'clear_timeout') && !leader;
+  const isTeamTimeout = isTeam && (action === 'timeout' || action === 'clear_timeout');
+  const teamWithoutMembers = isTeam && scopeMembers.length === 0 && !leader;
   const choosesCatalog = action === 'ban' || action === 'suspend' || action === 'timeout';
   const choosesDuration = choosesCatalog || action === 'lock';
   const [punishmentId, setPunishmentId] = useState('');
@@ -443,26 +472,25 @@ export function ConfirmStatusModal({
     unsuspend: 'Remove team suspension',
     unlock: 'Remove team lock',
     lock: 'Lock team',
-    timeout: 'Timeout team leader',
-    clear_timeout: 'Remove leader timeout',
+    timeout: 'Timeout team members',
+    clear_timeout: 'Remove team timeouts',
   };
   const teamDescriptions: Record<typeof action, string> = {
     ban: 'The team cannot take new work, move team credits, change its roster or edit itself. Its open jobs, gigs and listings close and pending proposals are withdrawn. Live contracts and the team wallet stay for staff to resolve. Members can still leave.',
     suspend: 'While suspended the team cannot take new work, move team credits, change its roster or settings, or transfer ownership. Live contract work (tasks, video projects) can continue so clients are not stranded.',
     lock: 'Investigation hold: every team action stops until staff lift it. Members can still read the team, leave it and report.',
-    timeout: 'Teams never post in the forums, so the timeout goes on the leader’s personal account and is listed on the team’s record. Other products stay open.',
-    clear_timeout: 'Ends the forum timeout on the leader’s account.',
+    timeout: 'Teams never post in the forums, so the timeout goes on each person you pick and is listed on the team’s record. The team account and the rest of Ensemble stay open for them.',
+    clear_timeout: 'Ends the forum timeouts that were set together with this team. Timeouts a member got on their own stay; clear those from the Users tab.',
     restore: 'The team gets its normal features back.',
     unban: 'The team gets its normal features back. Closed jobs, gigs and listings stay closed; the team reposts them.',
     unsuspend: 'The team gets its normal features back.',
     unlock: 'The team gets its normal features back.',
   };
-  const isLeaderTimeout = isTeam && (action === 'timeout' || action === 'clear_timeout');
   const title = isTeam ? teamTitles[action] : labels.title;
-  const subtitle = isLeaderTimeout
-    ? leader
-      ? `${leader.name} (leader of ${entityName}) will be ${labels.result}`
-      : `${entityName} has no active leader`
+  const subtitle = isTeamTimeout
+    ? action === 'timeout'
+      ? `${entityName}: the people you pick will be timed out`
+      : `${entityName}: team-linked timeouts end for the people you pick`
     : `${entityName} will be set to ${labels.result}`;
 
   return (
@@ -483,7 +511,7 @@ export function ConfirmStatusModal({
             type="button"
             disabled={
               saving
-              || teamTimeoutWithoutLeader
+              || (isTeamTimeout && teamWithoutMembers)
               || (scopeMode !== null && !teamScopeReady(memberScope))
               || !reason.trim()
               || (choosesCatalog && !punishmentId)
@@ -525,7 +553,40 @@ export function ConfirmStatusModal({
       {isTeam ? (
         <p className="text-sm text-zinc-300">{teamDescriptions[action]}</p>
       ) : null}
-      {scopeMode ? (
+      {scopeMode && isTeamTimeout ? (
+        <div className="mt-4">
+          {action === 'timeout' ? (
+            <TeamMemberScopeFields
+              mode="apply"
+              verb="time out"
+              tone="amber"
+              teamIncluded={false}
+              covered={timedOutAlready}
+              title="Who gets the forum timeout"
+              subtitle="Teams never post, so only people are timed out. Members already timed out stay as they are."
+              footnote="Each person gets the same named timeout and length, and their notice says it came with the team. Accounts you may not act on stop the action, except with All members, where they are skipped."
+              leader={leader}
+              members={scopeMembers}
+              value={memberScope}
+              onChange={setMemberScope}
+            />
+          ) : (
+            <TeamMemberScopeFields
+              mode="lift"
+              verb="remove the timeout from"
+              teamIncluded={false}
+              liftable={timeoutLiftable}
+              title="Whose forum timeout ends"
+              subtitle="Only timeouts set together with this team end. Choose whose."
+              footnote="A timeout a member got on their own (a forum report, for example) stays; clear it from the Users tab."
+              leader={leader}
+              members={scopeMembers}
+              value={memberScope}
+              onChange={setMemberScope}
+            />
+          )}
+        </div>
+      ) : scopeMode ? (
         <div className="mt-4">
           <TeamMemberScopeFields
             mode={scopeMode}
@@ -538,9 +599,9 @@ export function ConfirmStatusModal({
           />
         </div>
       ) : null}
-      {teamTimeoutWithoutLeader ? (
+      {isTeamTimeout && teamWithoutMembers ? (
         <p className="mt-3 rounded-xl border border-rose-500/25 bg-rose-500/[0.06] px-3 py-2 text-xs text-rose-200">
-          This team has no active leader to time out. Lock the team or assign an owner first.
+          This team has no active members to time out.
         </p>
       ) : null}
       <p className={`text-sm text-zinc-300 ${isTeam ? 'hidden' : ''}`}>
@@ -801,7 +862,83 @@ function leaderPenaltyEnd(leader: TeamLeader) {
   return end ? `until ${formatDateTime(end)}` : s === 'banned' ? 'permanently' : 'until lifted';
 }
 
-/** The team's leader: the person who answers for the team and carries its warnings. */
+function meritTextTone(merit: number | null | undefined) {
+  if (merit == null) return 'text-zinc-300';
+  if (merit >= 80) return 'text-emerald-300';
+  if (merit > 60) return 'text-amber-200';
+  return 'text-rose-300';
+}
+
+function meritBarTone(merit: number) {
+  if (merit >= 80) return 'bg-emerald-400';
+  if (merit > 60) return 'bg-amber-400';
+  return 'bg-rose-400';
+}
+
+/** A 0–100 merit bar with its number. */
+function MeritMeter({ merit, compact = false }: { merit: number; compact?: boolean }) {
+  const value = Math.max(0, Math.min(100, Math.round(merit)));
+  return (
+    <span className={`flex items-center gap-2 ${compact ? 'min-w-[88px]' : 'min-w-[120px]'}`}>
+      <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-white/[0.06]">
+        <span className={`block h-full rounded-full ${meritBarTone(value)}`} style={{ width: `${value}%` }} />
+      </span>
+      <span className={`w-7 text-right text-xs font-semibold tabular-nums ${meritTextTone(value)}`}>{value}</span>
+    </span>
+  );
+}
+
+/** Team merit as a percentage, from a summary that may predate `percent`. */
+export function teamMeritPercent(summary: TeamMemberMerit | null | undefined) {
+  if (!summary || !summary.max) return null;
+  return summary.percent ?? Math.floor((summary.total / summary.max) * 100);
+}
+
+/**
+ * Teams have no Platform Merit of their own, so staff read the people: every active member's
+ * merit added up and shown as a share of the most they could have (100 each). Five members at
+ * 100 → 100%; one of them at 50 → 450 / 500 = 90%.
+ */
+function MembersMeritCard({ summary, className = '' }: { summary: TeamMemberMerit | null | undefined; className?: string }) {
+  const percent = teamMeritPercent(summary);
+  if (!summary || !summary.members || percent == null) {
+    return (
+      <div className={`rounded-xl bg-white/[0.03] p-4 ${className}`}>
+        <p className="text-xs text-zinc-500">Team merit</p>
+        <p className="mt-1 text-sm text-zinc-400">No active members.</p>
+      </div>
+    );
+  }
+  return (
+    <div className={`rounded-xl bg-white/[0.03] p-4 ${className}`}>
+      <p className="text-xs text-zinc-500">Team merit (members’ total)</p>
+      <p className={`mt-0.5 text-2xl font-bold tabular-nums ${meritTextTone(percent)}`}>{percent}%</p>
+      <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/[0.06]">
+        <div className={`h-full rounded-full ${meritBarTone(percent)}`} style={{ width: `${percent}%` }} />
+      </div>
+      <p className="mt-2 text-[11px] text-zinc-500">
+        <span className="tabular-nums text-zinc-300">
+          {summary.total.toLocaleString()} / {summary.max.toLocaleString()}
+        </span>{' '}
+        across {summary.members} member{summary.members === 1 ? '' : 's'}
+        {summary.lowest && summary.lowest.merit < 100 ? (
+          <>
+            {' '}· lowest <span className="text-zinc-300">{summary.lowest.name}</span>{' '}
+            <span className={meritTextTone(summary.lowest.merit)}>{summary.lowest.merit}</span>
+          </>
+        ) : null}
+      </p>
+      {summary.below60 > 0 ? (
+        <p className="mt-1 text-[11px] text-rose-200">
+          {summary.below60} member{summary.below60 === 1 ? ' is' : 's are'} at merit 60 or below (automatic punishments start there).
+        </p>
+      ) : null}
+      <p className="mt-1 text-[10px] text-zinc-600">Teams have no merit of their own: 100% means every member is at 100.</p>
+    </div>
+  );
+}
+
+/** The team's leader: the person who answers for the team and gets its penalties by default. */
 function TeamLeaderCard({ leader, onTransfer }: { leader: TeamLeader | null | undefined; onTransfer?: () => void }) {
   if (!leader) {
     return (
@@ -861,8 +998,9 @@ function TeamLeaderCard({ leader, onTransfer }: { leader: TeamLeader | null | un
         </div>
       ) : null}
       <p className="mt-3 text-xs text-zinc-500">
-        Warnings and forum timeouts aimed at this team go to the leader. Ban, suspend and lock apply to the team and, by
-        default, to the leader too; staff can instead pick the team only, specific members or all members.
+        Every team penalty reaches people, the leader by default; staff can pick specific members or all members instead.
+        Ban, suspend and lock also change the team account. Warnings and forum timeouts land only on the people (teams have
+        no merit and never post).
       </p>
       {restricted && ['banned', 'locked'].includes(String(leader.status).toLowerCase()) && (
         <p className="mt-2 rounded-lg border border-rose-500/25 bg-rose-500/[0.06] px-3 py-2 text-xs text-rose-200">
@@ -898,7 +1036,8 @@ export function TeamOverviewModal({
   const leader = team.leader ?? null;
   const contractual = String(team.teamType || 'standard') === 'contractual';
   const wallet = team.wallet;
-  const viaTeam = team.history?.violations?.length ?? 0;
+  const memberActiveWarnings = team.history?.activeWarnings ?? 0;
+  const viaTeam = (team.history?.violations || []).filter((v) => v.viaThisTeam).length;
 
   return (
     <ModalShell
@@ -932,7 +1071,7 @@ export function TeamOverviewModal({
               onClick={onOpenHistory}
               className="rounded-xl border border-white/[0.1] px-4 py-2.5 text-sm text-white hover:bg-white/[0.05]"
             >
-              Warnings & disputes
+              Members’ warnings & disputes
             </button>
           )}
           {onOpenTransfer && !contractual && (
@@ -981,6 +1120,8 @@ export function TeamOverviewModal({
 
       {!contractual && <TeamLeaderCard leader={leader} onTransfer={onOpenTransfer} />}
 
+      <MembersMeritCard summary={team.memberMerit ?? team.history?.memberMerit} className="mt-4" />
+
       {team.description && (
         <div className="mt-4">
           <p className="text-xs font-semibold uppercase tracking-wide text-zinc-600">About</p>
@@ -1009,11 +1150,12 @@ export function TeamOverviewModal({
           </dd>
         </div>
         <div>
-          <dt className="text-zinc-500">Platform Merit</dt>
+          <dt className="text-zinc-500">Members’ warnings</dt>
           <dd className="text-zinc-300">
-            None — teams have no merit.
+            {memberActiveWarnings} active across members
+            {team.history?.activeWarningPoints ? ` (${team.history.activeWarningPoints} pts)` : ''}
             <span className="ml-1 text-xs text-zinc-500">
-              {viaTeam} warning{viaTeam === 1 ? '' : 's'} issued through this team (carried by the leader).
+              · {viaTeam} issued through this team
             </span>
           </dd>
         </div>
@@ -1029,9 +1171,10 @@ export function TeamOverviewModal({
           </dd>
         </div>
         <div>
-          <dt className="text-zinc-500">Disputes</dt>
+          <dt className="text-zinc-500">Members’ disputes</dt>
           <dd className="text-zinc-300">
-            {team.history?.openDisputes ?? 0} open of {team.history?.totalDisputes ?? 0} dispute(s)
+            {team.history?.openDisputes ?? 0} open of {team.history?.totalDisputes ?? 0}
+            <span className="ml-1 text-xs text-zinc-500">(disputes of current members)</span>
           </dd>
         </div>
         <div>
@@ -1079,15 +1222,68 @@ export function TeamOverviewModal({
   );
 }
 
-const PREVIOUS_OWNER_ROLES: { value: 'Member' | 'Admin' | 'Removed'; label: string; hint: string }[] = [
-  { value: 'Member', label: 'Member', hint: 'Stays on the team without management rights.' },
-  { value: 'Admin', label: 'Team Admin', hint: 'Keeps managing members, but cannot pay out or delete the team.' },
-  { value: 'Removed', label: 'Remove from team', hint: 'Leaves the team entirely.' },
+const PREVIOUS_OWNER_ROLES: {
+  value: 'Admin' | 'Member' | 'Removed';
+  label: string;
+  hint: string;
+  icon: typeof Crown;
+}[] = [
+  { value: 'Admin', label: 'Team Admin', hint: 'Keeps managing members and settings; cannot pay out or delete the team.', icon: ShieldCheck },
+  { value: 'Member', label: 'Member', hint: 'Stays on the team without management rights.', icon: User },
+  { value: 'Removed', label: 'Remove from team', hint: 'Leaves the team and its chat. Use for a banned or gone owner.', icon: UserMinus },
 ];
+
+const REASON_MIN = 5;
+const REASON_MAX = 1000;
+
+function HandOffPerson({
+  label,
+  person,
+  empty,
+  tone,
+}: {
+  label: string;
+  person: { name: string; handle?: string | null; avatarPath?: string | null; status?: string | null; merit?: number | null } | null;
+  empty: string;
+  tone: 'muted' | 'accent';
+}) {
+  return (
+    <div
+      className={`min-w-0 flex-1 rounded-xl border p-3 ${
+        tone === 'accent' && person ? 'border-sky-400/40 bg-sky-500/[0.06]' : 'border-white/[0.08] bg-white/[0.02]'
+      }`}
+    >
+      <p className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500">{label}</p>
+      {person ? (
+        <div className="mt-2 flex min-w-0 items-center gap-2.5">
+          <ProfileAvatar path={person.avatarPath} name={person.name} size="md" />
+          <div className="min-w-0">
+            <p className="truncate text-sm font-semibold text-white">{person.name}</p>
+            <p className="truncate text-[11px] text-zinc-500">
+              {person.handle ? `@${person.handle}` : 'No handle'}
+              {person.merit != null ? (
+                <>
+                  {' '}· <span className={meritTextTone(person.merit)}>merit {person.merit}</span>
+                </>
+              ) : null}
+            </p>
+            {person.status ? (
+              <span className={`mt-1 inline-block rounded-full border px-2 py-0.5 text-[10px] ${standingTone(person.status)}`}>
+                {person.status}
+              </span>
+            ) : null}
+          </div>
+        </div>
+      ) : (
+        <p className="mt-2 text-sm text-zinc-500">{empty}</p>
+      )}
+    </div>
+  );
+}
 
 /**
  * Admin / Support: move a team's ownership. Used when the leader is banned, locked or gone, or
- * the team asks for it. The new owner must be an active member in good standing.
+ * the team asks for it. The new owner must be an active member whose own account is Active.
  */
 export function TransferTeamOwnershipModal({
   team,
@@ -1098,141 +1294,232 @@ export function TransferTeamOwnershipModal({
   onClose: () => void;
   onChanged?: () => void | Promise<void>;
 }) {
-  const { profile, loading, error, reload } = useAccountProfile(team.accountId);
   const [newOwnerAccountId, setNewOwnerAccountId] = useState('');
-  const [previousOwnerRole, setPreviousOwnerRole] = useState<'Member' | 'Admin' | 'Removed'>('Member');
+  const [previousOwnerRole, setPreviousOwnerRole] = useState<'Member' | 'Admin' | 'Removed'>(() => {
+    const status = String(team.leader?.status || '').toLowerCase();
+    return status === 'banned' || status === 'locked' ? 'Removed' : 'Admin';
+  });
+  const [query, setQuery] = useState('');
   const [reason, setReason] = useState('');
   const [saving, setSaving] = useState(false);
-  const currentOwnerId = team.leader?.accountId ? String(team.leader.accountId) : null;
-  const candidates = (profile?.team?.members || []).filter(
-    (m) => String(m.status).toLowerCase() === 'active' && String(m.accountId) !== currentOwnerId
-  );
-  const picked = candidates.find((m) => String(m.accountId) === newOwnerAccountId) || null;
-  const pickedRestricted = picked && picked.accountStatus && picked.accountStatus.toLowerCase() !== 'active';
-  const canSubmit = Boolean(picked) && !pickedRestricted && reason.trim().length >= 5 && !saving;
+  const leader = team.leader ?? null;
+  const currentOwnerId = leader?.accountId ? String(leader.accountId) : null;
+  const roleRank = (role: string) => ({ admin: 0, representative: 1, manager: 2 } as Record<string, number>)[role.toLowerCase()] ?? 3;
+  const candidates = (team.members || [])
+    .filter((m) => m.accountId && String(m.accountId) !== currentOwnerId)
+    .map((m) => ({ ...m, accountId: String(m.accountId), restricted: String(m.accountStatus || 'Active').toLowerCase() !== 'active' }))
+    .sort((a, b) => Number(a.restricted) - Number(b.restricted) || roleRank(a.role) - roleRank(b.role) || (b.merit ?? 100) - (a.merit ?? 100));
+  const term = query.trim().toLowerCase().replace(/^@/, '');
+  const shown = term
+    ? candidates.filter((m) => [m.name, m.username, m.role].some((part) => String(part || '').toLowerCase().includes(term)))
+    : candidates;
+  const picked = candidates.find((m) => m.accountId === newOwnerAccountId) || null;
+  // A member whose account became restricted after being picked can no longer lead.
+  const pickedOk = Boolean(picked && !picked.restricted);
+  const trimmed = reason.trim();
+  const canSubmit = pickedOk && trimmed.length >= REASON_MIN && trimmed.length <= REASON_MAX && !saving;
+  const teamStatus = String(team.status || 'Active');
+  const roleAfter = PREVIOUS_OWNER_ROLES.find((option) => option.value === previousOwnerRole)!;
 
   return (
     <ModalShell
-      title={team.leader ? `Transfer ownership of ${team.name}` : `Assign an owner to ${team.name}`}
-      subtitle={team.leader ? `Current leader: ${team.leader.name} (${team.leader.status})` : 'This team has no active leader'}
+      title={leader ? `Transfer ownership of ${team.name}` : `Assign an owner to ${team.name}`}
+      subtitle={leader ? 'Pick the member who leads the team from now on.' : 'This team has no active leader. Pick a member to lead it.'}
       onClose={onClose}
       footer={
-        <div className="flex justify-end gap-2">
-          <button type="button" onClick={onClose} className="rounded-xl border border-white/[0.1] px-4 py-2 text-sm text-white">
-            Cancel
-          </button>
-          <button
-            type="button"
-            disabled={!canSubmit}
-            onClick={async () => {
-              if (!picked) return;
-              setSaving(true);
-              try {
-                await transferTeamOwnership(team.accountId, {
-                  newOwnerAccountId: String(picked.accountId),
-                  previousOwnerRole,
-                  reason: reason.trim(),
-                });
-                await onChanged?.();
-                onClose();
-              } catch (err) {
-                handleAccountActionError(err);
-              } finally {
-                setSaving(false);
-              }
-            }}
-            className="rounded-xl bg-sky-500 px-4 py-2 text-sm font-semibold text-black hover:bg-sky-400 disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            {saving ? 'Transferring…' : 'Make owner'}
-          </button>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <p className="min-w-0 flex-1 text-xs text-zinc-400">
+            {picked
+              ? `${picked.name} becomes Owner${leader ? `; ${leader.name} ${previousOwnerRole === 'Removed' ? 'leaves the team' : `becomes ${roleAfter.label}`}` : ''}.`
+              : 'Pick the new owner.'}
+          </p>
+          <div className="flex gap-2">
+            <button type="button" onClick={onClose} className="rounded-xl border border-white/[0.1] px-4 py-2 text-sm text-white">
+              Cancel
+            </button>
+            <button
+              type="button"
+              disabled={!canSubmit}
+              onClick={async () => {
+                if (!picked) return;
+                setSaving(true);
+                try {
+                  await transferTeamOwnership(team.accountId, {
+                    newOwnerAccountId: picked.accountId,
+                    previousOwnerRole,
+                    reason: trimmed,
+                  });
+                  await onChanged?.();
+                  onClose();
+                } catch (err) {
+                  handleAccountActionError(err);
+                } finally {
+                  setSaving(false);
+                }
+              }}
+              className="inline-flex items-center gap-1.5 rounded-xl bg-sky-500 px-4 py-2 text-sm font-semibold text-black hover:bg-sky-400 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              <Crown className="h-4 w-4" />
+              {saving ? 'Transferring…' : picked ? `Make ${picked.name.split(' ')[0]} owner` : 'Make owner'}
+            </button>
+          </div>
         </div>
       }
     >
-      <p className="text-sm text-zinc-300">
-        The new owner leads the team from now on: they pay out the team wallet, answer for its warnings and get its
-        notices. Both the new and the previous owner are told, with your reason.
-      </p>
-      <ProfileDetailsState loading={loading} error={error} onRetry={() => void reload()} />
-      {profile && (
-        <>
-          <p className="mt-5 text-xs font-semibold uppercase tracking-wide text-zinc-600">New owner</p>
-          {candidates.length === 0 ? (
-            <p className="mt-2 rounded-xl border border-dashed border-white/[0.08] px-4 py-5 text-center text-sm text-zinc-500">
-              No other active members. Lock the team instead, or wait for a member to join.
-            </p>
-          ) : (
-            <ul className="mt-2 space-y-2">
-              {candidates.map((m) => {
-                const restricted = m.accountStatus && m.accountStatus.toLowerCase() !== 'active';
-                return (
-                  <li key={m.accountId}>
-                    <label
-                      className={`flex items-center gap-3 rounded-xl border px-4 py-3 ${
-                        restricted ? 'cursor-not-allowed border-white/[0.05] opacity-50' : 'cursor-pointer border-white/[0.08] hover:border-white/20'
-                      } ${newOwnerAccountId === String(m.accountId) ? 'border-sky-400/50 bg-sky-400/[0.06]' : 'bg-white/[0.02]'}`}
-                    >
-                      <input
-                        type="radio"
-                        name="new-owner"
-                        disabled={Boolean(restricted)}
-                        checked={newOwnerAccountId === String(m.accountId)}
-                        onChange={() => setNewOwnerAccountId(String(m.accountId))}
-                        className="h-4 w-4 accent-sky-500"
-                      />
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate text-sm font-medium text-white">{m.name}</span>
-                        <span className="block truncate text-xs text-zinc-500">
-                          {m.username ? `@${m.username}` : '—'} · {m.role}
-                        </span>
-                      </span>
-                      {restricted ? (
-                        <span className="rounded-full border border-rose-500/20 bg-rose-500/10 px-2 py-0.5 text-[10px] text-rose-200">
-                          Account {m.accountStatus}
-                        </span>
-                      ) : null}
-                    </label>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-        </>
+      <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-center">
+        <HandOffPerson
+          label="Current leader"
+          tone="muted"
+          empty="No active leader"
+          person={leader ? { name: leader.name, handle: leader.username, avatarPath: leader.avatarPath, status: leader.status, merit: leader.merit } : null}
+        />
+        <ArrowRight className="mx-auto h-5 w-5 shrink-0 rotate-90 text-zinc-600 sm:rotate-0" />
+        <HandOffPerson
+          label="New owner"
+          tone="accent"
+          empty="Pick a member below"
+          person={picked ? { name: picked.name, handle: picked.username, avatarPath: picked.avatarPath, status: picked.accountStatus, merit: picked.merit } : null}
+        />
+      </div>
+
+      {teamStatus.toLowerCase() !== 'active' ? (
+        <p className="mt-3 flex items-start gap-2 rounded-xl border border-amber-500/25 bg-amber-500/[0.06] px-3 py-2 text-xs text-amber-100">
+          <AlertTriangle className="mt-px h-3.5 w-3.5 shrink-0" />
+          The team itself is {teamStatus.toLowerCase()}. Moving ownership does not lift that; remove it separately once the new owner is in place.
+        </p>
+      ) : leader && ['banned', 'locked', 'suspended'].includes(String(leader.status).toLowerCase()) ? (
+        <p className="mt-3 flex items-start gap-2 rounded-xl border border-sky-500/25 bg-sky-500/[0.06] px-3 py-2 text-xs text-sky-100">
+          <Info className="mt-px h-3.5 w-3.5 shrink-0" />
+          The leader is {String(leader.status).toLowerCase()}, which pauses new work and payouts. A new owner in good standing un-pauses them right away.
+        </p>
+      ) : null}
+
+      <div className="mt-5 flex flex-wrap items-center justify-between gap-2">
+        <p className="text-xs font-semibold uppercase tracking-wide text-zinc-600">New owner</p>
+        {candidates.length > 4 ? (
+          <div className="relative w-full sm:w-64">
+            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-500" />
+            <input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Search name, @handle or role"
+              aria-label="Search members"
+              className="w-full rounded-lg border border-white/10 bg-black/25 py-1.5 pl-8 pr-2.5 text-xs text-white outline-none placeholder:text-zinc-600 focus:border-white/25"
+            />
+          </div>
+        ) : null}
+      </div>
+      {candidates.length === 0 ? (
+        <p className="mt-2 rounded-xl border border-dashed border-white/[0.08] px-4 py-5 text-center text-sm text-zinc-500">
+          No other active members. Lock the team instead, or wait for a member to join.
+        </p>
+      ) : (
+        <ul role="radiogroup" aria-label="New owner" className="mt-2 max-h-72 space-y-1.5 overflow-y-auto pr-1">
+          {shown.map((m) => {
+            const checked = newOwnerAccountId === m.accountId;
+            return (
+              <li key={m.accountId}>
+                <label
+                  className={`flex items-center gap-3 rounded-xl border px-3 py-2.5 transition-colors has-[input:focus-visible]:ring-2 has-[input:focus-visible]:ring-white/25 ${
+                    m.restricted
+                      ? 'cursor-not-allowed border-white/[0.05] opacity-50'
+                      : checked
+                        ? 'cursor-pointer border-sky-400/50 bg-sky-400/[0.07]'
+                        : 'cursor-pointer border-white/[0.08] bg-white/[0.02] hover:border-white/20'
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="new-owner"
+                    disabled={m.restricted}
+                    checked={checked}
+                    onChange={() => setNewOwnerAccountId(m.accountId)}
+                    className="sr-only"
+                  />
+                  <span
+                    aria-hidden
+                    className={`flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full border ${
+                      checked ? 'border-sky-400 bg-sky-500' : 'border-white/20'
+                    }`}
+                  >
+                    {checked ? <span className="h-1.5 w-1.5 rounded-full bg-black" /> : null}
+                  </span>
+                  <ProfileAvatar path={m.avatarPath} name={m.name} size="sm" />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-medium text-white">{m.name}</span>
+                    <span className="block truncate text-[11px] text-zinc-500">
+                      {m.username ? `@${m.username}` : 'No handle'} · {m.role}
+                      {m.activeWarnings ? ` · ${m.activeWarnings} active warning${m.activeWarnings === 1 ? '' : 's'}` : ''}
+                    </span>
+                  </span>
+                  {m.merit != null ? <MeritMeter merit={m.merit} compact /> : null}
+                  {m.restricted ? (
+                    <span className="rounded-full border border-rose-500/20 bg-rose-500/10 px-2 py-0.5 text-[10px] text-rose-200">
+                      {m.accountStatus}: cannot lead
+                    </span>
+                  ) : null}
+                </label>
+              </li>
+            );
+          })}
+          {!shown.length ? <li className="px-3 py-4 text-center text-xs text-zinc-500">No member matches “{query.trim()}”.</li> : null}
+        </ul>
       )}
-      {team.leader && (
+
+      {leader && (
         <>
-          <p className="mt-5 text-xs font-semibold uppercase tracking-wide text-zinc-600">{team.leader.name} becomes</p>
-          <div className="mt-2 grid gap-2 sm:grid-cols-3">
+          <p className="mt-5 text-xs font-semibold uppercase tracking-wide text-zinc-600">{leader.name} becomes</p>
+          <div role="radiogroup" aria-label="Previous owner's role" className="mt-2 grid gap-2 sm:grid-cols-3">
             {PREVIOUS_OWNER_ROLES.map((option) => (
-              <label
+              <TeamScopeOptionCard
                 key={option.value}
-                className={`cursor-pointer rounded-xl border px-3 py-2 text-sm ${
-                  previousOwnerRole === option.value ? 'border-sky-400/50 bg-sky-400/[0.06] text-white' : 'border-white/[0.08] text-zinc-300'
-                }`}
-              >
-                <input
-                  type="radio"
-                  name="previous-owner-role"
-                  checked={previousOwnerRole === option.value}
-                  onChange={() => setPreviousOwnerRole(option.value)}
-                  className="sr-only"
-                />
-                <span className="block font-medium">{option.label}</span>
-                <span className="block text-xs text-zinc-500">{option.hint}</span>
-              </label>
+                name="previous-owner-role"
+                checked={previousOwnerRole === option.value}
+                onSelect={() => setPreviousOwnerRole(option.value)}
+                icon={option.icon}
+                title={option.label}
+                hint={option.hint}
+                tone={option.value === 'Removed' ? 'rose' : 'zinc'}
+                layout="tile"
+              />
             ))}
           </div>
         </>
       )}
+
+      <div className="mt-5 rounded-xl border border-white/[0.06] bg-white/[0.02] p-3">
+        <p className="text-xs font-semibold text-zinc-300">What happens</p>
+        <ul className="mt-1.5 list-disc space-y-1 pl-4 text-[11px] leading-snug text-zinc-400">
+          <li>
+            {picked ? picked.name : 'The new owner'} pays out the team wallet, manages the roster, gets the team’s notices and is the person
+            team penalties reach by default.
+          </li>
+          {leader ? (
+            <li>
+              {leader.name}{' '}
+              {previousOwnerRole === 'Removed' ? 'leaves the team and its chat.' : `stays on the team as ${roleAfter.label}.`} Their own
+              standing and warnings do not change.
+            </li>
+          ) : null}
+          <li>Both owners are told, with your reason; the team’s Admins are told who leads now.</li>
+          <li>Team chat roles and team video projects follow, and open team pages refresh.</li>
+          <li>Logged on the team record as “Ownership transferred”.</li>
+        </ul>
+      </div>
+
       <label className="mt-5 block text-sm text-zinc-300">
         Reason (both owners see it)
         <textarea
           value={reason}
           onChange={(event) => setReason(event.target.value)}
           rows={3}
-          maxLength={1000}
+          maxLength={REASON_MAX}
           placeholder="e.g. The previous owner is banned; the team asked for its Admin to take over (ticket TCK-1234)."
           className="mt-1 w-full rounded-xl border border-white/10 bg-transparent px-3 py-2 text-sm text-white"
         />
+        <span className={`mt-1 block text-[11px] ${trimmed && trimmed.length < REASON_MIN ? 'text-amber-300' : 'text-zinc-500'}`}>
+          {trimmed.length < REASON_MIN ? `At least ${REASON_MIN} characters.` : `${trimmed.length}/${REASON_MAX}`}
+        </span>
       </label>
     </ModalShell>
   );
@@ -2156,16 +2443,11 @@ export function HistoryModal({
   canLiftPoints = false,
   showPunishments = false,
   meritPenalties,
-  forTeam = false,
-  leader = null,
 }: {
   entityName: string;
   accountId?: string;
   history: PlatformTeam['history'];
-  /** Team record: warnings issued through the team (carried by its leaders), no team merit. */
-  forTeam?: boolean;
-  leader?: TeamLeader | null;
-  /** Running automatic punishments, shown next to merit (members only). */
+  /** Running automatic punishments, shown next to merit. Teams use TeamRecordModal. */
   meritPenalties?: MeritPenaltyLike[] | null;
   onClose: () => void;
   onChanged?: () => void | Promise<void>;
@@ -2188,40 +2470,20 @@ export function HistoryModal({
     history.merit != null && Number.isFinite(Number(history.merit))
       ? Number(history.merit)
       : meritFromWarnings(history.violations);
-  const activeViaTeam = history.violations.filter((v) => isActiveWarning(v)).length;
 
   return (
     <ModalShell title={`${entityName} history`} subtitle={history.summaryLabel} onClose={onClose}>
       <div className="mb-6 grid gap-3 sm:grid-cols-4">
-        {forTeam ? (
-          <div className="rounded-xl bg-white/[0.03] p-4">
-            <p className="text-xs text-zinc-500">Leader merit</p>
-            <p className="text-2xl font-bold text-white">{leader?.merit ?? '—'}</p>
-            <p className="mt-1 text-[10px] uppercase tracking-wide text-zinc-500">
-              {leader ? `${leader.name} · ${leader.merit != null ? meritBandLabel(leader.merit) : leader.status}` : 'No active leader'}
-            </p>
-            <p className="mt-2 text-[11px] text-zinc-500">
-              Teams have no merit. {activeViaTeam} active warning{activeViaTeam === 1 ? '' : 's'} issued through this team
-              {history.activeWarningPoints ? ` (${history.activeWarningPoints} pts)` : ''}.
-            </p>
-            {leader?.meritPenalties?.length ? (
-              <div className="mt-2">
-                <StaffPunishmentChips penalties={leader.meritPenalties} />
-              </div>
-            ) : null}
-          </div>
-        ) : (
-          <div className="rounded-xl bg-white/[0.03] p-4">
-            <p className="text-xs text-zinc-500">Platform Merit</p>
-            <p className="text-2xl font-bold text-white">{displayedMerit}</p>
-            <p className="mt-1 text-[10px] uppercase tracking-wide text-zinc-500">{meritBandLabel(displayedMerit)}</p>
-            {showPunishments ? (
-              <div className="mt-2">
-                <StaffPunishmentChips penalties={meritPenalties} showNone />
-              </div>
-            ) : null}
-          </div>
-        )}
+        <div className="rounded-xl bg-white/[0.03] p-4">
+          <p className="text-xs text-zinc-500">Platform Merit</p>
+          <p className="text-2xl font-bold text-white">{displayedMerit}</p>
+          <p className="mt-1 text-[10px] uppercase tracking-wide text-zinc-500">{meritBandLabel(displayedMerit)}</p>
+          {showPunishments ? (
+            <div className="mt-2">
+              <StaffPunishmentChips penalties={meritPenalties} showNone />
+            </div>
+          ) : null}
+        </div>
         <div className="rounded-xl bg-white/[0.03] p-4">
           <p className="text-xs text-zinc-500">Total violations</p>
           <p className="text-2xl font-bold text-white">{history.totalViolations}</p>
@@ -2284,27 +2546,13 @@ export function HistoryModal({
 
       <div className="grid gap-6 lg:grid-cols-2">
         <div>
-          <h3 className="mb-3 text-sm font-semibold text-white">
-            {forTeam ? 'Warnings issued through this team' : 'Violation history'}
-          </h3>
+          <h3 className="mb-3 text-sm font-semibold text-white">Violation history</h3>
           <ul className="space-y-3">
-            {history.violations.length === 0 && (
-              <p className="text-sm text-zinc-500">
-                {forTeam ? 'No warnings have been issued through this team.' : 'No violations on record.'}
-              </p>
-            )}
+            {history.violations.length === 0 && <p className="text-sm text-zinc-500">No violations on record.</p>}
             {history.violations.map((v) => (
               <li key={v.id} className="rounded-lg bg-white/[0.03] p-3 text-sm">
                 <p className="font-medium text-white">{v.type}</p>
-                {forTeam && v.issuedToName ? (
-                  <p className="mt-0.5 text-xs text-sky-300">
-                    Issued to leader {v.issuedToName}
-                    {v.issuedToHandle ? ` (@${v.issuedToHandle})` : ''}
-                    {leader && v.accountId && String(v.accountId) !== String(leader.accountId) ? ' · former leader' : ''}
-                  </p>
-                ) : !forTeam && v.viaTeamName ? (
-                  <p className="mt-0.5 text-xs text-sky-300">As leader of Team {v.viaTeamName}</p>
-                ) : null}
+                {v.viaTeamName ? <p className="mt-0.5 text-xs text-sky-300">Issued through Team {v.viaTeamName}</p> : null}
                 <p className="mt-1 text-zinc-500">{v.reason}</p>
                 <p className="mt-2 text-xs text-zinc-600">
                   By: {v.by} · {v.points} warning points
@@ -2331,7 +2579,6 @@ export function HistoryModal({
                     onClick={async () => {
                       setRescindingId(v.violationId || null);
                       try {
-                        // A team's warnings sit on the leader's account: rescind them there.
                         await rescindWarning(String(v.accountId || accountId), v.violationId || '');
                         await onChanged?.();
                       } catch (err) {
@@ -2427,30 +2674,361 @@ export function HistoryModal({
   );
 }
 
+function isOpenDisputeStatus(status: string | null | undefined) {
+  return !String(status || '').toLowerCase().match(/resolv|closed|dismiss/);
+}
+
+/**
+ * A team's record, read only from its people. Teams have no warnings, disputes or merit of their
+ * own: this lists each current member's warnings and disputes (tagged with who they concern) and
+ * the team merit as a percentage of the members' total. Staff can filter to one member.
+ */
+export function TeamRecordModal({
+  team,
+  onClose,
+  onChanged,
+  canRescind = true,
+}: {
+  team: PlatformTeam;
+  onClose: () => void;
+  onChanged?: () => void | Promise<void>;
+  /** Staff who can warn may rescind a member's active warning from here. */
+  canRescind?: boolean;
+}) {
+  const history = team.history;
+  const [memberFilter, setMemberFilter] = useState<string>('all');
+  const [onlyThisTeam, setOnlyThisTeam] = useState(false);
+  const [rescindingId, setRescindingId] = useState<string | null>(null);
+  const records: TeamMemberRecord[] = history.members || [];
+  const avatarOf = new Map((team.members || []).map((member) => [String(member.accountId), member.avatarPath || null]));
+  const nameOf = new Map(records.map((member) => [member.accountId, member.name]));
+  const filtered = memberFilter !== 'all' ? records.find((member) => member.accountId === memberFilter) || null : null;
+
+  const warnings = history.violations.filter(
+    (v) => (memberFilter === 'all' || String(v.accountId) === memberFilter) && (!onlyThisTeam || v.viaThisTeam)
+  );
+  const disputes = history.disputes.filter(
+    (d) => memberFilter === 'all' || (d.parties || []).some((party) => party.accountId === memberFilter)
+  );
+  const openDisputes = disputes.filter((d) => isOpenDisputeStatus(d.status));
+  const activeWarnings = history.violations.filter((v) => isActiveWarning(v));
+  const restricted = records.filter((member) => String(member.status).toLowerCase() !== 'active').length;
+  const timedOut = records.filter((member) => member.forumTimeout).length;
+
+  const partyLine = (parties: { accountId: string; name: string; side: 'filed' | 'against' }[] | undefined) =>
+    (parties || []).map((party) => `${party.name} (${party.side === 'against' ? 'against them' : 'filed it'})`).join(', ');
+
+  return (
+    <ModalShell
+      title={`${team.name}: members’ record`}
+      subtitle="Teams have no warnings, disputes or merit of their own. This is every current member’s."
+      onClose={onClose}
+    >
+      <div className="mb-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <MembersMeritCard summary={history.memberMerit ?? team.memberMerit} />
+        <div className="rounded-xl bg-white/[0.03] p-4">
+          <p className="text-xs text-zinc-500">Active warnings</p>
+          <p className={`text-2xl font-bold tabular-nums ${activeWarnings.length ? 'text-amber-300' : 'text-white'}`}>
+            {activeWarnings.length}
+          </p>
+          <p className="mt-1 text-[11px] text-zinc-500">
+            {history.activeWarningPoints ?? 0} pts across members · {history.totalViolations} on record
+          </p>
+        </div>
+        <div className="rounded-xl bg-white/[0.03] p-4">
+          <p className="text-xs text-zinc-500">Members’ disputes</p>
+          <p className={`text-2xl font-bold tabular-nums ${history.openDisputes ? 'text-amber-300' : 'text-white'}`}>
+            {history.openDisputes}
+            <span className="text-sm font-medium text-zinc-500"> open</span>
+          </p>
+          <p className="mt-1 text-[11px] text-zinc-500">{history.totalDisputes} in total</p>
+        </div>
+        <div className="rounded-xl bg-white/[0.03] p-4">
+          <p className="text-xs text-zinc-500">Members restricted</p>
+          <p className={`text-2xl font-bold tabular-nums ${restricted ? 'text-rose-300' : 'text-white'}`}>{restricted}</p>
+          <p className="mt-1 text-[11px] text-zinc-500">
+            suspended, locked or banned · {timedOut} in a forum timeout
+          </p>
+        </div>
+      </div>
+
+      <section className="mb-6 overflow-hidden rounded-2xl border border-white/[0.08]">
+        <header className="flex flex-wrap items-center justify-between gap-2 border-b border-white/[0.06] bg-white/[0.02] px-4 py-3">
+          <div>
+            <p className="text-sm font-semibold text-white">Members</p>
+            <p className="text-[11px] text-zinc-500">Pick a member to see only their warnings and disputes.</p>
+          </div>
+          {filtered ? (
+            <button
+              type="button"
+              onClick={() => setMemberFilter('all')}
+              className="rounded-lg border border-white/10 px-2.5 py-1 text-xs text-zinc-300 hover:bg-white/[0.05] hover:text-white"
+            >
+              Show all members
+            </button>
+          ) : null}
+        </header>
+        {records.length === 0 ? (
+          <p className="px-4 py-5 text-center text-sm text-zinc-500">This team has no active members.</p>
+        ) : (
+          <ul className="divide-y divide-white/[0.04]">
+            {records.map((member) => {
+              const selected = memberFilter === member.accountId;
+              const status = String(member.status || 'Active');
+              return (
+                <li key={member.accountId}>
+                  <button
+                    type="button"
+                    onClick={() => setMemberFilter(selected ? 'all' : member.accountId)}
+                    aria-pressed={selected}
+                    className={`flex w-full flex-wrap items-center gap-3 px-4 py-2.5 text-left transition-colors sm:flex-nowrap ${
+                      selected ? 'bg-sky-500/[0.07]' : 'hover:bg-white/[0.02]'
+                    }`}
+                  >
+                    <ProfileAvatar path={avatarOf.get(member.accountId)} name={member.name} size="sm" />
+                    <span className="min-w-0 flex-1">
+                      <span className="flex items-center gap-1.5 truncate text-sm text-white">
+                        {member.name}
+                        {member.isLeader ? <Crown className="h-3.5 w-3.5 shrink-0 text-amber-300" aria-label="Leader" /> : null}
+                      </span>
+                      <span className="block truncate text-[11px] text-zinc-500">
+                        {member.handle ? `@${member.handle} · ` : ''}
+                        {member.isLeader ? 'Leader' : member.role}
+                      </span>
+                    </span>
+                    <span className={`rounded-full border px-2 py-0.5 text-[10px] ${standingTone(status)}`}>{status}</span>
+                    <MeritMeter merit={member.merit} compact />
+                    <span className="w-24 text-right text-[11px] tabular-nums text-zinc-400">
+                      {member.activeWarnings ? (
+                        <span className="text-amber-300">
+                          {member.activeWarnings} warning{member.activeWarnings === 1 ? '' : 's'}
+                        </span>
+                      ) : (
+                        'No warnings'
+                      )}
+                    </span>
+                    <span className="w-20 text-right text-[11px] tabular-nums text-zinc-400">
+                      {member.openDisputes ? <span className="text-amber-300">{member.openDisputes} open</span> : `${member.totalDisputes} disputes`}
+                    </span>
+                  </button>
+                  {member.forumTimeout || member.meritPenalties?.length ? (
+                    <div className="flex flex-wrap gap-1.5 px-4 pb-2.5 pl-[60px]">
+                      {member.forumTimeout ? (
+                        <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[10px] text-amber-200">
+                          Forum timeout
+                        </span>
+                      ) : null}
+                      <StaffPunishmentChips penalties={member.meritPenalties} />
+                    </div>
+                  ) : null}
+                </li>
+              );
+            })}
+          </ul>
+        )}
+        <p className="flex items-start gap-2 border-t border-white/[0.06] px-4 py-2.5 text-[11px] text-zinc-500">
+          <Info className="mt-px h-3.5 w-3.5 shrink-0 text-zinc-600" />
+          Lift points, end automatic punishments or pardon from the member’s own record in the Users tab. Someone who leaves the
+          team drops off this list; their own record keeps everything.
+        </p>
+      </section>
+
+      {openDisputes.length ? (
+        <div className="mb-6">
+          <div className="mb-3 flex items-center justify-between">
+            <h3 className="text-sm font-semibold text-white">Open disputes{filtered ? ` · ${filtered.name}` : ''}</h3>
+            <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-200">
+              Needs attention
+            </span>
+          </div>
+          <ul className="space-y-3">
+            {openDisputes.map((d) => (
+              <li key={d.id} className="rounded-xl border border-amber-500/25 bg-amber-500/5 p-4">
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <p className="text-sm font-semibold text-amber-100">{d.title}</p>
+                  <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[10px] uppercase tracking-wide text-amber-200">
+                    {d.status}
+                  </span>
+                </div>
+                {d.parties?.length ? <p className="mt-1 text-xs text-sky-300">{partyLine(d.parties)}</p> : null}
+                <p className="mt-2 text-sm text-zinc-300">{d.description}</p>
+                <p className="mt-2 text-xs text-zinc-500">
+                  Handled by {d.by || 'Staff'} · Against {d.against || '—'} · {d.id} · {d.timeAgo}
+                </p>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
+      <div className="grid gap-6 lg:grid-cols-2">
+        <div>
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <h3 className="text-sm font-semibold text-white">Warnings{filtered ? ` · ${filtered.name}` : ' · all members'}</h3>
+            <label className="flex items-center gap-1.5 text-[11px] text-zinc-400">
+              <input
+                type="checkbox"
+                checked={onlyThisTeam}
+                onChange={(event) => setOnlyThisTeam(event.target.checked)}
+                className="rounded border-white/20 bg-transparent"
+              />
+              Only issued through this team
+            </label>
+          </div>
+          <ul className="space-y-3">
+            {warnings.length === 0 && (
+              <p className="text-sm text-zinc-500">
+                {filtered ? `${filtered.name} has no warnings${onlyThisTeam ? ' issued through this team' : ''}.` : 'No member has a warning on record.'}
+              </p>
+            )}
+            {warnings.map((v) => (
+              <li key={v.violationId || v.id} className="rounded-lg bg-white/[0.03] p-3 text-sm">
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <p className="font-medium text-white">{v.type}</p>
+                  {v.viaThisTeam ? (
+                    <span className="rounded-full border border-sky-500/30 bg-sky-500/10 px-1.5 py-0.5 text-[10px] text-sky-200">
+                      Through this team
+                    </span>
+                  ) : v.viaTeamName ? (
+                    <span className="rounded-full border border-white/10 px-1.5 py-0.5 text-[10px] text-zinc-400">
+                      Through Team {v.viaTeamName}
+                    </span>
+                  ) : null}
+                </div>
+                <p className="mt-0.5 text-xs text-sky-300">
+                  {nameOf.get(String(v.accountId)) || v.issuedToName || 'Member'}
+                  {v.issuedToHandle ? ` (@${v.issuedToHandle})` : ''}
+                  {v.isLeader ? ' · leader' : v.memberRole ? ` · ${v.memberRole}` : ''}
+                </p>
+                <p className="mt-1 text-zinc-500">{v.reason}</p>
+                <p className="mt-2 text-xs text-zinc-600">
+                  By: {v.by} · {v.points} pts
+                  {Number(v.points) > 0 ? (isActiveWarning(v) ? ` · −${v.points} merit now` : ' · no longer deducts merit') : ''}
+                  {' · '}
+                  {v.id} · {v.timeAgo}
+                  {v.expiresAt ? ` · expires ${new Date(v.expiresAt).toLocaleDateString()}` : ''}
+                  {String(v.status || '').toLowerCase() === 'rescinded'
+                    ? ' · rescinded'
+                    : String(v.status || '').toLowerCase() === 'lifted'
+                      ? ' · points lifted'
+                      : v.active === false
+                        ? ' · inactive'
+                        : ''}
+                </p>
+                {canRescind && v.accountId && v.violationId && isActiveWarning(v) ? (
+                  <button
+                    type="button"
+                    disabled={rescindingId === v.violationId}
+                    onClick={async () => {
+                      setRescindingId(v.violationId || null);
+                      try {
+                        await rescindWarning(String(v.accountId), v.violationId || '');
+                        await onChanged?.();
+                      } catch (err) {
+                        handleAccountActionError(err);
+                      } finally {
+                        setRescindingId(null);
+                      }
+                    }}
+                    className="mt-2 rounded-lg border border-white/10 px-2.5 py-1 text-[11px] text-zinc-200"
+                  >
+                    {rescindingId === v.violationId ? 'Rescinding…' : 'Rescind warning'}
+                  </button>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        </div>
+        <div>
+          <h3 className="mb-3 text-sm font-semibold text-white">Disputes{filtered ? ` · ${filtered.name}` : ' · all members'}</h3>
+          <ul className="space-y-3">
+            {disputes.length === 0 && (
+              <p className="text-sm text-zinc-500">{filtered ? `${filtered.name} has no disputes.` : 'No member has a dispute on record.'}</p>
+            )}
+            {disputes.map((d) => {
+              const open = isOpenDisputeStatus(d.status);
+              return (
+                <li
+                  key={d.id}
+                  className={`rounded-lg p-3 text-sm ${open ? 'border border-amber-500/20 bg-amber-500/[0.06]' : 'bg-white/[0.03]'}`}
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="font-medium text-white">{d.title}</p>
+                    {open ? <span className="text-[10px] font-semibold uppercase tracking-wide text-amber-300">Open</span> : null}
+                  </div>
+                  {d.parties?.length ? <p className="mt-0.5 text-xs text-sky-300">{partyLine(d.parties)}</p> : null}
+                  <p className="mt-1 text-zinc-500">{d.description}</p>
+                  <p className="mt-2 text-xs text-zinc-600">
+                    Handled by {d.by} · {d.status} · {d.id} · {d.timeAgo}
+                  </p>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      </div>
+
+      <div className="mt-6">
+        <h3 className="mb-1 text-sm font-semibold text-white">Team activity</h3>
+        <p className="mb-3 text-[11px] text-zinc-500">Staff actions on the team: standing changes, member penalties set with it, ownership moves.</p>
+        <ul className="space-y-3">
+          {(!history.activity || history.activity.length === 0) && (
+            <p className="rounded-xl border border-dashed border-white/[0.08] px-4 py-5 text-center text-sm text-zinc-500">
+              No team activity recorded yet.
+            </p>
+          )}
+          {(history.activity || []).map((item) => (
+            <li key={item.id} className="rounded-lg bg-white/[0.03] p-3 text-sm">
+              <div className="flex flex-wrap items-start justify-between gap-2">
+                <p className="font-medium text-white">{item.action}</p>
+                <span className="rounded-full border border-white/10 bg-white/[0.04] px-2 py-0.5 text-[10px] uppercase tracking-wide text-zinc-400">
+                  {item.eventCode.replace(/_/g, ' ')}
+                </span>
+              </div>
+              <p className="mt-2 text-xs text-zinc-500">
+                {item.actorName || 'System'}
+                {item.actorRole ? ` · ${item.actorRole}` : ''} · {item.createdAt ? formatDateTime(item.createdAt) : '—'}
+              </p>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </ModalShell>
+  );
+}
+
 export function WarnAccountModal({
   entityName,
   accountId,
   onClose,
   onChanged,
   team,
+  desk = 'admin',
 }: {
   entityName: string;
   accountId: string;
   onClose: () => void;
   onChanged?: () => void;
-  /** Team targets: teams have no Platform Merit, so the warning lands on the team leader. */
-  team?: { leader: TeamLeader | null };
+  /**
+   * Team targets: teams have no Platform Merit, so the warning lands on the people staff pick
+   * (the leader by default, every member when the team has no leader).
+   */
+  team?: { leader: TeamLeader | null; members?: TeamMember[] };
+  desk?: 'admin' | 'support' | 'forum' | 'marketplace' | 'jobs';
 }) {
   const [warningId, setWarningId] = useState('harassment');
   const [reason, setReason] = useState('');
   const [saving, setSaving] = useState(false);
   const leader = team?.leader ?? null;
-  const blocked = Boolean(team) && !leader;
+  const scopeMembers = teamScopeMembers(team?.members);
+  const [memberScope, setMemberScope] = useState<TeamScopeValue>(() => defaultTeamScope('apply', leader));
+  const blocked = Boolean(team) && !leader && scopeMembers.length === 0;
+  const scopeReady = !team || teamScopeReady(memberScope);
 
   return (
     <ModalShell
-      title={team ? `Warn the leader of ${entityName}` : `Warn ${entityName}`}
-      subtitle={team && leader ? `Issued to ${leader.name}${leader.username ? ` (@${leader.username})` : ''}` : undefined}
+      title={team ? `Warn members of ${entityName}` : `Warn ${entityName}`}
+      subtitle={team ? 'Teams have no Platform Merit: the warning goes on each person’s own record' : undefined}
       onClose={onClose}
       footer={
         <div className="flex justify-end gap-2">
@@ -2463,14 +3041,15 @@ export function WarnAccountModal({
           </button>
           <button
             type="button"
-            disabled={saving || blocked || !reason.trim() || !warningId}
+            disabled={saving || blocked || !scopeReady || !reason.trim() || !warningId}
             onClick={async () => {
-              if (blocked || !reason.trim() || !warningId) return;
+              if (blocked || !scopeReady || !reason.trim() || !warningId) return;
               setSaving(true);
               try {
                 await warnAccount(accountId, {
                   warningId,
                   reason,
+                  ...(team ? teamScopeRequest(memberScope) : {}),
                 });
                 onChanged?.();
                 onClose();
@@ -2482,7 +3061,7 @@ export function WarnAccountModal({
             }}
             className="rounded-xl bg-amber-500/90 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
           >
-            {saving ? 'Issuing…' : team ? 'Warn the leader' : 'Issue warning'}
+            {saving ? 'Issuing…' : team ? 'Warn the people picked' : 'Issue warning'}
           </button>
         </div>
       }
@@ -2490,24 +3069,29 @@ export function WarnAccountModal({
       {team ? (
         blocked ? (
           <p className="mb-4 rounded-xl border border-rose-500/25 bg-rose-500/[0.06] px-4 py-3 text-sm text-rose-200">
-            This team has no active leader to warn. Lock the team, or assign an owner with Transfer ownership first.
+            This team has no active members to warn. Lock or ban the team instead.
           </p>
         ) : (
-          <div className="mb-4 rounded-xl border border-amber-500/25 bg-amber-500/[0.05] px-4 py-3 text-sm text-amber-100">
-            <p>
-              Teams have no Platform Merit, so this warning goes on{' '}
-              <span className="font-semibold text-white">{leader?.name}</span>’s personal record
-              {leader?.merit != null ? ` (merit ${leader.merit} now)` : ''} and is listed on the team’s record.
-            </p>
-            <p className="mt-1 text-xs text-amber-200/80">
-              The leader is told it came with the team. If another member did it, warn that member from the Users tab
-              instead. The automatic punishment ladder applies to the leader as usual.
-            </p>
+          <div className="mb-4">
+            <TeamMemberScopeFields
+              mode="apply"
+              verb="warn"
+              tone="amber"
+              teamIncluded={false}
+              showMerit
+              title="Who gets this warning"
+              subtitle="Each person carries the named warning and its points on their own record; the team’s record lists it."
+              footnote="Everyone picked gets the same named warning and points, and their notice says it came with the team. Automatic punishments follow each person’s own merit. If only one member did it, pick just them. Accounts you may not act on stop the warning, except with All members, where they are skipped."
+              leader={leader}
+              members={scopeMembers}
+              value={memberScope}
+              onChange={setMemberScope}
+            />
           </div>
         )
       ) : null}
       <WarningPresetFields
-        desk="admin"
+        desk={desk}
         warningId={warningId}
         reason={reason}
         onWarningId={setWarningId}

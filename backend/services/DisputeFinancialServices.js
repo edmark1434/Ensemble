@@ -441,6 +441,7 @@ async function applyFinancialResolution(disputeId, body, staffSession) {
   let result;
   let reason = action;
   let warning = null;
+  let banSummary = null;
   if (action === 'settle_escrow') {
     const notes = requireNotes(notesInput);
     const timing = parseReleaseTiming(body);
@@ -457,7 +458,14 @@ async function applyFinancialResolution(disputeId, body, staffSession) {
       : parseSettlementSplit(body);
     const banning = ruling.accountAction === 'ban';
     // Checked before any credit moves, so a ruling never lands with a ban that cannot follow.
-    if (banning) await assertDisputeBanAllowed(row, staff);
+    // The plan also says who on the disputee's team the ban reaches (`memberScope`).
+    const banPlan = banning
+      ? await assertDisputeBanAllowed(
+          row,
+          staff,
+          require('./DisputeMemberServices').banScopeInput(body)
+        )
+      : null;
     result = await settleEscrow({
       disputeId,
       staffId,
@@ -497,8 +505,14 @@ async function applyFinancialResolution(disputeId, body, staffSession) {
     });
     if (banning) {
       try {
-        await banDisputeRespondent(row, { reason: ruling.banReason, staff, staffSession });
+        const outcome = await banDisputeRespondent(row, {
+          reason: ruling.banReason,
+          staff,
+          staffSession,
+          plan: banPlan,
+        });
         reason = 'escrow_settled_banned';
+        banSummary = outcome?.summary || null;
       } catch (err) {
         // The escrow ruling is committed; say plainly that the ban is what did not happen.
         console.error('Dispute settled but the ban failed:', err.message);
@@ -574,7 +588,12 @@ async function applyFinancialResolution(disputeId, body, staffSession) {
   broadcastWalletChange(row, result, reason);
 
   const detail = await getDisputeDetail(disputeId, staffSession);
-  return { ...detail, financialResult: summarizeResult(result), ...(warning ? { warning } : {}) };
+  return {
+    ...detail,
+    financialResult: summarizeResult(result),
+    ...(warning ? { warning } : {}),
+    ...(banSummary ? { banSummary } : {}),
+  };
 }
 
 /** Keep raw ledger rows out of the HTTP response; the detail payload has the full picture. */

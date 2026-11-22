@@ -103,9 +103,27 @@ async function getActiveTeamMemberAccountIds(teamAccountId) {
     WHERE t.account_id=$1 AND tm.status='Active' AND tm.deleted_at IS NULL`,
     [teamAccountId])).rows.map((row) => row.account_id);
 }
-/** Active members with their own account standing: who a staff team penalty can also reach. */
+/**
+ * Active members with their own account standing and Platform Merit: who a staff team penalty
+ * can also reach. `forum_timeout` is a running forum timeout; `timeout_via_team` says the latest timeout was
+ * set together with this team (so clearing the team's timeouts may end it).
+ */
 async function listTeamMemberStandings(teamAccountId) {
-  return (await pool.query(`SELECT u.account_id,a.display_name,a.handle,a.status,tm.role
+  const { platformMeritSql } = require('./WarningBandRepositories');
+  return (await pool.query(`SELECT u.account_id,a.display_name,a.handle,a.status,tm.role,
+      ${platformMeritSql('a.account_id')}::int AS merit,
+      EXISTS (
+        SELECT 1 FROM restrictions r
+        WHERE r.account_id=a.account_id AND LOWER(r.type) IN ('forum_timeout','timeout')
+          AND r.starts_at<=NOW() AND (r.ends_at IS NULL OR r.ends_at>NOW())
+      ) AS forum_timeout,
+      COALESCE((
+        SELECT aa.metadata->>'viaTeamAccountId'
+        FROM account_activity aa
+        WHERE aa.account_id=a.account_id AND aa.event_code='FORUM_TIMEOUT'
+        ORDER BY aa.created_at DESC
+        LIMIT 1
+      )=t.account_id::text,FALSE) AS timeout_via_team
     FROM teams t
     JOIN team_members tm ON tm.team_id=t.team_id
     JOIN users u ON u.user_id=tm.user_id
@@ -246,7 +264,7 @@ async function listTeams(accountId, q='', mine=false, limit=20, offset=0, catego
     GROUP BY t.team_id,t.team_type,t.job_id,t.gig_id,t.is_archived,a.account_id,f.path,v.is_verified,mine.role,mine.status,o.display_name,o.handle,ofile.path ORDER BY a.display_name LIMIT $4 OFFSET $5`, [accountId,q,mine,limit,offset,category])).rows;
 }
 async function getMembership(teamId, accountId) { return (await pool.query(`SELECT tm.*,u.account_id,a.display_name,a.handle FROM team_members tm JOIN users u ON u.user_id=tm.user_id JOIN accounts a ON a.account_id=u.account_id WHERE tm.team_id=$1 AND u.account_id=$2`,[teamId,accountId])).rows[0]||null; }
-async function listMembers(teamId, statuses=null) { return (await pool.query(`SELECT tm.*,u.account_id,a.display_name,a.handle,f.path avatar_path FROM team_members tm JOIN users u ON u.user_id=tm.user_id JOIN accounts a ON a.account_id=u.account_id LEFT JOIN files f ON f.file_id=a.avatar_file_id WHERE tm.team_id=$1 AND ($2::text[] IS NULL OR tm.status=ANY($2)) ORDER BY tm.joined_at`,[teamId,statuses])).rows; }
+async function listMembers(teamId, statuses=null) { return (await pool.query(`SELECT tm.*,u.account_id,a.display_name,a.handle,a.status AS account_status,f.path avatar_path FROM team_members tm JOIN users u ON u.user_id=tm.user_id JOIN accounts a ON a.account_id=u.account_id LEFT JOIN files f ON f.file_id=a.avatar_file_id WHERE tm.team_id=$1 AND ($2::text[] IS NULL OR tm.status=ANY($2)) ORDER BY tm.joined_at`,[teamId,statuses])).rows; }
 async function listJoinRequests(teamId, search='') { return (await pool.query(`SELECT tm.team_id,u.account_id,a.display_name,a.handle,f.path AS avatar_path, a.banner_preset,tm.role,tm.status,COALESCE(tm.updated_at,tm.joined_at) AS requested_at FROM team_members tm JOIN users u ON u.user_id=tm.user_id JOIN accounts a ON a.account_id=u.account_id LEFT JOIN files f ON f.file_id=a.avatar_file_id WHERE tm.team_id=$1 AND tm.status='Pending' AND ($2='' OR a.display_name ILIKE '%'||$2||'%' OR a.handle ILIKE '%'||$2||'%') ORDER BY COALESCE(tm.updated_at,tm.joined_at) DESC`,[teamId,search])).rows; }
 async function upsertMembership(teamId,userId,role,status,invitedBy=null) { return (await pool.query(`INSERT INTO team_members(team_id,user_id,role,status,invited_by_account_id,invited_at,deleted_at) VALUES($1,$2,$3,$4::varchar,$5,CASE WHEN $4::varchar='Invited'::varchar THEN NOW() END,NULL) ON CONFLICT(team_id,user_id) DO UPDATE SET role=EXCLUDED.role,status=EXCLUDED.status,invited_by_account_id=EXCLUDED.invited_by_account_id,invited_at=EXCLUDED.invited_at,deleted_at=NULL,updated_at=NOW() RETURNING *`,[teamId,userId,role,status,invitedBy])).rows[0]; }
 async function updateMembership(teamId,userId,fields) { const allowed=['role','status']; const entries=Object.entries(fields).filter(([k])=>allowed.includes(k)); const vals=entries.map(([,v])=>v); vals.push(teamId,userId); return (await pool.query(`UPDATE team_members SET ${entries.map(([k],i)=>`${k}=$${i+1}`).join(',')},updated_at=NOW() WHERE team_id=$${vals.length-1} AND user_id=$${vals.length} RETURNING *`,vals)).rows[0]||null; }
@@ -392,7 +410,44 @@ async function transferOwnershipByStaff(teamId, newOwnerUserId, previousOwnerRol
     client.release();
   }
 }
-async function transferOwnership(teamId,oldUserId,newUserId){const c=await pool.connect();try{await c.query('BEGIN');await c.query(`UPDATE team_members SET role='Admin',updated_at=NOW() WHERE team_id=$1 AND user_id=$2 AND role='Owner'`,[teamId,oldUserId]);await c.query(`UPDATE team_members SET role='Owner',updated_at=NOW() WHERE team_id=$1 AND user_id=$2 AND status='Active'`,[teamId,newUserId]);await c.query('COMMIT');}catch(e){await c.query('ROLLBACK');throw e;}finally{c.release();}}
+/**
+ * The owner hands the team to an active member. Both roster rows are locked and each update must
+ * hit exactly one row, so a team can never end up with no owner or two owners.
+ * @param {'Admin'|'Member'} previousOwnerRole what the giver becomes
+ */
+async function transferOwnership(teamId, oldUserId, newUserId, previousOwnerRole = 'Admin') {
+  const c = await pool.connect();
+  const fail = (message, statusCode) => Object.assign(new Error(message), { statusCode });
+  try {
+    await c.query('BEGIN');
+    const rows = (await c.query(
+      `SELECT user_id, role, status FROM team_members
+        WHERE team_id=$1 AND user_id IN ($2,$3) AND deleted_at IS NULL
+        ORDER BY user_id FOR UPDATE`,
+      [teamId, oldUserId, newUserId]
+    )).rows;
+    const giver = rows.find((row) => String(row.user_id) === String(oldUserId));
+    const taker = rows.find((row) => String(row.user_id) === String(newUserId));
+    if (!giver || giver.role !== 'Owner' || giver.status !== 'Active') throw fail('Only the active owner can transfer ownership', 403);
+    if (!taker || taker.status !== 'Active') throw fail('The new owner must be an active member of this team', 422);
+    if (taker.role === 'Owner') throw fail('That member already owns this team', 409);
+    const demoted = await c.query(
+      `UPDATE team_members SET role=$3, updated_at=NOW() WHERE team_id=$1 AND user_id=$2 AND role='Owner'`,
+      [teamId, oldUserId, previousOwnerRole === 'Member' ? 'Member' : 'Admin']
+    );
+    const promoted = await c.query(
+      `UPDATE team_members SET role='Owner', updated_at=NOW() WHERE team_id=$1 AND user_id=$2 AND status='Active'`,
+      [teamId, newUserId]
+    );
+    if (demoted.rowCount !== 1 || promoted.rowCount !== 1) throw fail('The roster changed while transferring. Refresh and try again.', 409);
+    await c.query('COMMIT');
+  } catch (e) {
+    await c.query('ROLLBACK');
+    throw e;
+  } finally {
+    c.release();
+  }
+}
 async function wallet(teamId){
   const baseWallet = (await pool.query(`SELECT COALESCE(sum(w.balance_credits) FILTER(WHERE w.type='account wallets'),0)::int available_balance,COALESCE(sum(w.balance_credits) FILTER(WHERE w.type='escrow wallets'),0)::int escrow_balance,COALESCE(sum(w.frozen_balance_credits),0)::int frozen_balance,COALESCE(sum(w.balance_credits),0)::int total_balance FROM teams t JOIN account_wallets aw ON aw.account_id=t.account_id JOIN wallets w ON w.wallet_id=aw.wallet_id WHERE t.team_id=$1`,[teamId])).rows[0] || { available_balance: 0, escrow_balance: 0, frozen_balance: 0, total_balance: 0 };
 
@@ -407,12 +462,12 @@ async function wallet(teamId){
     ),
     contract_releases AS (
       SELECT ct.reference_id AS contract_id,
-             COALESCE(SUM(ct.amount_credits), 0)::int AS released_credits
+             COALESCE(SUM(${require('../lib/TeamContractReserve').netReleaseCreditsSql('ct')}), 0)::int AS released_credits
         FROM team_wallet tw
         JOIN credit_transactions ct ON ct.destination_wallet_id = tw.wallet_id
        WHERE ct.reference_table = 'contracts'
          AND ct.type = 'Escrow Release'
-         AND LOWER(ct.status::text) = 'completed'
+         AND ${require('../lib/TeamContractReserve').releaseCountsSql('ct')}
        GROUP BY ct.reference_id
     ),
     contract_dists AS (
@@ -545,12 +600,12 @@ async function distributeTeamFunds(teamId, recipients) {
     const contractReservedResult = await client.query(`
       WITH contract_releases AS (
         SELECT ct.reference_id AS contract_id,
-               COALESCE(SUM(ct.amount_credits), 0)::int AS released_credits
+               COALESCE(SUM(${require('../lib/TeamContractReserve').netReleaseCreditsSql('ct')}), 0)::int AS released_credits
           FROM credit_transactions ct
          WHERE ct.destination_wallet_id = $1
            AND ct.reference_table = 'contracts'
            AND ct.type = 'Escrow Release'
-           AND LOWER(ct.status::text) = 'completed'
+           AND ${require('../lib/TeamContractReserve').releaseCountsSql('ct')}
          GROUP BY ct.reference_id
       ),
       contract_dists AS (

@@ -359,20 +359,51 @@ async function createContractDisputeController(req, res) {
             return res.status(400).json({ success: false, message: 'Dispute reason and details are required' });
         }
 
-        const dispute = await ContractRepositories.createContractDispute(actorIds, contractId, { reason, details, attachments });
+        const dispute = await ContractRepositories.createContractDispute(actorIds, contractId, {
+            reason,
+            details,
+            attachments,
+            personalAccountId,
+            // Who answers on the freelancer side (client filers only): leader | selected | all.
+            memberScope: req.body?.memberScope,
+            memberAccountIds: Array.isArray(req.body?.memberAccountIds) ? req.body.memberAccountIds : undefined,
+        });
         return res.status(201).json({
             success: true,
             message: 'Dispute submitted successfully',
             data: dispute
         });
     } catch (err) {
-        console.error('Error creating contract dispute:', err);
+        if (!err.statusCode || err.statusCode >= 500) console.error('Error creating contract dispute:', err);
         const status = Number(err.statusCode) || (String(err.message || '').includes('Unauthorized') ? 403 : 500);
         return res.status(status).json({
             success: false,
             message: err.message || 'Internal server error',
             // Filing blocks (DISPUTE_ALREADY_FILED, DISPUTE_WINDOW_CLOSED, DISPUTE_PAYOUT_PENDING) let
             // the form show its banner. Only our own errors carry statusCode; driver codes stay out.
+            ...(err.statusCode && err.code ? { code: err.code } : {}),
+        });
+    }
+}
+
+/** Who the client can name on the freelancer side before filing a dispute on this contract. */
+async function getDisputeMemberOptionsController(req, res) {
+    try {
+        const personalAccountId = req.user.account_id || req.user.accountId;
+        const actorIds = await getAuthorizedActorAccountIds(personalAccountId);
+        const { getFilingMemberOptions } = require('../services/DisputeMemberServices');
+        const data = await getFilingMemberOptions({
+            contractId: req.params.contractId,
+            actorAccountIds: actorIds,
+            personalAccountId,
+        });
+        return res.status(200).json({ success: true, data });
+    } catch (err) {
+        if (!err.statusCode) console.error('Error loading dispute member options:', err);
+        const status = Number(err.statusCode) || 500;
+        return res.status(status).json({
+            success: false,
+            message: err.statusCode ? err.message : 'Internal server error',
             ...(err.statusCode && err.code ? { code: err.code } : {}),
         });
     }
@@ -611,6 +642,7 @@ module.exports = {
     rejectJobOfferController,
     getContractsController,
     createContractDisputeController,
+    getDisputeMemberOptionsController,
     chooseAfterDisputeController,
     extendContractDeadlineController,
     cancelContractController,

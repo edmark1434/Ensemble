@@ -10,6 +10,7 @@ import {
   defaultTeamScope,
   teamScopeReady,
   teamScopeRequest,
+  timedOutAlready,
   type TeamScopeValue,
 } from "@/components/staff/TeamMemberScopeFields";
 import {
@@ -90,9 +91,9 @@ export function PlatformModerationActionDialog({
   const openEndedAllowed = viewer.fullRole || accountAction === "ban" || accountAction === "lock";
   const leader = account?.team?.leader ?? null;
   const teamMembers = account?.team?.members ?? [];
-  const offersMembers = Boolean(
-    account?.isTeam && (accountAction === "suspend" || accountAction === "lock" || accountAction === "ban"),
-  );
+  // Every team action reaches people; warnings and timeouts reach only people (no team merit, no posts).
+  const offersMembers = Boolean(account?.isTeam && accountAction);
+  const peopleOnly = accountAction === "warn" || accountAction === "timeout";
   const trimmed = reason.replace(/\s+/g, " ").trim();
   const reasonOk = trimmed.length >= context.limits.reasonMin && trimmed.length <= context.limits.reasonMax;
 
@@ -134,25 +135,24 @@ export function PlatformModerationActionDialog({
     const content = context.contentActions.find((row) => row.id === contentAction);
     if (content) parts.push(`${content.label.toLowerCase()}`);
     if (account && accountAction) {
-      const who = accountAction === "warn" || accountAction === "timeout"
-        ? account.isTeam && leader ? `${leader.name} (leader of ${account.name})` : account.name
-        : account.name;
       const what = accountAction === "warn" ? "warn" : ACCOUNT_ACTION_LABELS[accountAction].toLowerCase();
-      const alsoWho = !offersMembers
+      const people = !offersMembers
         ? ""
         : memberScope.scope === "leader" && leader
-          ? ` and the team leader, ${leader.name}`
+          ? `the team leader, ${leader.name}`
           : memberScope.scope === "all"
-            ? ` and all ${teamMembers.length} members`
+            ? `all ${teamMembers.length} members`
             : memberScope.scope === "selected" && memberScope.memberAccountIds.length
-              ? ` and ${memberScope.memberAccountIds.length} chosen member${memberScope.memberAccountIds.length === 1 ? "" : "s"}`
+              ? `${memberScope.memberAccountIds.length} chosen member${memberScope.memberAccountIds.length === 1 ? "" : "s"}`
               : "";
-      parts.push(`${what} ${who}${alsoWho}`);
+      if (!offersMembers) parts.push(`${what} ${account.name}`);
+      else if (peopleOnly) parts.push(`${what} ${people || "the members you pick"} of ${account.name}`);
+      else parts.push(`${what} ${account.name}${people ? ` and ${people}` : ""}`);
     }
     if (!parts.length) return null;
     const text = parts.join(", then ");
     return text.charAt(0).toUpperCase() + text.slice(1) + ".";
-  }, [account, accountAction, contentAction, context.contentActions, memberScope, leader, offersMembers, teamMembers.length]);
+  }, [account, accountAction, contentAction, context.contentActions, memberScope, leader, offersMembers, peopleOnly, teamMembers.length]);
 
   const submit = async (confirmRecent = false) => {
     if (!canSubmit) return;
@@ -379,6 +379,27 @@ export function PlatformModerationActionDialog({
                       </p>
                     ) : null}
 
+                    {offersMembers && peopleOnly ? (
+                      <TeamMemberScopeFields
+                        dense
+                        mode="apply"
+                        verb={accountAction === "warn" ? "warn" : "time out"}
+                        tone="amber"
+                        teamIncluded={false}
+                        showMerit={accountAction === "warn"}
+                        covered={accountAction === "timeout" ? timedOutAlready : undefined}
+                        title={accountAction === "warn" ? "Who gets this warning" : "Who gets the forum timeout"}
+                        subtitle={
+                          accountAction === "warn"
+                            ? "Teams have no merit: each person carries the warning on their own record."
+                            : "Teams never post: only people are timed out. Members already timed out stay as they are."
+                        }
+                        leader={leader}
+                        members={teamMembers}
+                        value={memberScope}
+                        onChange={setMemberScope}
+                      />
+                    ) : null}
                     {offersMembers && (accountAction === "suspend" || accountAction === "lock" || accountAction === "ban") ? (
                       <TeamMemberScopeFields
                         dense

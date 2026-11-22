@@ -584,9 +584,14 @@ async function getJobsGigsPostingDetail(type, id) {
  * client for a job, the freelancer for a gig — so the action shows up in
  * Moderation → Activity log with its reason and who made it.
  *
- * @param reason {string} optional note shown in the activity log
+ * Pausing, closing or archiving puts the posting on a staff hold (`staff_hold_at`), so the
+ * owner cannot reopen it themselves; reopening clears the hold. The owner is notified either
+ * way, and a hold notice tells them to open a support ticket.
+ *
+ * @param reason {string} note shown in the activity log and the owner's notice
+ * @param options.reportNumber {string} server-side only: the report that led to the action
  */
-async function updateJobsGigsPosting(type, id, { status, reason } = {}, session = null, audit = {}) {
+async function updateJobsGigsPosting(type, id, { status, reason } = {}, session = null, audit = {}, options = {}) {
   const table = type === 'job' ? 'jobs' : type === 'gig' ? 'gigs' : null;
   if (!table) throw new Error(`Invalid posting type: ${type}`);
 
@@ -626,19 +631,23 @@ async function updateJobsGigsPosting(type, id, { status, reason } = {}, session 
   let changed;
   if (next === 'archived') {
     changed = await pool.query(
-      `UPDATE ${table} SET deleted_at = NOW(), updated_at = NOW()
+      `UPDATE ${table}
+       SET deleted_at = NOW(), staff_hold_at = COALESCE(staff_hold_at, NOW()), updated_at = NOW()
        WHERE ${idColumn} = $1 AND deleted_at IS NULL AND status IS NOT DISTINCT FROM $2`,
       [id, posting.status]
     );
   } else {
     const dbStatus = dbStatusForWrite(type, next);
     changed = await pool.query(
-      `UPDATE ${table} SET status = $1, deleted_at = NULL, updated_at = NOW()
+      `UPDATE ${table}
+       SET status = $1, deleted_at = NULL,
+           staff_hold_at = CASE WHEN $5::boolean THEN COALESCE(staff_hold_at, NOW()) ELSE NULL END,
+           updated_at = NOW()
        WHERE ${idColumn} = $2 AND status IS NOT DISTINCT FROM $3
          AND (deleted_at IS NULL) = $4::boolean`,
       // Compared as "archived or not": a timestamp read back through a JS Date loses
       // its microseconds and would never match.
-      [dbStatus, id, posting.status, !posting.deleted_at]
+      [dbStatus, id, posting.status, !posting.deleted_at, next !== 'active']
     );
   }
   if (!changed.rowCount) {
@@ -669,9 +678,58 @@ async function updateJobsGigsPosting(type, id, { status, reason } = {}, session 
         ...(audit && typeof audit === 'object' && !Array.isArray(audit) ? audit : {}),
       },
     });
+    const { notifyPostingOwner } = require('../services/PostingModerationServices');
+    await notifyPostingOwner({
+      ownerAccountId: posting.owner_account_id,
+      type,
+      id,
+      title: posting.title,
+      status: next,
+      reason: note,
+      reportNumber: options?.reportNumber || null,
+    });
   }
 
   return getJobsGigsPostingDetail(type, id);
+}
+
+/** Live state of one job or gig posting, for staff actions that depend on it. */
+async function readPostingState(type, id) {
+  const table = type === 'job' ? 'jobs' : type === 'gig' ? 'gigs' : null;
+  if (!table) return null;
+  const idColumn = type === 'job' ? 'job_id' : 'gig_id';
+  const ownerColumn = type === 'job' ? 'client_account_id' : 'freelancer_account_id';
+  const { rows } = await pool.query(
+    `SELECT ${idColumn} AS id, title, status, deleted_at, staff_hold_at, ${ownerColumn} AS owner_account_id
+     FROM ${table} WHERE ${idColumn}::text = $1`,
+    [String(id)]
+  );
+  const row = rows[0];
+  if (!row) return null;
+  return {
+    id: row.id,
+    title: row.title,
+    status: normalizePostingStatus(row.status, row.deleted_at),
+    held: Boolean(row.staff_hold_at),
+    ownerAccountId: row.owner_account_id,
+  };
+}
+
+/**
+ * Puts a posting that is already off the board (paused or closed) on a staff hold without
+ * changing its status, so its owner cannot reopen it. Returns whether the row was held.
+ */
+async function holdPostingForStaff(type, id) {
+  const table = type === 'job' ? 'jobs' : type === 'gig' ? 'gigs' : null;
+  if (!table) return false;
+  const idColumn = type === 'job' ? 'job_id' : 'gig_id';
+  const result = await pool.query(
+    `UPDATE ${table}
+     SET staff_hold_at = COALESCE(staff_hold_at, NOW()), updated_at = NOW()
+     WHERE ${idColumn}::text = $1 AND deleted_at IS NULL`,
+    [String(id)]
+  );
+  return result.rowCount > 0;
 }
 
 // Full jobs/gigs/contracts history for one user account.
@@ -1473,6 +1531,8 @@ module.exports = {
   getJobsQueueHealth,
   getFlaggedPostings,
   updateJobsGigsPosting,
+  readPostingState,
+  holdPostingForStaff,
   getUserJobsHistory,
   JOBS_DISPUTE_ENTITIES,
 };

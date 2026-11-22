@@ -64,3 +64,60 @@ The admin dashboard's member breakdown shows member health, not one lone bar.
 - **Server.** `GET /api/admin/dashboard-overview` adds `memberHealth` (`fetchMemberSummary` from Analytics plus `pulse`: signups this week and the week before, members active in 7 days, members with active warnings, running forum timeouts). Either read failing gives null figures, never a failed dashboard; `breakdowns.usersByStatus` stays as the fallback.
 - **Members card.** A stacked standing bar and every standing (zeros dimmed); rows with members open User & Team → Users filtered by `?status=`. ID-verified and complete-profile meters, a link to the identity queue when IDs wait, and four last-7-days tiles linking to Users, Analytics → Members and Restrictions.
 - **Staff by role.** Each role shows how many are online now, and the card names roles with nobody online.
+
+# Parallel task: replace asset files before live, report holds on jobs and gigs
+
+## Objective
+
+A seller can swap an asset's files while it is not live yet (for example when the review team suspects a copyright problem and asks for a new version). A sanctioned job or gig report takes the reported posting off the board, and the owner is told why and that they can open a support ticket.
+
+## Acceptance Criteria
+
+- **Asset files.** The editor lets the owner remove current files and add same-type replacements while the asset is not published, not a template and has no buyers; saving sends it to review. A published asset keeps the "Asset file is locked" notice, and the server returns 409 `ASSET_FILE_LOCKED` for `replaceMedia` on it (service check plus the locked row).
+- **Report → posting.** Sanctioning a job or gig report takes `postingAction` `pause` (default) | `archive`. After the sanction is saved the posting is paused, archived, or (already paused / closed) put on hold; already archived is skipped. A failure is shown to staff and never undoes the sanction. The report modal on every desk shows the Pause / Archive choice and the outcome.
+- **Hold.** Migration `1830600000000_posting-staff-hold` adds `staff_hold_at` to `jobs` and `gigs`. Staff pause / close / archive set it, staff reopen clears it. While held, the owner's gig toggle and a job edit that changes `status` return 403 `POSTING_STAFF_HOLD` with ticket instructions.
+- **Notice.** Every staff posting change notifies the owner (`notifyPostingOwner`): pause / close / archive notices give the reason (and the report number when there is one) and link to `/support/ticket?type=Appeal a jobs action`; reopen notices link to the posting.
+
+# Parallel task: teams are read through their members
+
+## Objective
+
+Teams have no warnings, disputes or merit of their own. Every team penalty (warn, timeout, suspend, lock, ban) reaches the people staff pick, a team's record shows its current members' warnings and disputes, team merit is the members' total as a percentage, and ownership transfer works properly from both the staff desk and the team page. See docs/punishment-system.md §8.10.
+
+## Acceptance Criteria
+
+- **Warn and timeout scope.** Team warn (`POST /api/admin/accounts/:id/warn`), timeout and clear-timeout take `memberScope` `leader` | `selected` | `all` like bans (`TeamSanctionServices.warnTeam` / `changeTeamTimeouts`). People are checked before anyone changes; members already timed out are skipped; clearing ends only timeouts set with the team. The Teams desk warn / timeout modals and platform view show the same choice cards (no "Team +" count: only people change).
+- **Members-only record.** Teams desk "Members' warnings & disputes" (`TeamRecordModal`) lists current members' warnings and disputes, tagged and filterable per member, with a member table (merit bar, standing, warnings, disputes, timeouts, automatic punishments). No team-account warnings or disputes.
+- **Team merit %.** `memberMerit.percent` = members' merit total ÷ (100 × members), rounded down (5 × 100 → 100%; one at 50 → 90%). Shown on the team overview, the record, the Teams list (sortable, "Members at low merit" filter), platform view and team `CaseAccountSummary`.
+- **Ownership transfer.** `TeamOwnershipServices`: active member in good standing, no contract workspaces, locked roster transaction, notices, chat roles, project access, live refresh, team record. Owner side: Transfer Ownership in the team menu, Members tab header and a crown per member; picks the new owner and their own role, types the team name to confirm; plan team limit checked. Staff side: redesigned modal (hand-off strip, searchable candidates with merit and standing, role cards, what-happens list).
+
+# Parallel task: team members in contract disputes
+
+## Objective
+
+A client disputing a contract whose freelancer side is a team (team account, or the contract workspace's included members and subcontractors) chooses who answers for that side: the team leader (default), specific people, or everyone. Named people can follow and answer the case like the disputee, staff see and change them, and a dispute ban reaches them through the team rules. Team parties work end to end on the member side, and the team "owed to members" reserve follows dispute reversals. See docs/api.md "Contract disputes" → "Team members in a dispute".
+
+## Acceptance Criteria
+
+- **Data.** Migration `1830500000000_dispute-members` adds `dispute_members` (soft removal, who named them) and `disputes.respondent_member_scope`.
+- **Client only.** `GET /api/contracts/:contractId/dispute-members` returns the freelancer side's roster for a client filer; a freelancer filer gets `canNameMembers: false`. Filing takes `memberScope` `leader` | `selected` | `all` (+ `memberAccountIds`), checked under the filing lock; a freelancer sending `selected`/`all` gets 422 `DISPUTE_MEMBERS_CLIENT_ONLY`; stale picks 422 `DISPUTE_MEMBERS_NOT_FOUND`; leaderless + `leader` 422 `DISPUTE_MEMBERS_NO_LEADER`.
+- **Form.** The dispute form shows "Who answers on their side" (three cards, searchable picker with avatars, Leader / On this contract chips, "Everyone on this contract" quick pick) in light and dark, and names the filer's own team correctly when filing for a team.
+- **Access.** Cases, the public page and replies treat a team party's active Owners and Admins as that party, and named people as the disputee side once public. Notices and live updates to a team account reach those people.
+- **Staff.** The dispute console shows a team chip, the named people in Parties (with "Change who is named": `action: "set_members"`), and a "Disputee's team" case-file section (roster, standing of named people, team wallet with what this contract still owes members, people taken off).
+- **Punishment.** Ban and settle-and-ban accept `memberScope` / `memberAccountIds`; the default is the named people, else the leader. Team members go through `TeamSanctionServices`; others are banned with a reason naming the dispute; the ruling and response name who else was banned or skipped.
+- **Swap.** `swap_parties` takes named people off (removed rows kept) and says so in the notice.
+- **Escrow.** Team wallet reserve and contract fund distributions count releases net of standing dispute reversals (`lib/TeamContractReserve.js`).
+
+# Parallel task: Forum Control member view and forum Trends
+
+## Objective
+
+Forum moderators see the forum close to how members do (avatars, group pictures, post bodies, images, threaded replies), and the Forum dashboard's Trends section shows real activity for a range they pick. See docs/api.md "Forum content moderation" and docs/frontend.md (Forum Control, Forum dashboard).
+
+## Acceptance Criteria
+
+- **People and pictures.** Forum desk payloads carry `avatarUrl` and `subscriptionPlan` on every person, `excerpt`, `images`, `imageCount` and `groupImageUrl` on discussions, `memberPreview` on group rows, `images` / `isEdited` on comments, and pictures / authors on the dashboard's recent groups and discussions. Identity lookups are chunked so a full group page never drops avatars.
+- **Member view.** `ForumModerationDesk` (admin Management → Forum and Forum Control) defaults to cards laid out like the member forum (post cards, group cards with banners and member avatars), with a Table layout kept per browser. Every card and both detail dialogs open the member page in platform view; content members cannot see says why.
+- **Detail dialogs.** The discussion dialog shows the post as members see it (formatted body with a plain-text toggle, images with a viewer, likes / replies / saves) and a threaded comment list with avatars; the group dialog shows the banner, owner and roster with avatars and role chips. All existing actions, guards and reasons are unchanged.
+- **Deep links.** `/moderator/forum/forum-control?group=<id>` and `?discussion=<id>` open that review; closing clears the param. Dashboard recent lists and busiest groups link there.
+- **Trends.** `GET /api/moderator/forum/trends?range=7d|30d|90d|12m` (default 30d, anything else 400) returns per-bucket discussions, replies, members posting, new groups, content taken down, forum reports, forum tickets and staff forum actions, totals against the period before, status / target / action-kind mixes for the range, and the busiest groups and members. Either store failing leaves its half empty with a note. The dashboard has a 7D / 30D / 90D / 12M picker kept in `?range=`, keeps the last range on screen while a new one loads, and re-reads live.

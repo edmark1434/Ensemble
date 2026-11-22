@@ -52,7 +52,7 @@ What is actually paused comes from the running automatic punishments. The owner 
 - Not earned by finishing jobs, gigs, or reviews.
 - Not for sale with credits, Premium, or Business.
 - Not a star rating.
-- Teams have no merit ring. The acting user’s merit is what the backend checks.
+- Teams have no merit of their own. The acting user’s merit is what the backend checks. Staff desks show **team merit**: the active members' merit added up as a percentage of 100 each (`lib/TeamMerit.js`, `memberMeritSummary`). Five members at 100 → 100%; one of them at 50 → 450 / 500 = 90%. It is rounded down, so 100% means every member is at 100.
 
 ---
 
