@@ -32,15 +32,15 @@ Every Admin and staff console page, tab, modal and case chat updates on its own 
 
 ## Objective
 
-When staff ban, suspend or lock a team, they choose who else gets the same penalty: the team only, the team leader only, specific members, or all members. Lifting the team lifts team-linked penalties for the chosen scope. See docs/punishment-system.md §8.10.
+When staff ban, suspend or lock a team, they choose who else gets the same penalty: the team leader, specific members, or all members. There is no "team only": a team penalty always reaches people. Lifting the team lifts team-linked penalties for the chosen scope. See docs/punishment-system.md §8.10.
 
 ## Acceptance Criteria
 
-- **Server.** `memberScope` `none` | `leader` (default) | `selected` (+ `memberAccountIds`, active members of the team) | `all` on `PATCH /api/admin/accounts/:accountId/status` and the platform-view action; `includeLeader` still maps to `leader` / `none`. Unknown scope, empty or non-member picks → 422 before anything changes.
+- **Server.** `memberScope` `leader` (default) | `selected` (+ `memberAccountIds`, active members of the team) | `all` on `PATCH /api/admin/accounts/:accountId/status` and the platform-view action; `includeLeader: true` maps to `leader`. `none`, `includeLeader: false`, unknown scope, empty or non-member picks, and `leader` on a team with no active leader → 422 before anything changes.
 - **Guards.** Members already as strict or stricter are skipped. A leader or chosen member staff may not act on stops the whole action; with `all` they are skipped and named.
 - **Lifts.** Only penalties applied together with this team (latest standing change carries `viaTeamAccountId`) are lifted, for members in scope.
 - **Record.** Each member's reason says it came with the team; the team record gets `TEAM_LEADER_STANDING_CHANGED` / `TEAM_MEMBER_STANDING_CHANGED`; the summary lists who changed and who was skipped.
-- **UI.** The team status modal and platform-view dialog show the four choices with a searchable member picker; bulk team actions offer team only / each leader / all members.
+- **UI.** The team status modal and platform-view dialog (admin and every moderator console) show three choice cards tinted with the action's color (leader, specific members, all members), a "Team + N people" count and a searchable member picker with avatars, leader and standing chips; a leaderless team starts on all members. Bulk team actions offer each leader / all members as the same cards.
 
 # Parallel task: no contract workspaces in verification views
 

@@ -9,10 +9,8 @@ type ActionOptions = {
   reason?: string;
   punishmentId?: string;
   customDuration?: boolean;
-  /** Team targets (older flag): also apply the penalty to (or lift it from) the team leader. */
-  includeLeader?: boolean;
-  /** Team targets: who else gets it, or has a team-linked penalty lifted. */
-  memberScope?: 'none' | 'leader' | 'selected' | 'all';
+  /** Team targets: who else gets it, or has a team-linked penalty lifted (never the team alone). */
+  memberScope?: 'leader' | 'selected' | 'all';
   /** With `memberScope: 'selected'`: the chosen active members. */
   memberAccountIds?: string[];
 };
@@ -26,7 +24,6 @@ export async function setAccountStatus(accountId: string, action: string, option
     reason: options?.reason,
     punishmentId: options?.punishmentId,
     customDuration: options?.customDuration,
-    includeLeader: options?.includeLeader,
     memberScope: options?.memberScope,
     memberAccountIds: options?.memberAccountIds,
   });
@@ -253,7 +250,7 @@ export async function runBulkAccountAction(
   kind: 'status' | 'verification',
   action: string,
   reason?: string,
-  extra?: { memberScope?: 'none' | 'leader' | 'all' }
+  extra?: { memberScope?: 'leader' | 'all' }
 ) {
   let ok = 0;
   let failed = 0;

@@ -135,9 +135,8 @@ export type AccountActionInput = {
   customDuration?: boolean;
   duration?: "temporary" | "permanent";
   endsAt?: string | null;
-  includeLeader?: boolean;
-  /** Team targets: who else gets it (none | leader | selected | all). */
-  memberScope?: "none" | "leader" | "selected" | "all";
+  /** Team targets: who else gets it (leader | selected | all; never the team alone). */
+  memberScope?: "leader" | "selected" | "all";
   memberAccountIds?: string[];
 };
 

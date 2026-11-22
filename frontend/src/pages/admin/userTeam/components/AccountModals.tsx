@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { AlertTriangle, Download, ExternalLink, X } from 'lucide-react';
+import { AlertTriangle, Crown, Download, ExternalLink, Users, X } from 'lucide-react';
 import api from '@/lib/axios';
 import { useStaffLive } from '@/lib/staffLive';
 import { showErrorToast } from '@/components/utility/toast';
@@ -35,9 +35,11 @@ import { StaffPunishmentChips, type MeritPenaltyLike } from '@/components/accoun
 import { PunishmentPresetFields } from './PunishmentPresetFields';
 import {
   TeamMemberScopeFields,
+  TeamScopeOptionCard,
   defaultTeamScope,
   teamScopeReady,
   teamScopeRequest,
+  teamScopeTone,
   type TeamMemberScope,
   type TeamScopeMember,
   type TeamScopeValue,
@@ -645,17 +647,43 @@ export function BulkConfirmModal({
   const [bulkScope, setBulkScope] = useState<Exclude<TeamMemberScope, 'selected'>>(
     memberScopeOption?.mode === 'lift' ? 'all' : 'leader'
   );
-  const bulkScopeChoices: { id: Exclude<TeamMemberScope, 'selected'>; label: string; hint: string }[] = memberScopeOption
+  const bulkTone = memberScopeOption
+    ? teamScopeTone(memberScopeOption.mode, SANCTION_RESULT[memberScopeOption.verb])
+    : 'rose';
+  const bulkScopeChoices: {
+    id: Exclude<TeamMemberScope, 'selected'>;
+    icon: typeof Crown;
+    label: string;
+    hint: string;
+  }[] = memberScopeOption
     ? memberScopeOption.mode === 'apply'
       ? [
-          { id: 'none', label: 'Teams only', hint: 'Member accounts stay as they are.' },
-          { id: 'leader', label: `Also ${memberScopeOption.verb} each team's leader`, hint: 'Teams with no leader change alone.' },
-          { id: 'all', label: `Also ${memberScopeOption.verb} every member of each team`, hint: 'The leader included. Accounts you may not act on are skipped.' },
+          {
+            id: 'leader',
+            icon: Crown,
+            label: "Each team's leader",
+            hint: 'A team with no active leader is left unchanged and listed as failed.',
+          },
+          {
+            id: 'all',
+            icon: Users,
+            label: 'Every member of each team',
+            hint: 'Leaders included. Accounts you may not act on are skipped.',
+          },
         ]
       : [
-          { id: 'none', label: 'Teams only', hint: 'Member penalties stay as they are.' },
-          { id: 'leader', label: 'Also lift leaders’ team penalties', hint: 'Only a penalty set together with the team is lifted.' },
-          { id: 'all', label: 'Also lift every member’s team penalty', hint: 'Only penalties set together with the team are lifted; others stay.' },
+          {
+            id: 'leader',
+            icon: Crown,
+            label: "Each team's leader",
+            hint: 'Lifted only if their penalty was set together with the team.',
+          },
+          {
+            id: 'all',
+            icon: Users,
+            label: 'Every member of each team',
+            hint: 'Only penalties set together with the team are lifted; others stay.',
+          },
         ]
     : [];
 
@@ -701,27 +729,39 @@ export function BulkConfirmModal({
         This runs the same action on every highlighted row. Accounts that fail individually will be
         reported without blocking the rest.
       </p>
-      {bulkScopeChoices.length ? (
-        <div className="mt-4 space-y-1.5 rounded-xl border border-white/[0.08] bg-white/[0.02] p-3">
-          {bulkScopeChoices.map((choice) => (
-            <label key={choice.id} className="flex cursor-pointer items-start gap-3 text-sm text-zinc-200">
-              <input
-                type="radio"
+      {bulkScopeChoices.length && memberScopeOption ? (
+        <section className="mt-4 overflow-hidden rounded-2xl border border-white/[0.08] bg-white/[0.02]">
+          <header className="border-b border-white/[0.06] px-4 py-3">
+            <p className="text-sm font-semibold text-white">
+              {memberScopeOption.mode === 'apply'
+                ? `${memberScopeOption.verb.charAt(0).toUpperCase()}${memberScopeOption.verb.slice(1)} with each team`
+                : 'Lift member penalties too'}
+            </p>
+            <p className="mt-0.5 text-[11px] text-zinc-500">
+              {memberScopeOption.mode === 'apply'
+                ? 'Every team account gets it. Choose the people who answer for each team.'
+                : 'Every team is restored. Choose whose team-linked penalty ends with it.'}
+            </p>
+          </header>
+          <div role="radiogroup" aria-label="Who else in each team" className="grid gap-2 p-3 sm:grid-cols-2">
+            {bulkScopeChoices.map((choice) => (
+              <TeamScopeOptionCard
+                key={choice.id}
                 name="bulk-team-member-scope"
                 checked={bulkScope === choice.id}
-                onChange={() => setBulkScope(choice.id)}
-                className="mt-0.5 h-4 w-4 border-white/20 bg-transparent accent-rose-500"
+                onSelect={() => setBulkScope(choice.id)}
+                icon={choice.icon}
+                title={choice.label}
+                hint={choice.hint}
+                tone={bulkTone}
+                layout="tile"
               />
-              <span>
-                <span className="font-medium text-white">{choice.label}</span>
-                <span className="mt-0.5 block text-xs text-zinc-500">{choice.hint}</span>
-              </span>
-            </label>
-          ))}
-          <p className="pt-1 text-xs text-zinc-500">
+            ))}
+          </div>
+          <p className="border-t border-white/[0.06] px-4 py-2.5 text-[11px] text-zinc-500">
             Members already at the same or a stricter standing are left as they are. To pick specific members, act on one team at a time.
           </p>
-        </div>
+        </section>
       ) : null}
       {requireReason ? (
         <label className="mt-4 block text-sm text-zinc-300">

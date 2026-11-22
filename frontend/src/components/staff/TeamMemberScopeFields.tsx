@@ -1,7 +1,11 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type ComponentType } from 'react';
+import { Check, Crown, Info, ListChecks, Search, Users } from 'lucide-react';
 
-/** Who besides the team account a team ban / suspend / lock (or its lift) reaches. */
-export type TeamMemberScope = 'none' | 'leader' | 'selected' | 'all';
+/**
+ * Who besides the team account a team ban / suspend / lock (or its lift) reaches. A team penalty
+ * always reaches people: there is no "team only" choice (the server refuses one too).
+ */
+export type TeamMemberScope = 'leader' | 'selected' | 'all';
 export type TeamScopeValue = { scope: TeamMemberScope; memberAccountIds: string[] };
 export type TeamScopeMember = {
   accountId: string;
@@ -12,18 +16,65 @@ export type TeamScopeMember = {
   status?: string | null;
 };
 type ScopeLeader = { accountId: string; name: string; status?: string | null } | null | undefined;
+export type ScopeTone = 'rose' | 'amber' | 'zinc' | 'emerald';
 
 /** Higher is stricter; a member already at the same or a stricter standing is left alone. */
 const SEVERITY: Record<string, number> = { active: 0, deactivated: 0, suspended: 1, locked: 2, banned: 3 };
+
+/** Literal class strings per tone, so Tailwind keeps them. Matches each action's confirm button. */
+const TONES: Record<ScopeTone, { card: string; iconBox: string; icon: string; check: string; row: string; badge: string }> = {
+  rose: {
+    card: 'border-rose-400/45 bg-rose-500/[0.07]',
+    iconBox: 'bg-rose-500/15',
+    icon: 'text-rose-300',
+    check: 'border-rose-400 bg-rose-500 text-white',
+    row: 'border-rose-400/25 bg-rose-500/[0.06]',
+    badge: 'border-rose-400/30 bg-rose-500/10 text-rose-200',
+  },
+  amber: {
+    card: 'border-amber-400/45 bg-amber-500/[0.07]',
+    iconBox: 'bg-amber-500/15',
+    icon: 'text-amber-300',
+    check: 'border-amber-400 bg-amber-500 text-zinc-950',
+    row: 'border-amber-400/25 bg-amber-500/[0.06]',
+    badge: 'border-amber-400/30 bg-amber-500/10 text-amber-200',
+  },
+  zinc: {
+    card: 'border-white/35 bg-white/[0.06]',
+    iconBox: 'bg-white/10',
+    icon: 'text-zinc-100',
+    check: 'border-white bg-white text-zinc-900',
+    row: 'border-white/20 bg-white/[0.05]',
+    badge: 'border-white/20 bg-white/[0.06] text-zinc-200',
+  },
+  emerald: {
+    card: 'border-emerald-400/45 bg-emerald-500/[0.07]',
+    iconBox: 'bg-emerald-500/15',
+    icon: 'text-emerald-300',
+    check: 'border-emerald-400 bg-emerald-500 text-zinc-950',
+    row: 'border-emerald-400/25 bg-emerald-500/[0.06]',
+    badge: 'border-emerald-400/30 bg-emerald-500/10 text-emerald-200',
+  },
+};
+
+export function teamScopeTone(mode: 'apply' | 'lift', targetStatus?: 'banned' | 'suspended' | 'locked'): ScopeTone {
+  if (mode === 'lift') return 'emerald';
+  if (targetStatus === 'banned') return 'rose';
+  if (targetStatus === 'locked') return 'zinc';
+  return 'amber';
+}
 
 function standingOf(status: string | null | undefined) {
   return String(status || 'active').toLowerCase();
 }
 
-/** Sanctions reach the leader by default; lifts reach every member whose penalty came with the team. */
+/**
+ * Sanctions reach the leader by default (every member when the team has no leader); lifts reach
+ * every member whose penalty came with the team.
+ */
 export function defaultTeamScope(mode: 'apply' | 'lift', leader: ScopeLeader): TeamScopeValue {
-  if (mode === 'lift') return { scope: 'all', memberAccountIds: [] };
-  return { scope: leader ? 'leader' : 'none', memberAccountIds: [] };
+  if (mode === 'lift' || !leader) return { scope: 'all', memberAccountIds: [] };
+  return { scope: 'leader', memberAccountIds: [] };
 }
 
 export function teamScopeReady(value: TeamScopeValue) {
@@ -37,6 +88,95 @@ export function teamScopeRequest(value: TeamScopeValue) {
     memberAccountIds: value.scope === 'selected' ? value.memberAccountIds : undefined,
   };
 }
+
+/** One selectable card in a scope radio group. Shared with the bulk team action dialog. */
+export function TeamScopeOptionCard({
+  name,
+  checked,
+  disabled = false,
+  onSelect,
+  icon: Icon,
+  title,
+  hint,
+  tone,
+  layout = 'row',
+}: {
+  name: string;
+  checked: boolean;
+  disabled?: boolean;
+  onSelect: () => void;
+  icon: ComponentType<{ className?: string }>;
+  title: string;
+  hint: string;
+  tone: ScopeTone;
+  /** `tile` stacks icon, title and hint for a grid of cards; `row` lays them out in one line. */
+  layout?: 'row' | 'tile';
+}) {
+  const t = TONES[tone];
+  const check = (
+    <span
+      aria-hidden
+      className={`flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full border transition-colors ${
+        checked ? t.check : 'border-white/20'
+      }`}
+    >
+      {checked ? <Check className="h-3 w-3" strokeWidth={3} /> : null}
+    </span>
+  );
+  const icon = (
+    <span
+      className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition-colors ${
+        checked ? t.iconBox : 'bg-white/[0.05]'
+      }`}
+    >
+      <Icon className={`h-4 w-4 ${checked ? t.icon : 'text-zinc-400'}`} />
+    </span>
+  );
+  return (
+    <label
+      className={`relative flex rounded-xl border p-3 transition-colors has-[input:focus-visible]:ring-2 has-[input:focus-visible]:ring-white/25 ${
+        layout === 'tile' ? 'flex-col gap-2' : 'items-center gap-3'
+      } ${checked ? t.card : 'border-white/[0.08] bg-white/[0.015]'} ${
+        disabled ? 'cursor-not-allowed opacity-45' : checked ? 'cursor-pointer' : 'cursor-pointer hover:border-white/[0.18] hover:bg-white/[0.035]'
+      }`}
+    >
+      <input type="radio" name={name} checked={checked} disabled={disabled} onChange={onSelect} className="sr-only" />
+      {layout === 'tile' ? (
+        <>
+          <span className="flex items-center justify-between">
+            {icon}
+            {check}
+          </span>
+          <span className="block text-sm font-semibold text-white">{title}</span>
+          <span className="block text-[11px] leading-snug text-zinc-500">{hint}</span>
+        </>
+      ) : (
+        <>
+          {icon}
+          <span className="min-w-0 flex-1">
+            <span className="block text-sm font-semibold text-white">{title}</span>
+            <span className="mt-0.5 block text-[11px] leading-snug text-zinc-500">{hint}</span>
+          </span>
+          {check}
+        </>
+      )}
+    </label>
+  );
+}
+
+function MemberInitial({ name }: { name: string }) {
+  return (
+    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/[0.07] text-xs font-bold uppercase text-zinc-200">
+      {(name || '?').charAt(0)}
+    </span>
+  );
+}
+
+const STATUS_CHIP: Record<string, string> = {
+  banned: 'border-rose-400/30 bg-rose-500/10 text-rose-200',
+  locked: 'border-white/20 bg-white/[0.06] text-zinc-200',
+  suspended: 'border-amber-400/30 bg-amber-500/10 text-amber-200',
+};
 
 export function TeamMemberScopeFields({
   mode,
@@ -58,22 +198,24 @@ export function TeamMemberScopeFields({
   members: TeamScopeMember[];
   value: TeamScopeValue;
   onChange: (next: TeamScopeValue) => void;
+  /** Narrow dialogs: one card per row. */
   dense?: boolean;
 }) {
   const [query, setQuery] = useState('');
-  const text = dense ? 'text-xs' : 'text-sm';
-  const hint = dense ? 'text-[11px]' : 'text-xs';
+  const tone = teamScopeTone(mode, targetStatus);
+  const t = TONES[tone];
   const leaderId = leader?.accountId ? String(leader.accountId) : null;
 
-  const alreadyStrict = (member: TeamScopeMember) =>
+  const alreadyStrict = (member: { status?: string | null }) =>
     mode === 'apply' && targetStatus
       ? (SEVERITY[standingOf(member.status)] ?? 0) >= SEVERITY[targetStatus]
       : false;
-  const eligibleCount = members.filter((member) => !alreadyStrict(member)).length;
+  const eligible = members.filter((member) => !alreadyStrict(member));
+  const strictCount = members.length - eligible.length;
   const leaderStrict = Boolean(leader && alreadyStrict(leader));
 
   const filtered = useMemo(() => {
-    const term = query.trim().toLowerCase();
+    const term = query.trim().toLowerCase().replace(/^@/, '');
     if (!term) return members;
     return members.filter((member) =>
       [member.name, member.handle, member.role].some((part) => String(part || '').toLowerCase().includes(term))
@@ -81,155 +223,228 @@ export function TeamMemberScopeFields({
   }, [members, query]);
 
   const picked = new Set(value.memberAccountIds);
+  const pickedCount = members.filter((member) => picked.has(member.accountId) && !alreadyStrict(member)).length;
   const setPicked = (ids: Iterable<string>) => onChange({ scope: 'selected', memberAccountIds: [...new Set(ids)] });
 
-  const options: { id: TeamMemberScope; label: string; hint: string; disabled?: boolean }[] = [
-    {
-      id: 'none',
-      label: 'Team only',
-      hint: 'Member accounts stay as they are.',
-    },
+  /** How many people besides the team the current choice changes (apply only). */
+  const reach =
+    value.scope === 'leader' ? (leader && !leaderStrict ? 1 : 0) : value.scope === 'all' ? eligible.length : pickedCount;
+  const verbTitle = verb.charAt(0).toUpperCase() + verb.slice(1);
+
+  const options: { id: TeamMemberScope; icon: ComponentType<{ className?: string }>; title: string; hint: string; disabled?: boolean }[] = [
     {
       id: 'leader',
-      label: leader ? `Team leader only, ${leader.name}` : 'Team leader only',
+      icon: Crown,
+      title: 'Team leader',
       hint: !leader
         ? 'This team has no active leader.'
-        : mode === 'apply'
-          ? leaderStrict
-            ? `${leader.name} is already ${standingOf(leader.status)}, so their account stays as it is.`
-            : 'The leader answers for the team. Their personal account gets the same penalty and length.'
-          : 'Lifts the leader’s penalty if it was set together with this team.',
+        : mode === 'lift'
+          ? `${leader.name}, if their penalty was set with the team.`
+          : leaderStrict
+            ? `${leader.name} is already ${standingOf(leader.status)}, so stays as is.`
+            : `${leader.name} answers for the team.`,
       disabled: !leader,
     },
     {
       id: 'selected',
-      label: 'Specific members',
-      hint: members.length ? 'Pick who gets it below.' : 'This team has no active members.',
+      icon: ListChecks,
+      title: 'Specific members',
+      hint: !members.length
+        ? 'No active members to pick.'
+        : value.scope === 'selected'
+          ? `${pickedCount} picked below.`
+          : 'Choose exactly who from the roster.',
       disabled: !members.length,
     },
     {
       id: 'all',
-      label: `All members (${members.length})`,
-      hint:
-        mode === 'apply'
-          ? `Every active member, the leader included${
-              eligibleCount < members.length ? `; ${members.length - eligibleCount} already as strict or stricter stay as they are` : ''
-            }. Accounts you may not act on are skipped.`
-          : 'Every active member whose penalty was set together with this team.',
+      icon: Users,
+      title: `All members${members.length ? ` (${members.length})` : ''}`,
+      hint: !members.length
+        ? 'No active members.'
+        : mode === 'lift'
+          ? 'Everyone whose penalty was set with the team.'
+          : strictCount
+            ? `Leader included. ${strictCount} already as strict stay as is.`
+            : 'Every active member, leader included.',
       disabled: !members.length,
     },
   ];
 
+  const nobody = !leader && !members.length;
+
   return (
-    <div className={`rounded-xl border border-white/[0.08] bg-white/[0.02] ${dense ? 'p-2.5' : 'p-3'}`}>
-      <p className={`${hint} font-semibold uppercase tracking-wide text-zinc-500`}>
-        {mode === 'apply' ? `Who else to ${verb}` : 'Also lift member penalties for'}
-      </p>
-      <div className="mt-2 space-y-1.5">
-        {options.map((option) => (
-          <label
-            key={option.id}
-            className={`flex items-start gap-2.5 ${text} ${option.disabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'} text-zinc-200`}
-          >
-            <input
-              type="radio"
+    <section className="overflow-hidden rounded-2xl border border-white/[0.08] bg-white/[0.02]">
+      <header className={`flex items-start justify-between gap-3 border-b border-white/[0.06] ${dense ? 'px-3 py-2.5' : 'px-4 py-3'}`}>
+        <div className="flex min-w-0 items-start gap-2.5">
+          <span className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${t.iconBox}`}>
+            <Users className={`h-3.5 w-3.5 ${t.icon}`} />
+          </span>
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-white">
+              {mode === 'apply' ? `${verbTitle} with the team` : 'Lift member penalties too'}
+            </p>
+            <p className="mt-0.5 text-[11px] leading-snug text-zinc-500">
+              {mode === 'apply'
+                ? 'The team account always gets it. Choose the people who answer for it.'
+                : 'The team is restored. Choose whose team-linked penalty ends with it.'}
+            </p>
+          </div>
+        </div>
+        {mode === 'apply' && !nobody ? (
+          <span className={`shrink-0 rounded-full border px-2.5 py-0.5 text-[11px] font-medium tabular-nums ${t.badge}`}>
+            Team + {reach} {reach === 1 ? 'person' : 'people'}
+          </span>
+        ) : null}
+      </header>
+
+      {nobody ? (
+        <p className={`flex items-start gap-2 text-xs text-zinc-400 ${dense ? 'p-3' : 'px-4 py-3'}`}>
+          <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-zinc-500" />
+          This team has no active leader or members, so only the team account changes.
+        </p>
+      ) : (
+        <div
+          role="radiogroup"
+          aria-label={mode === 'apply' ? `Who else to ${verb}` : 'Whose penalties to lift'}
+          className={`grid gap-2 ${dense ? 'p-2.5' : 'p-3 sm:grid-cols-3'}`}
+        >
+          {options.map((option) => (
+            <TeamScopeOptionCard
+              key={option.id}
               name="team-member-scope"
               checked={value.scope === option.id}
               disabled={option.disabled}
-              onChange={() => onChange({ scope: option.id, memberAccountIds: option.id === 'selected' ? value.memberAccountIds : [] })}
-              className="mt-0.5 h-4 w-4 border-white/20 bg-transparent accent-rose-500"
+              onSelect={() =>
+                onChange({ scope: option.id, memberAccountIds: option.id === 'selected' ? value.memberAccountIds : [] })
+              }
+              icon={option.icon}
+              title={option.title}
+              hint={option.hint}
+              tone={tone}
+              layout={dense ? 'row' : 'tile'}
             />
-            <span>
-              <span className="font-medium text-white">{option.label}</span>
-              <span className={`mt-0.5 block ${hint} text-zinc-500`}>{option.hint}</span>
-            </span>
-          </label>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
 
       {value.scope === 'selected' && members.length ? (
-        <div className="mt-3 rounded-lg border border-white/[0.08] bg-black/20 p-2">
+        <div className={`border-t border-white/[0.06] ${dense ? 'p-2.5' : 'px-3 pb-3 pt-3'}`}>
           <div className="flex flex-wrap items-center gap-2">
-            {members.length > 6 ? (
+            <div className="relative min-w-[160px] flex-1">
+              <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-500" />
               <input
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
-                placeholder="Search members"
-                className={`min-w-0 flex-1 rounded-lg border border-white/10 bg-transparent px-2 py-1 ${hint} text-white outline-none placeholder:text-zinc-600 focus:border-sky-400/50`}
+                placeholder="Search name, @handle or role"
+                aria-label="Search team members"
+                className="w-full rounded-lg border border-white/10 bg-black/25 py-1.5 pl-8 pr-2.5 text-xs text-white outline-none placeholder:text-zinc-600 focus:border-white/25"
               />
-            ) : (
-              <span className={`flex-1 ${hint} text-zinc-500`}>{picked.size} picked</span>
-            )}
+            </div>
             <button
               type="button"
               onClick={() => setPicked([...picked, ...filtered.filter((member) => !alreadyStrict(member)).map((member) => member.accountId)])}
-              className={`rounded-md border border-white/10 px-2 py-0.5 ${hint} text-zinc-300 hover:bg-white/[0.05]`}
+              className="rounded-lg border border-white/10 px-2.5 py-1.5 text-xs text-zinc-300 transition-colors hover:bg-white/[0.05] hover:text-white"
             >
-              Pick {query.trim() ? 'shown' : 'all'}
+              Select {query.trim() ? 'shown' : 'all'}
             </button>
             <button
               type="button"
               onClick={() => setPicked([])}
-              className={`rounded-md border border-white/10 px-2 py-0.5 ${hint} text-zinc-300 hover:bg-white/[0.05]`}
+              disabled={!picked.size}
+              className="rounded-lg border border-white/10 px-2.5 py-1.5 text-xs text-zinc-300 transition-colors hover:bg-white/[0.05] hover:text-white disabled:opacity-40"
             >
               Clear
             </button>
           </div>
-          <ul className="mt-2 max-h-48 space-y-0.5 overflow-y-auto pr-1">
+
+          <ul className="scroll-thin mt-2 max-h-60 space-y-1 overflow-y-auto pr-1">
             {filtered.map((member) => {
               const strict = alreadyStrict(member);
               const status = standingOf(member.status);
               const isLeader = leaderId === String(member.accountId);
+              const checked = !strict && picked.has(member.accountId);
               return (
                 <li key={member.accountId}>
                   <label
-                    className={`flex items-center gap-2 rounded-md px-1.5 py-1 ${text} ${
-                      strict ? 'cursor-not-allowed opacity-50' : 'cursor-pointer hover:bg-white/[0.03]'
-                    }`}
+                    className={`flex items-center gap-3 rounded-xl border px-2.5 py-2 transition-colors has-[input:focus-visible]:ring-2 has-[input:focus-visible]:ring-white/25 ${
+                      checked ? t.row : 'border-transparent'
+                    } ${strict ? 'cursor-not-allowed opacity-50' : checked ? 'cursor-pointer' : 'cursor-pointer hover:bg-white/[0.03]'}`}
                   >
                     <input
                       type="checkbox"
                       disabled={strict}
-                      checked={!strict && picked.has(member.accountId)}
+                      checked={checked}
                       onChange={(event) => {
                         const next = new Set(picked);
                         if (event.target.checked) next.add(member.accountId);
                         else next.delete(member.accountId);
                         setPicked(next);
                       }}
-                      className="h-4 w-4 rounded border-white/20 bg-transparent accent-rose-500"
+                      className="sr-only"
                     />
-                    <span className="min-w-0 flex-1 truncate text-zinc-200">
-                      {member.name}
-                      {member.handle ? <span className="text-zinc-500"> @{member.handle}</span> : null}
+                    <span
+                      aria-hidden
+                      className={`flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-md border transition-colors ${
+                        checked ? t.check : 'border-white/20'
+                      }`}
+                    >
+                      {checked ? <Check className="h-3 w-3" strokeWidth={3} /> : null}
                     </span>
-                    {isLeader || member.role ? (
-                      <span className={`${hint} text-zinc-500`}>{isLeader ? 'Leader' : member.role}</span>
+                    <MemberInitial name={member.name} />
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm text-zinc-100">{member.name}</span>
+                      <span className="block truncate text-[11px] text-zinc-500">
+                        {member.handle ? `@${member.handle}` : 'No handle'}
+                        {!isLeader && member.role ? ` · ${member.role}` : ''}
+                      </span>
+                    </span>
+                    {isLeader ? (
+                      <span className="flex shrink-0 items-center gap-1 rounded-full border border-amber-300/25 bg-amber-400/10 px-2 py-0.5 text-[10px] font-medium text-amber-200">
+                        <Crown className="h-3 w-3" />
+                        Leader
+                      </span>
                     ) : null}
                     {status !== 'active' ? (
-                      <span className={`rounded-full border border-white/10 px-1.5 ${hint} capitalize text-zinc-300`}>
-                        {strict ? `already ${status}` : status}
+                      <span
+                        className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] capitalize ${
+                          STATUS_CHIP[status] || 'border-white/10 text-zinc-300'
+                        }`}
+                      >
+                        {strict ? `Already ${status}` : status}
                       </span>
                     ) : null}
                   </label>
                 </li>
               );
             })}
-            {!filtered.length ? <li className={`px-1.5 py-1 ${hint} text-zinc-500`}>No member matches.</li> : null}
+            {!filtered.length ? (
+              <li className="px-2.5 py-4 text-center text-xs text-zinc-500">No member matches “{query.trim()}”.</li>
+            ) : null}
           </ul>
-          {!picked.size ? <p className={`mt-1 ${hint} text-amber-300`}>Pick at least one member.</p> : null}
+
+          <div className="mt-2 flex items-center justify-between gap-2 text-[11px]">
+            <span className="tabular-nums text-zinc-500">
+              {pickedCount} of {eligible.length} picked
+              {strictCount ? ` · ${strictCount} already as strict` : ''}
+            </span>
+            {!pickedCount ? <span className="text-amber-300">Pick at least one member.</span> : null}
+          </div>
         </div>
       ) : null}
 
-      {mode === 'lift' && value.scope !== 'none' ? (
-        <p className={`mt-2 ${hint} text-zinc-500`}>
-          Only penalties set together with this team are lifted. Other member penalties stay; change them from the Users tab.
-        </p>
-      ) : mode === 'apply' && value.scope !== 'none' ? (
-        <p className={`mt-2 ${hint} text-zinc-500`}>
-          Each member gets the same penalty and length, and the reason tells them it came with the team.
+      {!nobody ? (
+        <p
+          className={`flex items-start gap-2 border-t border-white/[0.06] text-[11px] leading-snug text-zinc-500 ${
+            dense ? 'px-3 py-2' : 'px-4 py-2.5'
+          }`}
+        >
+          <Info className="mt-px h-3.5 w-3.5 shrink-0 text-zinc-600" />
+          {mode === 'apply'
+            ? 'Each person gets the same penalty and length, and their reason says it came with the team. Accounts you may not act on stop the action, except with All members, where they are skipped.'
+            : 'Only penalties set together with this team are lifted. Other member penalties stay; change them from the Users tab.'}
         </p>
       ) : null}
-    </div>
+    </section>
   );
 }

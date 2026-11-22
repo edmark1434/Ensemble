@@ -105,7 +105,7 @@ export function PlatformModerationActionDialog({
     setError(null);
   }, [accountAction, accountId]);
 
-  // A different team starts from its own default (its leader, or the team only).
+  // A different team starts from its own default (its leader, or every member when it has none).
   useEffect(() => {
     setMemberScope(defaultTeamScope("apply", leader));
   }, [accountId, leader?.accountId]); // eslint-disable-line react-hooks/exhaustive-deps

@@ -5,10 +5,12 @@
  *  - Warnings and forum timeouts go to the team's leader (active Owner). Teams have no Platform
  *    Merit and never post in the forums. The team's record lists them (`violations.team_account_id`).
  *  - Ban / suspend / lock change the team account. `memberScope` says who else gets the same
- *    penalty: `none` (team only), `leader` (default), `selected` (`memberAccountIds`, active
- *    members of this team) or `all` active members. A member already at the same or a stricter
- *    standing is left alone. A leader or chosen member staff may not act on stops the whole action
- *    before anything changes; with `all` such members are skipped and named in the summary.
+ *    penalty: `leader` (default), `selected` (`memberAccountIds`, active members of this team) or
+ *    `all` active members. There is no "team only": a team penalty always reaches people, so
+ *    `none` (or `includeLeader: false`) is refused, as is staff picking `leader` for a team with no
+ *    active leader. A member already at the same or a stricter standing is left alone. A leader or
+ *    chosen member staff may not act on stops the whole action before anything changes; with
+ *    `all` such members are skipped and named in the summary.
  *  - Lifting the team's penalty also lifts the penalty of each member in scope when it was applied
  *    together with this team and is still that member's current penalty.
  *  - Team Owners and Admins are told; the team page refreshes live.
@@ -66,24 +68,27 @@ function leaderOf(team) {
   };
 }
 
-const MEMBER_SCOPES = new Set(['none', 'leader', 'selected', 'all']);
+const MEMBER_SCOPES = new Set(['leader', 'selected', 'all']);
 const MAX_CHOSEN_MEMBERS = 500;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const SCOPE_REQUIRED_MESSAGE =
+  'A team penalty always reaches people. Pick the team leader, specific members or all members.';
 
 /**
- * Who besides the team account the action reaches. `explicit` is false only for the old default
- * (no `memberScope`, no `includeLeader`), which stays quiet about members it leaves alone.
- * The older `includeLeader` flag maps to `leader` / `none`.
+ * Who besides the team account the action reaches. `explicit` is false only for the internal
+ * default (no `memberScope`, no `includeLeader`: report decisions, dispute bans, appeal
+ * follow-ups), which reaches the leader and stays quiet about members it leaves alone.
+ * The older `includeLeader: true` flag maps to `leader`; `false` asked for the team only and is refused.
  */
 function memberScopeOf(options) {
   const raw = String(options.memberScope || '').trim().toLowerCase();
   if (raw) {
-    if (!MEMBER_SCOPES.has(raw)) {
-      throw sanctionError('Pick who else this reaches: the team only, its leader, chosen members or all members.', 422, 'TEAM_MEMBER_SCOPE_INVALID');
-    }
+    if (!MEMBER_SCOPES.has(raw)) throw sanctionError(SCOPE_REQUIRED_MESSAGE, 422, 'TEAM_MEMBER_SCOPE_INVALID');
     return { scope: raw, explicit: true };
   }
-  if (options.includeLeader === false || options.includeLeader === 'false') return { scope: 'none', explicit: true };
+  if (options.includeLeader === false || options.includeLeader === 'false') {
+    throw sanctionError(SCOPE_REQUIRED_MESSAGE, 422, 'TEAM_MEMBER_SCOPE_INVALID');
+  }
   return { scope: 'leader', explicit: options.includeLeader === true || options.includeLeader === 'true' };
 }
 
@@ -98,7 +103,6 @@ function chosenMemberIds(value) {
 
 /** The people in scope, each with their own standing. The leader is marked. */
 async function memberTargetsFor(team, leader, scope, memberAccountIds) {
-  if (scope === 'none') return [];
   if (scope === 'leader') return leader ? [{ ...leader, isLeader: true }] : [];
   const members = (await TeamsRepositories.listTeamMemberStandings(team.account_id)).map((row) => ({
     accountId: String(row.account_id),
@@ -160,7 +164,7 @@ function describeMemberResults(results, { scope, explicit, isLift, targetCount }
   if (failed.length) {
     parts.push(`Could not ${isLift ? 'lift' : 'update'} ${nameList(failed)}: ${failed[0].message}`);
   }
-  if (isLift && explicit && !parts.length && targetCount && scope !== 'none') {
+  if (isLift && explicit && !parts.length && targetCount) {
     parts.push('No member in scope had a penalty set together with this team, so member accounts stay as they are.');
   }
   return parts;
@@ -281,7 +285,11 @@ async function changeTeamStanding(teamAccount, key, staffId, options = {}) {
 
   const target = SANCTION_TARGET[key] || null;
   const isLift = Object.prototype.hasOwnProperty.call(LIFT_FROM, key);
-  const { scope, explicit } = target || isLift ? memberScopeOf(options) : { scope: 'none', explicit: false };
+  const { scope, explicit } = target || isLift ? memberScopeOf(options) : { scope: null, explicit: false };
+  // Staff who pick the leader of a leaderless team would otherwise change the team alone.
+  if (target && explicit && scope === 'leader' && !leader) {
+    throw sanctionError('This team has no active leader. Pick specific members or all members instead.', 422, 'TEAM_NO_LEADER');
+  }
   const targets = target || isLift ? await memberTargetsFor(team, leader, scope, options.memberAccountIds) : [];
   const { assertCanSanctionTarget } = require('../lib/SuspendGuards');
   // Checked before the team changes, so a refused leader or chosen member never leaves a
@@ -298,7 +306,9 @@ async function changeTeamStanding(teamAccount, key, staffId, options = {}) {
     } catch (err) {
       if (scope === 'all') return { ...member, applied: false, skipped: 'not_allowed', message: err.message };
       throw sanctionError(
-        `${err.message} (${member.isLeader ? 'the team leader' : member.name}). Leave them out to act on the team${scope === 'selected' ? ' and the other members' : ' only'}.`,
+        `${err.message} (${member.isLeader ? 'the team leader' : member.name}). ${
+          scope === 'selected' ? 'Leave them out of the chosen members' : 'Pick specific members instead'
+        }.`,
         err.statusCode || 403
       );
     }
