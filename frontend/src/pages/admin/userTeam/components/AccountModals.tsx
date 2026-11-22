@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
+import BanClosedItemsPanel from './BanClosedItemsPanel';
 import {
   AlertTriangle,
   ArrowRight,
@@ -387,6 +388,8 @@ export function ConfirmStatusModal({
     /** Team targets: who else gets it (or has a team-linked penalty lifted). */
     memberScope?: TeamMemberScope;
     memberAccountIds?: string[];
+    /** Unban / restore: also put back what the ban closed. */
+    restoreBanItems?: boolean;
   }) => Promise<void>;
   /** Team targets: the team acts as one account; staff pick which members share the penalty. */
   team?: { leader: TeamLeader | null; members?: TeamMember[] };
@@ -394,6 +397,9 @@ export function ConfirmStatusModal({
   const [saving, setSaving] = useState(false);
   const [reason, setReason] = useState('');
   const [reasonError, setReasonError] = useState('');
+  // Lifting a ban puts back what it closed unless staff untick it (only acts on a banned account).
+  const offersBanRestore = action === 'unban' || action === 'restore';
+  const [restoreBanItems, setRestoreBanItems] = useState(action === 'unban');
   const isTeam = Boolean(team);
   const leader = team?.leader ?? null;
   const scopeMode = isTeam ? teamScopeMode(action) : null;
@@ -482,7 +488,7 @@ export function ConfirmStatusModal({
     timeout: 'Teams never post in the forums, so the timeout goes on each person you pick and is listed on the team’s record. The team account and the rest of Ensemble stay open for them.',
     clear_timeout: 'Ends the forum timeouts that were set together with this team. Timeouts a member got on their own stay; clear those from the Users tab.',
     restore: 'The team gets its normal features back.',
-    unban: 'The team gets its normal features back. Closed jobs, gigs and listings stay closed; the team reposts them.',
+    unban: 'The team gets its normal features back. Tick below to also put back the jobs, gigs and listings the ban closed.',
     unsuspend: 'The team gets its normal features back.',
     unlock: 'The team gets its normal features back.',
   };
@@ -535,6 +541,7 @@ export function ConfirmStatusModal({
                   punishmentId: choosesCatalog ? punishmentId : undefined,
                   customDuration: choosesCatalog ? customDuration : undefined,
                   ...(scopeMode ? teamScopeRequest(memberScope) : {}),
+                  ...(offersBanRestore ? { restoreBanItems } : {}),
                 });
                 onClose();
               } catch (err) {
@@ -664,6 +671,24 @@ export function ConfirmStatusModal({
           onChange={setTiming}
         />
       )}
+      {offersBanRestore ? (
+        <label className="mt-4 flex items-start gap-2 rounded-xl border border-emerald-500/20 bg-emerald-500/[0.05] px-3 py-2.5 text-sm text-zinc-200">
+          <input
+            type="checkbox"
+            checked={restoreBanItems}
+            onChange={(event) => setRestoreBanItems(event.target.checked)}
+            className="mt-0.5 rounded border-white/20 bg-transparent"
+          />
+          <span>
+            Restore what the ban closed
+            <span className="block text-xs text-zinc-400">
+              Jobs, gigs and marketplace listings go back exactly as they were, unless they changed since or their
+              application window ended. Withdrawn proposals, offers and orders cannot come back. Only applies if the
+              account is banned.
+            </span>
+          </span>
+        </label>
+      ) : null}
       <label className="mt-4 block text-sm text-zinc-300">
         Reason
         <textarea
@@ -1218,6 +1243,7 @@ export function TeamOverviewModal({
         walletBalance={team.walletBalance ?? team.stats.totalCredits}
         frozenBalance={team.frozenBalance ?? 0}
       />
+      <BanClosedItemsPanel accountId={team.accountId} accountStatus={(team as any).status} />
     </ModalShell>
   );
 }
@@ -3357,6 +3383,7 @@ export function UserOverviewModal({
         walletBalance={user.walletBalance ?? user.stats.totalCredits}
         frozenBalance={user.frozenBalance ?? 0}
       />
+      <BanClosedItemsPanel accountId={user.accountId} accountStatus={(user as any).status} />
     </ModalShell>
   );
 }

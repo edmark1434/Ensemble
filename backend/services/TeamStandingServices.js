@@ -214,6 +214,36 @@ async function notifyTeamManagers(teamAccountId, { message, prefix, referenceTab
   return sent;
 }
 
+/**
+ * A team leader's own account was banned or locked (or that ended). The team's other Owners
+ * and Admins hear what it means, and that they do not need a ticket: the team's open jobs and
+ * gigs pause on their own (lib/OwnerAvailability), live contract work continues, the Teams
+ * desk flags the team, and Support transfers ownership or the team resumes when the penalty
+ * ends. Suspension does not pause a team, so it is not announced. Never throws.
+ * @param {string} accountId the leader's personal account
+ * @param {{ restricted: boolean, status?: string }} change
+ */
+async function notifyTeamsOfLeaderStanding(accountId, { restricted, status = null }) {
+  try {
+    const teams = await TeamsRepositories.getTeamsLedByAccount(accountId);
+    for (const team of teams) {
+      const name = team.display_name || team.handle || 'your team';
+      const message = restricted
+        ? `The leader of ${name} is ${String(status || 'restricted').toLowerCase()} and can't use Ensemble right now. The team's open jobs and gigs are paused and it can't take new work or pay out until Ensemble Support assigns a new owner or the restriction ends. Live contract work continues. You don't need to open a ticket: Support already sees this team.`
+        : `The leader of ${name} can use Ensemble again. The team's jobs and gigs are back and it can take new work again.`;
+      await notifyTeamManagers(team.account_id, {
+        message,
+        prefix: restricted ? 'TEAM_LEADER_RESTRICTED' : 'TEAM_LEADER_RESTORED',
+        event: 'standing_changed',
+      });
+    }
+    return teams.length;
+  } catch (err) {
+    console.warn('Team leader standing notice skipped:', err.message);
+    return 0;
+  }
+}
+
 /** `{ isTeam, teamId, name }` for a wallet owner, so wallet notices can say "Team X's wallet". */
 async function describeTeamAccount(accountId) {
   const team = accountId ? await TeamsRepositories.getTeamStanding(accountId).catch(() => null) : null;
@@ -228,5 +258,6 @@ module.exports = {
   teamStandingSummary,
   assertTeamAllows,
   notifyTeamManagers,
+  notifyTeamsOfLeaderStanding,
   describeTeamAccount,
 };

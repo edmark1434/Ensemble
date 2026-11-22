@@ -32,6 +32,7 @@ import {
 } from "@/pages/user/4_forums/forumCommentUtils";
 import { reconcileForumDiscussions, useForumRealtime } from "@/pages/user/4_forums/forumRealtime";
 import { identityFromDetails, loadCurrentForumAvatar } from "@/pages/user/4_forums/forumIdentity";
+import StandingChip from "@/components/account/StandingChip";
 import { useForumTimeout, isRestrictionErrorHandled } from "@/pages/user/4_forums/useForumTimeout";
 import { FORUM_LOCKED_CLASS, ForumTimeoutComposerLock, ForumTimeoutPill } from "@/pages/user/4_forums/ForumTimeoutLock";
 import {
@@ -298,6 +299,7 @@ const CommentNode = ({
                   {authorIdentity?.name || "Forum member"}
                 </p>
               )}
+              <StandingChip standing={(comment.author_identity as any)?.standing} className="mt-0.5" />
               <p className="text-[11px] text-zinc-600">
                 {new Date(comment.created_at).toLocaleString()}
                 {comment.is_edited ? " (edited)" : ""}
@@ -764,6 +766,7 @@ const ExpandDiscussion = () => {
                         </p>
                       </>
                     )}
+                    <StandingChip standing={(discussion as any).author_identity?.standing} />
                   </div>
                 );
               })()}

@@ -83,6 +83,10 @@ export interface AssetRecord {
   review_note?: string | null;
   /** Owner only: go-live time of a scheduled listing (or when it went live). */
   review_publish_at?: string | null;
+  /** Staff reading the page in platform view; review fields above are filled for them too. */
+  staff_view?: boolean;
+  /** Staff only: the seller's account was deleted. */
+  seller_removed?: boolean;
   trashed_at?: string | null;
   created_at: string;
   updated_at: string;
@@ -103,6 +107,10 @@ export interface AssetRecord {
   creator_name: string;
   creator_handle: string | null;
   creator_avatar_path: string | null;
+  /** Locked or banned creator: new sales pause (owners keep their licenses). */
+  creator_unavailable_reason?: string | null;
+  /** Public standing chip for the creator (Banned / Suspended / Locked / Timeout). */
+  creator_standing?: import("@/pages/user/7_profile/Displays/AccountStanding").PublicStanding | null;
   creator_is_verified?: boolean;
   creator_subscription_plan?: string | null;
   owner_account_id: string;

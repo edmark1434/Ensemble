@@ -11,7 +11,7 @@ export default function TicketManagement() {
     <ModeratorTicketDesk
       roleLabel="Marketplace Moderator"
       title="Ticket Management"
-      subtitle="Seller verification, listing review, purchases and downloads, broken files, refunds, asset reviews and marketplace appeals. Filed under the wrong category? Open the ticket and use Change category, send it to the right desk, or escalate it to Admin."
+      subtitle="Seller verification, listing review, purchases and downloads, broken files, refunds, asset reviews, marketplace appeals and bug reports. Filed under the wrong category? Open the ticket and use Change category, send it to the right desk, or escalate it to Admin."
       endpointBase="/api/moderator/marketplace/tickets"
       accent="amber"
       queueKey="marketplace"

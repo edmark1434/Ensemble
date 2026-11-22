@@ -304,11 +304,17 @@ async function searchBadgeRecipients(search, registryId, limit = 20) {
 async function getBadgeHolders(registryId) {
     const { rows } = await pool.query(`
         SELECT ab.account_badge_id, ab.status, ab.created_at, ab.claimed_at, ab.grant_message,
-               a.account_id, a.handle, a.display_name, f.path AS avatar_preset_url
+               a.account_id, a.handle, a.display_name, f.path AS avatar_preset_url,
+               -- The staff member who granted it (null when the grant recorded none).
+               COALESCE(gsa.display_name, NULLIF(TRIM(COALESCE(gs.first_name, '') || ' ' || COALESCE(gs.last_name, '')), ''))
+                 AS granted_by_name,
+               gs.role::text AS granted_by_role
         FROM account_badges ab
         JOIN badges b ON b.badge_id = ab.badge_id
         JOIN accounts a ON a.account_id = ab.account_id
         LEFT JOIN files f ON f.file_id = a.avatar_file_id
+        LEFT JOIN staff gs ON gs.staff_id = ab.granted_by_staff_id
+        LEFT JOIN accounts gsa ON gsa.account_id = gs.account_id
         WHERE b.registry_id = $1 AND ab.status <> 'revoked'
         ORDER BY ab.created_at DESC
     `, [registryId]);

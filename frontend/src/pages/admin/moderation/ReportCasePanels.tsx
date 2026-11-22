@@ -36,6 +36,8 @@ export type ReportForumContent = {
   /** `active`, `removed`, `inactive` (group) or `missing`. */
   status: string;
   removedBy?: string | null;
+  /** The staff member (or member) who removed it. */
+  removedByName?: string | null;
   removalReason?: string | null;
   /** Live text when the author edited it after the report. */
   currentText?: string | null;
@@ -549,7 +551,13 @@ export function ReportForumContentCard({
   } else if (!active) {
     state = (
       <span className="text-xs text-zinc-400">
-        {content.kind === 'group' ? 'Archived or deleted' : `Removed by ${removedByLabel(content.removedBy)}`}
+        {content.kind === 'group'
+          ? 'Archived or deleted'
+          : `Removed by ${
+              content.removedByName
+                ? `${content.removedByName} (${removedByLabel(content.removedBy)})`
+                : removedByLabel(content.removedBy)
+            }`}
         {content.removalReason ? ` · “${content.removalReason}”` : ''}
       </span>
     );

@@ -1,3 +1,5 @@
+import type { OwnerUnavailableReason } from "@/lib/ownerAvailability";
+import type { PublicStanding } from "@/pages/user/7_profile/Displays/AccountStanding";
 import { getBudgetDisplayInfo } from "@/lib/formatBudget";
 import React, { useState, useEffect } from "react";
 import { Star, Clock, Bookmark, Edit2, Flag, Wrench, Send, Users, User, TrendingUp, Check, Sparkles } from "lucide-react";
@@ -11,6 +13,7 @@ import { VerificationIcon } from "@/components/ui/VerificationIcon";
 import useGlobalState from "@/lib/global_state";
 import { computeJobRankingBreakdown } from "../job_ranking";
 import { ApplicationWindowTimer } from "./job_utilities/ApplicationWindowTimer";
+import type { PostingStaffHold } from "@/components/postings/StaffHoldNotice";
 
 export interface Job {
   id: string;
@@ -77,6 +80,12 @@ export interface Job {
   clientSubscriptionPlan?: "Free" | "Premium" | "Business" | string;
   clientIsVerified?: boolean;
   clientProfileVisibility?: number;
+  /** Only for people who manage the job: staff paused or closed it (see StaffHoldNotice). */
+  staffHold?: PostingStaffHold | null;
+  /** Set while the client cannot hire (deactivated, suspended, locked, banned, team leader restricted). */
+  ownerUnavailableReason?: OwnerUnavailableReason | null;
+  /** Public standing chip for the client (Banned / Suspended / Locked / Timeout). */
+  clientStanding?: PublicStanding | null;
 }
 
 interface JobListProps {

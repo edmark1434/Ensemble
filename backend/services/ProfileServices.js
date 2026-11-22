@@ -318,7 +318,7 @@ function checkChanges(originalForm, updates) {
     return newPayload;
 }
 
-async function getProfileByAccountIdService(accountId) {
+async function getProfileByAccountIdService(accountId, { viewerSeesAll = true } = {}) {
     if (!accountId) {
         throw new Error('Account ID is required');
     }
@@ -332,8 +332,24 @@ async function getProfileByAccountIdService(accountId) {
             profile.standing = await getPublicAccountStanding(profile.account_id);
             const { listVisibleAccountDisputes } = require('../repositories/DisputeChatRepositories');
             profile.disputes = await listVisibleAccountDisputes(profile.account_id);
-            const badges = await getAccountBadges(accountId);
-            profile.badges = badges;
+            // Badges are not deleted by a penalty, but visitors do not see them while the account is
+            // banned, locked or in Frozen access (docs/punishment-system.md §5, badges-system.md).
+            let badgesHidden = false;
+            if (!viewerSeesAll) {
+                const status = String(profile.standing?.status || '').toLowerCase();
+                badgesHidden = status === 'banned' || status === 'locked';
+                if (!badgesHidden) {
+                    try {
+                        const { getAccountAccess } = require('../lib/AccountRestriction');
+                        const access = await getAccountAccess(profile.account_id);
+                        badgesHidden = Boolean(access?.warningFrozen);
+                    } catch (_err) {
+                        badgesHidden = false;
+                    }
+                }
+            }
+            profile.badges = badgesHidden ? [] : await getAccountBadges(accountId);
+            profile.badgesHidden = badgesHidden;
         }
         return profile;
     } catch (err) {

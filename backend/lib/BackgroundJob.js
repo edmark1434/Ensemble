@@ -340,6 +340,8 @@ function startPaymentReconciliationJob() {
     // Deployments using a separate media:worker can disable embedded market previews.
     if (process.env.MEDIA_WORKER_EMBEDDED !== 'false') {
         let mediaJobRunning = false;
+        // Uploads that failed while ffmpeg was missing get another go once it is installed.
+        require('../services/MediaJobServices').recoverMissingToolFailures().catch(() => {});
         cron.schedule("*/3 * * * * *", async () => {
             if (mediaJobRunning) return;
             mediaJobRunning = true;

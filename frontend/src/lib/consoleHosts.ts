@@ -28,6 +28,7 @@ const ADMIN_SECTIONS = new Set([
   'user-team',
   'credit-economy',
   'moderation',
+  'restricted-work',
   'analytics',
   'ticket-management',
   'system-settings',

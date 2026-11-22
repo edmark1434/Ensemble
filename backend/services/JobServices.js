@@ -79,7 +79,13 @@ async function getAllJobsServices(filters, accountId = null, actorIds = [], affi
 }
 
 async function getJobByIdServices(jobId, accountId = null, actorIds = [], affiliatedAccountIds = actorIds) {
-    return await JobRepositories.getJobByIdRepositories(jobId, accountId, actorIds, affiliatedAccountIds);
+    const job = await JobRepositories.getJobByIdRepositories(jobId, accountId, actorIds, affiliatedAccountIds);
+    // People who manage the job see why staff hold it and how to appeal; nobody else gets the reason.
+    if (job && job.is_manageable_post && job.staff_hold_at) {
+        const { ownerStaffHoldNotice } = require('./PostingModerationServices');
+        job.staff_hold = await ownerStaffHoldNotice('job', job.job_id);
+    }
+    return job;
 }
 
 async function updateJobServices(jobId, accountIds, jobData) {

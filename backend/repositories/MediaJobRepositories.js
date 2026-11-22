@@ -4,7 +4,8 @@ const MAX_ATTEMPTS = 3;
 const STALE_MINUTES = 30;
 
 // Takes the oldest pending job (or one whose worker died). Safe with several workers.
-async function claimMediaAssetJobRepository() {
+// `skipKinds` leaves those kinds queued (video / audio while ffmpeg is missing), so images still run.
+async function claimMediaAssetJobRepository({ skipKinds = [] } = {}) {
   await pool.query(
     `UPDATE media_asset_jobs
      SET status = 'failed', error = COALESCE(error, 'The worker stopped before finishing'),
@@ -21,6 +22,7 @@ async function claimMediaAssetJobRepository() {
        SELECT candidate.media_asset_job_id
        FROM media_asset_jobs candidate
        WHERE candidate.attempts < $1
+         AND NOT (candidate.kind = ANY($3::text[]))
          AND (candidate.status = 'pending'
            OR (candidate.status = 'running'
                AND candidate.locked_at < CURRENT_TIMESTAMP - make_interval(mins => $2)))
@@ -30,7 +32,7 @@ async function claimMediaAssetJobRepository() {
      )
      RETURNING job.media_asset_job_id, job.media_asset_id, job.market_asset_id,
                job.kind, job.attempts`,
-    [MAX_ATTEMPTS, STALE_MINUTES]
+    [MAX_ATTEMPTS, STALE_MINUTES, Array.isArray(skipKinds) ? skipKinds : []]
   );
   if (!job) return null;
   const { rows: [media] } = await pool.query(
@@ -60,6 +62,39 @@ async function failMediaAssetJobRepository(job, message, { final = false } = {})
     [job.media_asset_job_id, retry ? 'pending' : 'failed', String(message || 'Processing failed').slice(0, 1000)]
   );
   return retry;
+}
+
+/**
+ * The server could not run ffmpeg / ffprobe: hand the job back without counting the attempt, so
+ * a broken install never uses up a seller's retries or marks their upload failed.
+ */
+async function releaseMediaAssetJobRepository(job, message) {
+  await pool.query(
+    `UPDATE media_asset_jobs
+     SET status = 'pending', attempts = GREATEST(attempts - 1, 0), error = $2, locked_at = NULL,
+         updated_at = CURRENT_TIMESTAMP, finished_at = NULL
+     WHERE media_asset_job_id = $1 AND status = 'running'`,
+    [job.media_asset_job_id, String(message || '').slice(0, 1000)]
+  );
+}
+
+/**
+ * Jobs that failed only because ffmpeg / ffprobe were missing (`spawn …/ffmpeg ENOENT`, or the
+ * worker's own "not installed" message) go back to the queue with fresh attempts. Run once the
+ * tools work again; returns how many were re-queued.
+ */
+async function requeueMissingToolFailuresRepository() {
+  const result = await pool.query(
+    `UPDATE media_asset_jobs
+     SET status = 'pending', attempts = 0, error = NULL, locked_at = NULL,
+         finished_at = NULL, updated_at = CURRENT_TIMESTAMP
+     WHERE status = 'failed'
+       AND (
+         (error ILIKE '%ENOENT%' AND (error ILIKE '%ffmpeg%' OR error ILIKE '%ffprobe%'))
+         OR error ILIKE '%is not installed on the media server%'
+       )`
+  );
+  return result.rowCount || 0;
 }
 
 // Writes the worker's output files onto the media asset and, once every job of the listing is
@@ -150,5 +185,7 @@ async function completeMediaAssetJobRepository(job, outputs) {
 module.exports = {
   claimMediaAssetJobRepository,
   failMediaAssetJobRepository,
+  releaseMediaAssetJobRepository,
+  requeueMissingToolFailuresRepository,
   completeMediaAssetJobRepository,
 };

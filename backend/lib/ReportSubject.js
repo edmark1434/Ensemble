@@ -366,6 +366,10 @@ async function buildReportSubject(row) {
         commentId: targetId ? String(targetId) : null,
         status: comment ? (comment.isDeleted ? 'removed' : 'active') : 'missing',
         removedBy: comment?.isDeleted ? comment.removedBy || 'author' : null,
+        // Staff report case only: the staff member (or member) who removed it.
+        removedByName: comment?.isDeleted
+          ? comment.removedByStaff?.name || comment.removedByMember?.name || null
+          : null,
         removalReason: comment?.isDeleted ? comment.removalReason || null : null,
         // The author can edit after reporting; staff see both when they differ.
         currentText: liveText && snapshot?.body && liveText !== snapshot.body ? liveText : null,
@@ -405,6 +409,7 @@ async function buildReportSubject(row) {
           discussionTitle: staffView.title,
           status: staffView.status,
           removedBy: staffView.removedBy || null,
+          removedByName: staffView.removedByStaff?.name || staffView.removedByMember?.name || null,
           removalReason: staffView.removalReason || null,
           // The author can edit after reporting; staff see both when they differ.
           currentText: liveText && snapshot?.body && liveText !== snapshot.body ? liveText : null,

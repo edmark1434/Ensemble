@@ -14,12 +14,42 @@ const TAG_BACKGROUND_VOLUME = 0.2;
 const TAG_DUCK_ATTACK_SECONDS = 0.08;
 const TAG_DUCK_RELEASE_SECONDS = 0.25;
 
+/**
+ * The bundled binary when its download really happened, else the server's own install.
+ * `ffmpeg-static` / `ffprobe-static` return their path even when the install script was skipped
+ * or the download failed (an `npm ci --ignore-scripts` deploy, no network), which used to fail
+ * every video with `spawn …/ffmpeg ENOENT`. `FFMPEG_PATH` / `FFPROBE_PATH` always win.
+ */
+function resolveBinary(envPath, bundled, systemName) {
+  if (envPath) return envPath;
+  try {
+    const bundledPath = bundled();
+    if (bundledPath && fs.existsSync(bundledPath)) return bundledPath;
+  } catch {
+    // Package missing or unsupported on this platform: fall through to the system binary.
+  }
+  return systemName;
+}
+
 function ffmpegBinary() {
-  return process.env.FFMPEG_PATH || require('ffmpeg-static');
+  return resolveBinary(process.env.FFMPEG_PATH, () => require('ffmpeg-static'), 'ffmpeg');
 }
 
 function ffprobeBinary() {
-  return process.env.FFPROBE_PATH || require('ffprobe-static').path;
+  return resolveBinary(process.env.FFPROBE_PATH, () => require('ffprobe-static').path, 'ffprobe');
+}
+
+/** The server cannot run a media tool at all: nothing is wrong with the seller's file. */
+const MEDIA_TOOLS_MISSING = 'MEDIA_TOOLS_MISSING';
+
+function mediaToolMissingError(binary) {
+  const tool = path.basename(String(binary || 'ffmpeg')).replace(/\.exe$/i, '');
+  const error = new Error(
+    `${tool} is not installed on the media server. The file was not processed; it will be retried once ${tool} is available `
+    + '(install it, set FFMPEG_PATH / FFPROBE_PATH, or run "npm rebuild ffmpeg-static ffprobe-static").'
+  );
+  error.code = MEDIA_TOOLS_MISSING;
+  return error;
 }
 
 function run(binary, args) {
@@ -29,7 +59,7 @@ function run(binary, args) {
     let stderr = '';
     child.stdout.on('data', (chunk) => { stdout += chunk; });
     child.stderr.on('data', (chunk) => { stderr = (stderr + chunk).slice(-4000); });
-    child.on('error', reject);
+    child.on('error', (error) => reject(error?.code === 'ENOENT' ? mediaToolMissingError(binary) : error));
     child.on('close', (code) => {
       if (code === 0) return resolve(stdout);
       return reject(new Error(`${path.basename(binary)} exited with ${code}: ${stderr.trim().split('\n').slice(-4).join(' | ')}`));
@@ -239,7 +269,32 @@ async function makePortfolioPoster(clip, poster, startMs, endMs, maxAllowedSecon
     '-vf', 'scale=640:640:force_original_aspect_ratio=decrease', poster]);
 }
 
+/** True when both ffmpeg and ffprobe start on this server. */
+async function mediaToolsAvailable() {
+  try {
+    await run(ffmpegBinary(), ['-version']);
+    await run(ffprobeBinary(), ['-version']);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** A stored job error as staff read it: no server paths, and a missing tool named as a server fault. */
+function describeProcessingError(raw) {
+  const text = String(raw || '').trim();
+  if (!text) return null;
+  if (/ENOENT/.test(text) && /ff(mpeg|probe)/i.test(text)) {
+    return 'The media server is missing ffmpeg, so the preview could not be made. Nothing is wrong with the file; it is retried once the server is fixed.';
+  }
+  // Keep only the file name of any absolute path (`/opt/app/…/ffmpeg` → `ffmpeg`).
+  return text.replace(/(?:[A-Za-z]:)?(?:[\\/][^\s'"\\/]+)+[\\/]([^\s'"\\/]+)/g, '$1').slice(0, 500);
+}
+
 module.exports = {
+  MEDIA_TOOLS_MISSING,
+  mediaToolsAvailable,
+  describeProcessingError,
   makePortfolioPoster,
   probe,
   cappedDimensions,

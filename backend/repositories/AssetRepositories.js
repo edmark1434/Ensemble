@@ -513,6 +513,7 @@ const ASSET_SELECT = `
            ELSE COALESCE(owner_plan.name, 'Free')
          END AS creator_subscription_plan,
          owner.account_id AS owner_account_id,
+         owner.deleted_at AS owner_deleted_at,
          (owner.account_id = $1) AS is_owner,
          purchase_access.is_purchased,
          purchase_access.available_license_count,
@@ -884,15 +885,19 @@ async function listAssetsRepository({ accountId, search, type, status, view, cre
   return rows;
 }
 
-async function getAssetRepository(assetId, accountId) {
+/**
+ * `staffViewer`: staff reading the page also see assets that are not live (draft, delisted,
+ * removed by a ban, trashed) and those of a seller who left. Deleted assets stay hidden.
+ */
+async function getAssetRepository(assetId, accountId, { staffViewer = false } = {}) {
   await ensureAdminMarketAssetSchema(pool);
   const { rows } = await pool.query(
     `${ASSET_SELECT}
      WHERE ma.market_asset_id = $2
        AND ma.deleted_at IS NULL
-       AND owner.deleted_at IS NULL
-       AND ((ma.status = 'published' AND ma.trashed_at IS NULL) OR owner.account_id = $1 OR purchase_access.is_purchased)`,
-    [accountId, assetId]
+       AND (owner.deleted_at IS NULL OR $3::boolean)
+       AND ((ma.status = 'published' AND ma.trashed_at IS NULL) OR owner.account_id = $1 OR purchase_access.is_purchased OR $3::boolean)`,
+    [accountId, assetId, Boolean(staffViewer)]
   );
   return rows[0] || null;
 }

@@ -58,6 +58,19 @@ async function addContractSubcontractorServices(contractId, actorAccountId, { ac
     throw new ContractSubcontractError('The contract client cannot be added as a subcontractor', 422, 'CANNOT_ADD_CLIENT');
   }
 
+  // Nobody is hired onto live work while they cannot act on it (deactivated, suspended, locked, banned).
+  {
+    const { getOwnerUnavailableReason, ownerUnavailableMessage } = require('../lib/OwnerAvailability');
+    const reason = await getOwnerUnavailableReason(accountId, { teamLeader: false });
+    if (reason) {
+      throw new ContractSubcontractError(
+        ownerUnavailableMessage(reason, { role: 'member', action: 'able to join a contract' }),
+        409,
+        reason === 'deactivated' ? 'ACCOUNT_DEACTIVATED' : 'OWNER_UNAVAILABLE'
+      );
+    }
+  }
+
   const member = await ContractRepositories.addContractSubcontractor({
     contractId,
     accountId,

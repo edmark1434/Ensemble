@@ -85,6 +85,7 @@ const {
   normalizeTicketPriority,
   resolveTicketPriority,
   defaultPriorityForType,
+  bugReportPriority,
   ticketTypeMeta,
   isClosedStatus,
   isTypeAllowedForRole,
@@ -320,7 +321,7 @@ async function createSupportTicket(input, session = null) {
   if (!reason) throw new Error('Subject is required');
 
   const type = normalizeTicketType(input?.type || input?.category || 'Other');
-  const priority = resolveTicketPriority(type, input?.priority);
+  let priority = resolveTicketPriority(type, input?.priority);
   const requesterAccountId = input?.requesterAccountId || sessionAccountId(session);
   if (!requesterAccountId) throw new Error('Requester account is required');
 
@@ -330,8 +331,16 @@ async function createSupportTicket(input, session = null) {
     const { sanitizeTicketFormValues } = require('../lib/TicketFormFields');
     formAnswers = sanitizeTicketFormValues(type, input.fields);
   }
+  // A bug that stops the member finishing what they were doing is filed as High, unless staff
+  // opening the ticket chose a priority themselves.
+  const bugPriority = input?.priority ? null : bugReportPriority(type, formAnswers);
+  if (bugPriority) priority = bugPriority;
   if (formAnswers.length) {
     formAnswers = await resolveFormAnswers(requesterAccountId, type, formAnswers);
+  }
+  // Member intake checks the resolved answers (the records they name) before anything is saved.
+  if (typeof input.beforeInsert === 'function') {
+    await input.beforeInsert({ type, formAnswers });
   }
   const authorSession = session || {
     account_id: requesterAccountId,
@@ -1214,6 +1223,8 @@ function ticketError(message, statusCode) {
 }
 
 const TICKET_ATTACHMENT_LIMIT = 4;
+/** Longest reply on a ticket: members match the ticket description limit; staff get more room. */
+const TICKET_REPLY_MAX_LENGTH = { member: 5000, staff: 10000 };
 
 /**
  * The files on a new ticket message. A member may only attach files their own account
@@ -1256,6 +1267,65 @@ async function listOpenTicketTypes(accountId) {
     [accountId]
   );
   return result.rows.map((row) => row.type);
+}
+
+/** The member's open tickets with what each one names, for the "same record" check at intake. */
+async function listOpenTicketsWithAnswers(accountId) {
+  if (!accountId) return [];
+  const result = await pool.query(
+    `
+    SELECT ticket_id, ticket_number, type, form_answers
+    FROM tickets
+    WHERE account_id = $1
+      AND deleted_at IS NULL
+      AND LOWER(status) NOT IN ('closed', 'resolved')
+    ORDER BY created_at DESC
+    LIMIT 200
+    `,
+    [accountId]
+  );
+  return result.rows.map((row) => ({
+    id: String(row.ticket_id),
+    number: row.ticket_number,
+    type: row.type,
+    answers: mapFormAnswers(row.form_answers),
+  }));
+}
+
+/**
+ * Listing id → its asset id, for every id that is a listing or an asset, so a listing named by
+ * the listing picker and the same asset named by the asset or purchase picker compare equal.
+ */
+async function listingAssetIdMap(ids) {
+  const values = [...new Set((ids || []).map((id) => String(id).toLowerCase()).filter((id) => TICKET_ACCOUNT_UUID.test(id)))];
+  const map = new Map();
+  if (!values.length) return map;
+  const result = await pool.query(
+    `
+    SELECT listing_id::text AS listing_id, market_asset_id::text AS market_asset_id
+    FROM marketplace_listings
+    WHERE market_asset_id IS NOT NULL
+      AND (listing_id = ANY($1::uuid[]) OR market_asset_id = ANY($1::uuid[]))
+    `,
+    [values]
+  );
+  for (const row of result.rows) map.set(row.listing_id.toLowerCase(), row.market_asset_id.toLowerCase());
+  return map;
+}
+
+/** Lower-cased handle → account id, for live accounts only. */
+async function accountIdsForHandles(handles) {
+  const values = [...new Set((handles || []).map((handle) => String(handle).toLowerCase()).filter(Boolean))].slice(0, 200);
+  const map = new Map();
+  if (!values.length) return map;
+  const result = await pool.query(
+    `SELECT LOWER(handle) AS handle, account_id::text AS account_id
+     FROM accounts
+     WHERE deleted_at IS NULL AND LOWER(handle) = ANY($1::text[])`,
+    [values]
+  );
+  for (const row of result.rows) map.set(row.handle, row.account_id);
+  return map;
 }
 
 async function findRecentOpenTicketLike(accountId, type, reason, minutes = 10) {
@@ -3341,6 +3411,11 @@ async function addTicketMessage(ticketId, body, staffSession, isInternal = false
   const messageBody = String(body || '').trim();
   if (!messageBody && !screenshots.length) {
     throw ticketError('Message body is required', 400);
+  }
+  const maxLength = isStaffSession(staffSession) ? TICKET_REPLY_MAX_LENGTH.staff : TICKET_REPLY_MAX_LENGTH.member;
+  // The opening message is the description, which intake already limits.
+  if (!options.initial && messageBody.length > maxLength) {
+    throw ticketError(`A reply can be at most ${maxLength.toLocaleString('en-US')} characters`, 400);
   }
 
   const chatId = await ensureTicketChat(ticketId, ticketResult.rows[0]);
@@ -7413,6 +7488,9 @@ module.exports = {
   createSupportTicket,
   findRecentOpenTicketLike,
   listOpenTicketTypes,
+  listOpenTicketsWithAnswers,
+  listingAssetIdMap,
+  accountIdsForHandles,
   createStaffTicketForAccount,
   findAccountByEmailOrUsername,
   getTicketPickers,

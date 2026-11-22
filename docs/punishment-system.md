@@ -139,7 +139,7 @@ Investigation / compromised account. Users: appeal-only (`/account/appeal`, tick
 
 ### 4.6 Ban
 
-Temp or permanent. Dispute conviction = permanent ban of `for_account_id`. Sign in only to appeal and view tickets/disputes. Listings/gigs/jobs stop being actionable; staff hide or close them. Badges hidden on public profile. Appeal accept → lift in **24 hours** by default (staff may lift now or shorten), then recompute. The ban is its own appeal, separate from any warning or timeout. Reopening a dispute does not unban.
+Temp or permanent. Dispute conviction = permanent ban of `for_account_id`. Sign in only to appeal and view tickets/disputes (and stop plan renewal). Open jobs, gigs and listings close automatically (§9); a permanent ban also stops plan renewal. Badges hidden on public profile. Appeal accept → lift in **24 hours** by default (staff may lift now or shorten), then recompute, and what the ban closed is restored (§9.1). The ban is its own appeal, separate from any warning or timeout. Reopening a dispute does not unban.
 
 Staff pick a **named ban** from `punishment_defs` (`kind = ban`). Duration is the catalog default (days or permanent) unless they set a custom clock. Only Admin and Support can ban. Admin CRUD is `/admin/warnings` → Ban, suspend, timeout.
 
@@ -278,13 +278,14 @@ Each subsection is: where it lives, how a punishment starts, what standing does,
 
 **Standing effects:**
 
-- Suspended/banned owner: staff close or freeze the post. Do not leave an Open job that nobody can hire on.
+- Suspended / locked owner (or a team whose leader is banned, locked or missing): the post pauses on its own — out of browse, no new proposals, invites or offers — and comes back when that ends (§9). Banned owner: closed by the ban clean-up. Nobody is left applying to a job nobody can hire on.
 - Sanctioned job or gig report: staff choose to pause (default) or archive the reported posting with the sanction. Any staff pause / close / archive puts the posting on a staff hold: the owner cannot reopen it, is notified with the reason, and is pointed to a support ticket ("Appeal a jobs action"). Staff reopening it lifts the hold.
 - What each staff status means for jobs and gigs (Jobs & Gigs Control shows this as its status guide and member view):
   - **Paused**: a temporary hold while staff investigate. It leaves the board and search (the owner still sees it in their own posts, and a direct link shows it as Closed). No new proposals or orders. Staff then reopen it or archive it.
   - **Closed**: stays on the board marked Closed and takes no new proposals or orders.
   - **Archived**: a confirmed violation. `deleted_at` is set and the posting is gone from the board, search, saved lists and its own page for everyone, the owner included. Staff can restore it.
   - Running proposals, orders and contracts continue in every case.
+  - Owner page notice: while a job or gig is paused or closed on a staff hold, its page shows the people who manage it a notice saying what that means, the reason (from the last matching staff change) and a link to "Appeal a jobs action". The job API sends it as `staff_hold` and the gig API as `staffHold` (`PostingModerationServices.ownerStaffHoldNotice`), only to people who manage the posting.
 - Proposal submission fees (credits) are charged only when the proposal is **accepted by the backend**. A blocked proposal must not take credits.
 
 ### 8.4 Gigs and orders
@@ -440,15 +441,35 @@ When standing changes, **do not strand the other party or their credits.** Warni
 
 | Situation | What happens |
 |---|---|
-| Open job, owner banned | Closed automatically by the ban. Open applicants' proposal fees are refunded and their proposals closed; with no applicants the posting fee is refunded (the jobs engine's own rule). |
-| Open job, owner suspended | Stays open; staff may close it. |
-| Unsigned job offer, either side banned | Withdrawn automatically through the normal reject path; the client's escrow returns to their Account Wallet. |
-| Gig, seller banned | Closed automatically; unconfirmed orders are cancelled and the clients notified (no credits are held before confirmation). |
-| Pending proposals / gig orders by a banned member | Withdrawn automatically so no one can hire them. Proposal fees follow the normal withdraw rule. |
-| Live contract, party suspended | They cannot write. Other party can file a ticket/dispute. Staff may extend deadlines or cancel with escrow rules. |
-| Live contract, party banned | Staff resolve via dispute/escrow. Ban does not silently keep money. The ban clean-up counts these for staff and leaves them untouched. |
-| Published or pending asset, creator banned | Delisted automatically (note: removed because the account was banned). Buyers keep purchased originals. New purchases stop. |
+| Open job / gig, owner suspended or locked (or a team whose leader is banned, locked or missing) | **Paused while restricted** (`lib/OwnerAvailability.js`): it leaves browse, and new proposals, invites, offers, gig orders and order confirmations are refused (409 `OWNER_UNAVAILABLE`, nothing charged). Nothing is written, so it comes back by itself when the standing ends. The owner sees "Paused while your account is …" on their own listing. Deactivated owners keep the same rule (`ACCOUNT_DEACTIVATED`). |
+| Open job, owner banned | Closed automatically by the ban. Open applicants' proposal fees are refunded and their proposals closed; with no applicants the posting fee is refunded (the jobs engine's own rule). Recorded in `ban_cleanup_items` so it can be restored. |
+| Unsigned job offer, either side banned | Withdrawn automatically through the normal reject path; the client's escrow returns to their Account Wallet. While the client is suspended or locked the freelancer cannot sign it (it waits); while the freelancer is unavailable the client cannot send one. |
+| Gig, seller banned | Closed automatically; unconfirmed orders are cancelled and the clients notified (no credits are held before confirmation). Recorded for restore. |
+| Pending proposals / gig orders by a banned member | Withdrawn automatically so no one can hire them. Proposal fees follow the normal withdraw rule. Never restored. |
+| Asset, creator locked or banned | New sales pause and it leaves the public catalog (409 `ASSET_CREATOR_UNAVAILABLE`). Buyers keep and can still assign licenses they own. **Suspended creators keep selling** (a purchase needs no answer). A ban also delists the listing (recorded for restore). |
+| Live contract, party suspended, locked or banned | The other side is told (`CONTRACT_PARTY_STANDING`, team counterparties via their Owners/Admins) and told again when the party can act. The contract appears on **Restricted parties** (`GET /api/moderator/restricted-work`; Jobs, Support and Admin consoles) with the escrow it holds, oldest restriction first. Staff settle with the contract and dispute tools; punishment never moves credits. A suspended team keeps working, so its counterparties are not told. |
+| Milestone stalled while the freelancer is suspended or locked | The stall notice still goes out (the client can cancel the milestone for a refund), but the **automatic abandonment refund waits** until the penalty ends plus 48 hours. A cancellation request is not auto-approved while its recipient is suspended or locked (plus 48 hours): silence only counts from someone who could answer. Bans do not wait. |
+| Review window while suspended, locked or banned | The member could not rate, so the missed-review warning is never issued for a window a penalty touched. |
+| DM, credit transfer, team invite, subcontract hire to a restricted member | New DMs to banned/locked members are refused (suspended can still read). Transfers to deactivated, locked or banned wallets are refused (`RECIPIENT_UNAVAILABLE`). Team invites to deactivated/locked/banned members and subcontract hires of anyone unavailable are refused. Discovery browse leaves out banned and locked members; a direct search still finds them with their chip. |
+| Paid plan, member banned, locked, suspended or deactivated | They can always see the plan and stop renewal (`/api/subscription/plan-details` and `/api/payment/cancel-subscription` are on every allowlist; card on `/account/appeal`). A **permanent** ban stops renewal itself; the plan runs to the end of the period. |
 | Personal or team editor project, Suspend/Ban/Lock | Editor stops. Staff handle any live paid work on the related contract. |
+
+### 9.1 When a ban ends: what comes back
+
+Decision: **the member never needs a ticket to get their work back.**
+
+- **Accepted ban appeal** restores everything the ban closed (jobs, gigs, marketplace listings), by default; staff can untick "Restore what the ban closed" in the decision. The ban still ends on its 24-hour clock; until then the paused gate keeps those items hidden.
+- **Unban from the Users desk** offers the same "Restore what the ban closed" option (on by default for unban).
+- **Later, item by item**: User & Team → account → *Closed by a ban* (Admin / Support; `GET/POST /api/admin/accounts/:accountId/ban-items[/restore]`). Refused while still banned (409 `ACCOUNT_STILL_BANNED`).
+- **An expired temporary ban restores nothing**: the member served it and reposts, as before.
+- An item comes back exactly as it was only if nothing changed it since the ban: a job whose application window ended, anything staff put on hold, or a listing staff touched stays closed (the panel says why). Withdrawn proposals, offers and orders never come back; other people moved on and their credits were returned. Posting fees refunded by the ban are not charged again.
+- Reversing an unban from the activity log brings the ban back **with** its clean-up.
+
+### 9.2 Teams
+
+- **Leader banned or locked**: the team's open jobs and gigs pause (gate above), it cannot take new work or pay out, live contract work continues. Its Owners and Admins are told, including that **no ticket is needed**: the Teams desk already flags the team and Support transfers ownership (existing tool), or the team resumes by itself when the penalty ends (they are told then too). A leader's suspension does not pause the team.
+- **Team account banned**: same clean-up, record and restore as a member (restore from the team's overview, unban option, or an accepted appeal).
+- **Non-leader member restricted**: the team is unaffected; the member cannot act, and team payouts owed to them stay owed.
 
 ---
 
@@ -482,7 +503,7 @@ Frozen access and Mute are timed automatic punishments, not standings. They are 
 
 ## 11. Visibility
 
-**Public** (`/profile/:id`, job/gig/asset author chips): chips for Banned / Suspended / Locked / Timeout / Under dispute. Star ratings and badge pins are the other systems. Badges hidden if Banned or Locked.
+**Public** (`/profile/:id`, job/gig/asset author chips, **forum posts, comments, group members and group owner**): chips for Banned / Suspended / Locked / Timeout (`StandingChip`, data from `publicStandingSql` in `lib/OwnerAvailability.js`: `author_identity.standing` on forum payloads, `client_standing` / `sellerStanding` / `creator_standing` on listings). Chips follow the current standing, so they disappear when the penalty ends. Under dispute stays on the profile's Disputes tab. Star ratings and badge pins are the other systems. Visitors do not see badges while the account is Banned, Locked or in Frozen access (`badgesHidden`); the owner and staff still do.
 
 **Owner:** Record modal — Platform Merit with "Running now", standing, warnings, timeouts, automatic punishments (running and past), recent activity. The owner's profile merit ring lists what is running and until when; visitors see only the neutral merit tier and public chips.
 
@@ -561,7 +582,7 @@ Implementation rules (enforced in code):
 - Team targets go through `services/TeamSanctionServices.js` from `warnAccount` and `updateAccountStatus`, so every path (Users desk, platform view, report decisions, dispute conviction bans) treats a team the same way (§8.10).
 - Status changes must match the current standing: unsuspend only lifts a suspension, unlock a lock, unban a ban. A banned account can only be changed by Admin or Support, so a specialist moderator cannot lift a ban through unsuspend/unlock or a suspension.
 - The automatic suspension never writes Suspended over a ban or lock, and never shortens a suspension already running.
-- Every ban (Users desk, dispute conviction, report sanction) runs `closeBannedAccountListings` (`backend/services/BanCleanupServices.js`) after the ban is saved: see §9 for what closes. Each item is its own transaction; failures are reported in the staff response and the `ACCOUNT_BAN_CLEANUP` activity row and never undo the ban. Lifting the ban does not reopen anything — the member reposts, or reopens a closed gig. Locks and suspensions do not run it.
+- Every ban (Users desk, dispute conviction, report sanction, appeal follow-up, activity reversal back to Banned) runs `closeBannedAccountListings` (`backend/services/BanCleanupServices.js`) after the ban is saved: see §9 for what closes. Each item is its own transaction and each closed job, gig and listing is recorded in `ban_cleanup_items` (migration `1830800000000_ban-cleanup-items`) with its previous status; failures are reported in the staff response and the `ACCOUNT_BAN_CLEANUP` activity row and never undo the ban. A permanent ban also stops plan renewal. Restoring is §9.1 (`services/BanRestoreServices.js`, activity `ACCOUNT_BAN_RESTORE`). Locks and suspensions do not run it; the paused gate covers them.
 - Report decisions follow the same role rules: specialist moderators may warn, suspend or lock from a report, Forum Moderators (and Admin/Support) may also time out from a forum report, and only Admin/Support may ban. A report is claimed for its decision before the sanction runs, so a double submit cannot sanction twice. The case shows the reported member's standing, recent warnings, restrictions, activity, other reports and (forum reports) forum footprint, and the forum desks can take the reported discussion, comment or group down from the case; that does not decide the report.
 - A report warning uses the named warning staff pick (desk-checked like any warning); **Staff follow-up warning** is only the default. A report that names no other account (technical problems, whose account columns point at the reporter) cannot be sanctioned — close or deny it.
 - Sanctioned and Denied are final: a hand edit cannot set them, change them, or reopen the report for a second sanction. Other statuses (open, in progress, closed, …) can still be changed by the handler. Claiming a report is guarded in SQL; a second claimer gets 409 (Admin may still take over).

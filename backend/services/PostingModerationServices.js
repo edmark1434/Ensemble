@@ -159,6 +159,35 @@ async function applyReportPostingAction(row, { action, reason }, staffSession) {
   }
 }
 
+/**
+ * The staff hold notice an owner sees on their own job or gig page: what staff did, why, and how
+ * to appeal. Null when the posting is not held or is open. Callers attach it only for people who
+ * manage the posting, since the reason is written for the owner.
+ */
+async function ownerStaffHoldNotice(type, id) {
+  if (!REPORT_POSTING_TYPES.has(type) || !id) return null;
+  const { readPostingState, getLatestPostingActions } = require('../repositories/JobsModeratorRepositories');
+  try {
+    const posting = await readPostingState(type, id);
+    if (!posting?.held || !['paused', 'closed'].includes(posting.status)) return null;
+    const actions = await getLatestPostingActions([posting.id]);
+    const last = actions.get(String(posting.id)) || null;
+    return {
+      status: posting.status,
+      heldAt: posting.heldAt,
+      // A report hold on an already paused or closed posting keeps no status change of its own,
+      // so the reason is only shown when the last change matches the current status.
+      reason: last && last.status === posting.status ? last.reason : null,
+      reportNumber: last && last.status === posting.status ? last.reportNumber : null,
+      actionAt: last?.at || posting.heldAt,
+      appealPath: APPEAL_TICKET_PATH,
+    };
+  } catch (error) {
+    console.error('Staff hold notice failed:', error.message);
+    return null;
+  }
+}
+
 /** Error for an owner trying to change the status of a posting staff put on hold. */
 function postingHeldError(type) {
   const noun = type === 'job' ? 'job' : 'gig';
@@ -176,5 +205,6 @@ module.exports = {
   reportPostingType,
   normalizeReportPostingAction,
   applyReportPostingAction,
+  ownerStaffHoldNotice,
   postingHeldError,
 };

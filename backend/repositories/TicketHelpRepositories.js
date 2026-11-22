@@ -324,7 +324,10 @@ async function listTicketPaymentEvidence(accountId) {
 async function submitTicketSatisfaction(ticketId, accountId, score, comment) {
   const rating = Number(score);
   if (!Number.isInteger(rating) || rating < 1 || rating > 5) {
-    throw new Error('Score must be a whole number from 1 to 5');
+    throw Object.assign(new Error('Score must be a whole number from 1 to 5'), { statusCode: 400 });
+  }
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(ticketId || ''))) {
+    throw Object.assign(new Error('Ticket not found'), { statusCode: 404 });
   }
   const note = comment ? String(comment).trim().slice(0, 1000) : null;
   const result = await pool.query(
@@ -342,7 +345,7 @@ async function submitTicketSatisfaction(ticketId, accountId, score, comment) {
     [ticketId, accountId, rating, note]
   );
   if (!result.rows.length) {
-    throw new Error('This ticket cannot be rated yet, or it was already rated');
+    throw Object.assign(new Error('This ticket cannot be rated yet, or it was already rated'), { statusCode: 409 });
   }
   await recordTicketEvent({
     ticketId,

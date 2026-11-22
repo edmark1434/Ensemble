@@ -79,10 +79,11 @@ export default function MembersTab({ data }: { data: PlatformAnalytics }) {
   return (
     <div className="space-y-6">
       <div className="console-stagger grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <StatTile label="Members" value={members ? total : null} sub={members ? `${fmtInt(members.status.active)} in good standing` : undefined} />
-        <StatTile label="New in period" value={summary.newMembers.value} kpi={summary.newMembers} spark={series.map((p) => p.signups)} sparkColor={SERIES_COLORS.signups} />
+        <StatTile label="Members" info="totalMembers" value={members ? total : null} sub={members ? `${fmtInt(members.status.active)} in good standing` : undefined} />
+        <StatTile label="New in period" info="newMembers" value={summary.newMembers.value} kpi={summary.newMembers} spark={series.map((p) => p.signups)} sparkColor={SERIES_COLORS.signups} />
         <StatTile
           label="Active in period"
+          info="activeMembers"
           value={summary.activeMembers?.value ?? null}
           kpi={summary.activeMembers}
           empty="Not tracked yet"
@@ -92,6 +93,7 @@ export default function MembersTab({ data }: { data: PlatformAnalytics }) {
         />
         <StatTile
           label="Verified"
+          info="verified"
           value={members ? members.verification.verified : null}
           sub={members ? `${fmtPct(share(members.verification.verified, total))} of members · ${fmtInt(members.verification.pending)} pending` : undefined}
         />
@@ -114,11 +116,12 @@ export default function MembersTab({ data }: { data: PlatformAnalytics }) {
             </Notice>
           )}
           <div className="console-stagger grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <StatTile label="Active today" value={engagement.dau} />
-            <StatTile label="Last 7 days" value={engagement.wau} sub="Distinct active members" />
-            <StatTile label="Last 30 days" value={engagement.mau} sub="Distinct active members" />
+            <StatTile label="Active today" info="dau" value={engagement.dau} />
+            <StatTile label="Last 7 days" info="wau" value={engagement.wau} sub="Distinct active members" />
+            <StatTile label="Last 30 days" info="mau" value={engagement.mau} sub="Distinct active members" />
             <StatTile
               label="Stickiness"
+              info="stickiness"
               value={engagement.stickiness}
               format={(n) => fmtPct(n, 1)}
               animate={false}
@@ -136,7 +139,7 @@ export default function MembersTab({ data }: { data: PlatformAnalytics }) {
             color={SERIES_COLORS.signups}
           />
         </Panel>
-        <Panel title="Active members" subtitle={`Distinct members who used the site each ${range.bucket}`}>
+        <Panel title="Active members" info="activeMembers" subtitle={`Distinct members who used the site each ${range.bucket}`}>
           {engagement.available ? (
             <LineChart
               labels={labels}
@@ -156,14 +159,14 @@ export default function MembersTab({ data }: { data: PlatformAnalytics }) {
           <Panel title="Engagement in this period">
             <MetricRows
               rows={[
-                ['Average active per day', fmtInt(Math.round(engagement.averageDaily))],
-                ['Returning members', fmtInt(engagement.returning), 'Joined before the period started'],
-                ['New members who were active', fmtInt(engagement.newActive)],
+                ['Average active per day', fmtInt(Math.round(engagement.averageDaily)), undefined, 'averageDaily'],
+                ['Returning members', fmtInt(engagement.returning), 'Joined before the period started', 'returning'],
+                ['New members who were active', fmtInt(engagement.newActive), undefined, 'newActive'],
                 ['Tracking since', fmtDay(engagement.trackingSince)],
               ]}
             />
           </Panel>
-          <Panel className="xl:col-span-2" title="Retention by signup week" subtitle="Share of each week’s new members active in the weeks after they joined">
+          <Panel className="xl:col-span-2" title="Retention by signup week" info="retention" subtitle="Share of each week’s new members active in the weeks after they joined">
             <CohortTable cohorts={engagement.cohorts} trackingSince={engagement.trackingSince} />
           </Panel>
         </div>
@@ -171,7 +174,7 @@ export default function MembersTab({ data }: { data: PlatformAnalytics }) {
 
       {members && (
         <div className="grid gap-5 lg:grid-cols-2 xl:grid-cols-3">
-          <Panel title="Account standing">
+          <Panel title="Account standing" info="standing">
             <DonutChart
               segments={[
                 { label: 'Active', value: members.status.active, color: '#34d399' },
@@ -184,7 +187,7 @@ export default function MembersTab({ data }: { data: PlatformAnalytics }) {
               centerLabel="members"
             />
           </Panel>
-          <Panel title="Identity verification">
+          <Panel title="Identity verification" info="verified">
             <DonutChart
               segments={[
                 { label: 'Verified', value: members.verification.verified, color: '#34d399' },
@@ -194,7 +197,7 @@ export default function MembersTab({ data }: { data: PlatformAnalytics }) {
               centerLabel="members"
             />
           </Panel>
-          <Panel title="Profile completeness" subtitle="Avatar and tagline set">
+          <Panel title="Profile completeness" info="profile" subtitle="Avatar and tagline set">
             <div className="space-y-4">
               <ProgressRow label="Has an avatar" value={members.profile.withAvatar} total={total} color="#60a5fa" />
               <ProgressRow label="Has a tagline" value={members.profile.withTagline} total={total} color="#a78bfa" />
@@ -206,7 +209,7 @@ export default function MembersTab({ data }: { data: PlatformAnalytics }) {
 
       {members && (
         <div className="grid gap-5 xl:grid-cols-3">
-          <Panel title="Email providers" subtitle="Top domains among member emails">
+          <Panel title="Email providers" info="emailDomains" subtitle="Top domains among member emails">
             <HorizontalBarChart
               data={members.emailDomains.map((d) => ({ label: d.domain || 'unknown', value: d.count }))}
               colorFrom={SERIES_COLORS.signups}

@@ -132,6 +132,9 @@ import {
   JobsDisputes,
   JobsReports,
   JobsUserTeam,
+  JobsRestrictedWork,
+  SupportRestrictedWork,
+  AdminRestrictedWorkPage,
 } from '@/pages/staff/staffPages';
 
 const lazyPage = (loader: () => Promise<{ default: ComponentType<any> }>) => lazy(loader);
@@ -425,6 +428,7 @@ function App() {
           <Route path='user-team/users' element={<Navigate to="/admin/user-team?tab=users" replace />} />
           <Route path='credit-economy' element={<CreditEconomyPage />} />
           <Route path='moderation' element={<ModerationPage />} />
+          <Route path='restricted-work' element={<AdminRestrictedWorkPage />} />
           <Route path='analytics' element={<AnalyticsPage />} />
           <Route path='ticket-management' element={<TicketManagementPage />} />
           <Route path='system-settings' element={<SystemSettingsPage />} />
@@ -464,6 +468,7 @@ function App() {
           <Route path='restrictions' element={<Navigate to="/moderator/support/user-team" replace />} />
           <Route path='user-team' element={<SupportUserTeam />} />
           <Route path='credits' element={<SupportCreditsWallets />} />
+          <Route path='restricted-work' element={<SupportRestrictedWork />} />
           <Route path='platform-view' element={<StaffPlatformPreviewPage />} />
         </Route>
 
@@ -476,6 +481,7 @@ function App() {
           {/* Restrictions removed: enforce from a report case or User & Team → Users. */}
           <Route path='restrictions' element={<Navigate to="/moderator/jobs/user-team" replace />} />
           <Route path='user-team' element={<JobsUserTeam />} />
+          <Route path='restricted-work' element={<JobsRestrictedWork />} />
           <Route path='platform-view' element={<StaffPlatformPreviewPage />} />
         </Route>
       </Route>

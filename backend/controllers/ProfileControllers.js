@@ -181,7 +181,11 @@ async function getProfileByAccountIdController(req, res) {
     try {
         const { accountId } = req.params;
         if (await hiddenProfileResponse(req, res, accountId)) return;
-        const profile = await getProfileByAccountIdService(accountId);
+        const viewerAccountId = req.session?.account_id || req.session?.accountId || null;
+        const profile = await getProfileByAccountIdService(accountId, {
+            // The owner and staff always see the badges; visitors do not while it is banned, locked or Frozen.
+            viewerSeesAll: req.session?.type === 'Staff' || (viewerAccountId && String(viewerAccountId) === String(accountId)),
+        });
         if (!profile) {
             return res.status(404).json({ success: false, message: 'Profile not found.' });
         }

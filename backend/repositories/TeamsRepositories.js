@@ -87,6 +87,16 @@ async function getTeamStanding(teamIdOrAccountId) {
     WHERE (t.team_id::text=$1 OR t.account_id::text=$1) AND t.deleted_at IS NULL
     LIMIT 1`, [String(teamIdOrAccountId)])).rows[0] || null;
 }
+/** Standard teams this account leads (active Owner): who hears when the leader is restricted. */
+async function getTeamsLedByAccount(accountId) {
+  return (await pool.query(`SELECT t.team_id, t.account_id, a.display_name, a.handle
+    FROM team_members tm
+    JOIN users u ON u.user_id=tm.user_id
+    JOIN teams t ON t.team_id=tm.team_id AND t.deleted_at IS NULL
+    JOIN accounts a ON a.account_id=t.account_id
+    WHERE u.account_id=$1 AND tm.role='Owner' AND tm.status='Active' AND tm.deleted_at IS NULL
+      AND COALESCE(t.team_type,'standard')='standard'`, [accountId])).rows;
+}
 /** Active Owners and Admins: the people who hear about the team's standing and wallet. */
 async function getTeamManagerAccountIds(teamAccountId) {
   return (await pool.query(`SELECT DISTINCT u.account_id FROM teams t
@@ -1196,5 +1206,5 @@ async function deleteTeamVideoProject(teamId, projectId) {
   return { success: true };
 }
 
-module.exports={createTeam,getUserId,isAccountVerified,isActiveTeamOwner,getTeamOwnerVerificationEligibility,getActiveTeamOwnerAccountIds,getTeamStanding,getTeamManagerAccountIds,getActiveTeamMemberAccountIds,listTeamMemberStandings,transferOwnershipByStaff,getTeam,listTeams,getMembership,listMembers,listJoinRequests,upsertMembership,updateMembership,updateTeam,softDeleteTeam,hasActiveAssignedContract,hasActiveTeamContract,findByCode,getTeamInvitePreview,transferOwnership,wallet,getTeamTransactions,distributeTeamFunds,addTeamFunds,listMarketplacePosts,reviews,addReview,addReport,getTeamInbox,createTeamInbox,syncTeamInboxMembers,getTeamCreationEligibility,getTeamMemberLimitEligibility,listTeamTasks,createTeamTask,updateTeamTask,deleteTeamTask,listTeamVideoProjects,createTeamVideoProject,ensureTeamMembersHaveProjectAccess,deleteTeamVideoProject};
+module.exports={createTeam,getUserId,isAccountVerified,isActiveTeamOwner,getTeamOwnerVerificationEligibility,getActiveTeamOwnerAccountIds,getTeamStanding,getTeamsLedByAccount,getTeamManagerAccountIds,getActiveTeamMemberAccountIds,listTeamMemberStandings,transferOwnershipByStaff,getTeam,listTeams,getMembership,listMembers,listJoinRequests,upsertMembership,updateMembership,updateTeam,softDeleteTeam,hasActiveAssignedContract,hasActiveTeamContract,findByCode,getTeamInvitePreview,transferOwnership,wallet,getTeamTransactions,distributeTeamFunds,addTeamFunds,listMarketplacePosts,reviews,addReview,addReport,getTeamInbox,createTeamInbox,syncTeamInboxMembers,getTeamCreationEligibility,getTeamMemberLimitEligibility,listTeamTasks,createTeamTask,updateTeamTask,deleteTeamTask,listTeamVideoProjects,createTeamVideoProject,ensureTeamMembersHaveProjectAccess,deleteTeamVideoProject};
 

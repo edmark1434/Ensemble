@@ -157,8 +157,12 @@ async function getLatestPostingActions(postingIds) {
   const ids = [...new Set((postingIds || []).filter(Boolean).map(String))];
   if (!ids.length) return new Map();
   const { rows } = await pool.query(
-    `SELECT DISTINCT ON (aa.reference_id) aa.reference_id, aa.created_at, aa.metadata
+    `SELECT DISTINCT ON (aa.reference_id) aa.reference_id, aa.created_at, aa.metadata,
+            COALESCE(sa.display_name, NULLIF(TRIM(COALESCE(s.first_name, '') || ' ' || COALESCE(s.last_name, '')), '')) AS actor_name,
+            s.role::text AS actor_role
        FROM account_activity aa
+       LEFT JOIN staff s ON s.staff_id = aa.actor_staff_id
+       LEFT JOIN accounts sa ON sa.account_id = s.account_id
       WHERE aa.reference_id = ANY($1::text[])
         AND aa.event_code IN ('JOBS_POSTING_STATUS_CHANGED', 'JOBS_POSTING_ARCHIVED')
       ORDER BY aa.reference_id, aa.created_at DESC`,
@@ -174,6 +178,8 @@ async function getLatestPostingActions(postingIds) {
           previousStatus: metadata?.previousStatus || null,
           reason: metadata?.reason || null,
           reportNumber: metadata?.reportNumber || null,
+          // The staff member who made the change (staff desks only).
+          by: row.actor_name ? { name: row.actor_name, role: row.actor_role || null } : null,
           at: row.created_at,
         },
       ];
@@ -390,6 +396,7 @@ async function getPostingModerationHistory(postingId) {
       previousStatus: metadata?.previousStatus || null,
       status: metadata?.status || null,
       reason: metadata?.reason || null,
+      reportNumber: metadata?.reportNumber || null,
       actor: row.actor_name ? { name: row.actor_name, role: row.actor_role || 'Staff' } : null,
       createdAt: row.created_at,
     };
@@ -731,7 +738,7 @@ async function updateJobsGigsPosting(type, id, { status, reason } = {}, session 
   const ownerColumn = type === 'job' ? 'client_account_id' : 'freelancer_account_id';
 
   const current = await pool.query(
-    `SELECT ${idColumn} AS id, title, status, deleted_at, ${ownerColumn} AS owner_account_id
+    `SELECT ${idColumn} AS id, title, status, deleted_at, staff_hold_at, ${ownerColumn} AS owner_account_id
      FROM ${table} WHERE ${idColumn} = $1`,
     [id]
   );
@@ -742,6 +749,19 @@ async function updateJobsGigsPosting(type, id, { status, reason } = {}, session 
   if (previousStatus === next) {
     const error = new Error(`This ${type} is already ${next}`);
     error.statusCode = 409;
+    throw error;
+  }
+  // Staff reopen only what staff closed. A posting closed without a staff hold was closed by
+  // its owner or by the system (every hire filled, application window ended), and reopening
+  // it would take new proposals or orders against the owner's decision.
+  if (next === 'active' && previousStatus === 'closed' && !posting.staff_hold_at) {
+    const error = new Error(
+      type === 'job'
+        ? 'This job was closed by its owner or automatically (every hire filled, or the application window ended), not by staff. Only the owner can reopen it.'
+        : 'This gig was closed by its owner, not by staff. Only the owner can reopen it.'
+    );
+    error.statusCode = 409;
+    error.code = 'POSTING_NOT_STAFF_CLOSED';
     throw error;
   }
 
@@ -830,6 +850,7 @@ async function readPostingState(type, id) {
     title: row.title,
     status: normalizePostingStatus(row.status, row.deleted_at),
     held: Boolean(row.staff_hold_at),
+    heldAt: row.staff_hold_at || null,
     ownerAccountId: row.owner_account_id,
   };
 }
@@ -1651,6 +1672,7 @@ module.exports = {
   getFlaggedPostings,
   updateJobsGigsPosting,
   readPostingState,
+  getLatestPostingActions,
   holdPostingForStaff,
   getUserJobsHistory,
   JOBS_DISPUTE_ENTITIES,

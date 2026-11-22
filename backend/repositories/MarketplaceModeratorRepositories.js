@@ -88,7 +88,7 @@ function mapListingRow(row) {
       handle: row.submitter_handle || '—',
     },
     reviewedBy: row.reviewed_by_staff_id
-      ? { staffId: row.reviewed_by_staff_id, name: row.reviewer_name || 'Staff' }
+      ? { staffId: row.reviewed_by_staff_id, name: row.reviewer_name || 'Staff', role: row.reviewer_role || null }
       : null,
     reviewedAt: row.reviewed_at,
     createdAt: row.created_at,
@@ -102,6 +102,7 @@ const LISTING_SELECT = `
     COALESCE(sa.display_name, su.first_name || ' ' || su.last_name) AS submitter_name,
     sa.handle AS submitter_handle,
     COALESCE(ra.display_name, rs.first_name || ' ' || rs.last_name) AS reviewer_name,
+    rs.role::text AS reviewer_role,
     cover.path AS cover_path,
     cover.mime_type AS cover_mime,
     last_message.author_type AS last_message_author_type,
@@ -402,7 +403,8 @@ async function getListingLinkedAsset(marketAssetId) {
     proxyPath: publicPath(file.proxy_path),
     thumbnailPath: publicPath(file.thumbnail_path),
     processingStatus: file.processing_status || 'ready',
-    processingError: file.processing_error || null,
+    // Readable for staff: no server paths, and a missing ffmpeg is named as a server fault.
+    processingError: require('../lib/MediaProcessing').describeProcessingError(file.processing_error),
     processingAttempts: Number(file.processing_attempts || 0),
     position: file.position,
   }));
@@ -744,18 +746,23 @@ async function getSellerMarketplaceListings(accountId) {
     pool.query(
     `
     SELECT
-      listing_id,
-      listing_number,
-      title,
-      category,
-      price_credits,
-      status,
-      created_at,
-      updated_at,
-      reviewed_at
-    FROM marketplace_listings
-    WHERE submitted_by_account_id = $1
-    ORDER BY created_at DESC
+      l.listing_id,
+      l.listing_number,
+      l.title,
+      l.category,
+      l.price_credits,
+      l.status,
+      l.created_at,
+      l.updated_at,
+      l.reviewed_at,
+      l.reviewed_by_staff_id,
+      COALESCE(ra.display_name, NULLIF(TRIM(COALESCE(rs.first_name, '') || ' ' || COALESCE(rs.last_name, '')), '')) AS reviewer_name,
+      rs.role::text AS reviewer_role
+    FROM marketplace_listings l
+    LEFT JOIN staff rs ON rs.staff_id = l.reviewed_by_staff_id
+    LEFT JOIN accounts ra ON ra.account_id = rs.account_id
+    WHERE l.submitted_by_account_id = $1
+    ORDER BY l.created_at DESC
     LIMIT 100
     `,
     [accountId]
@@ -774,6 +781,9 @@ async function getSellerMarketplaceListings(accountId) {
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     reviewedAt: row.reviewed_at,
+    reviewedBy: row.reviewed_by_staff_id
+      ? { staffId: row.reviewed_by_staff_id, name: row.reviewer_name || 'Staff', role: row.reviewer_role || null }
+      : null,
   }));
 
   const counts = {

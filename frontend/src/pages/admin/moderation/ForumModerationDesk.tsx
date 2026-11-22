@@ -82,7 +82,34 @@ type ForumMember = ForumPerson & {
   role: string;
   isBanned: boolean;
   bannedAt: string | null;
+  /** Detail only: the staff member behind a staff ban (null for a group admin's ban). */
+  bannedBy?: StaffActorStamp | null;
   joinedAt: string | null;
+};
+
+/** The staff member who took an action. Staff desks only: members never receive it. */
+type StaffActor = { staffId?: string; name: string; role?: string | null };
+
+/** A staff member and when they acted (current lock, pin or ban). */
+type StaffActorStamp = StaffActor & { at?: string | null };
+
+/** One staff action on a group or discussion (`account_activity`), newest first. */
+type ForumModerationEntry = {
+  id: string;
+  action: string;
+  eventCode: string;
+  reason: string | null;
+  memberId?: string | null;
+  commentId?: string | null;
+  by: StaffActor | null;
+  at: string;
+};
+
+/** Who removed or archived something: the staff member, or the member for a member-side delete. */
+type RemovalActors = {
+  removedBy?: string | null;
+  removedByStaff?: StaffActor | null;
+  removedByMember?: ForumPerson | null;
 };
 
 /** An earlier version of a comment: the text before an edit, or what its author deleted. */
@@ -109,6 +136,8 @@ type ForumComment = {
   isDeleted: boolean;
   deletedAt: string | null;
   removedBy?: string | null;
+  removedByStaff?: StaffActor | null;
+  removedByMember?: ForumPerson | null;
   removalReason?: string | null;
   canRestore?: boolean;
   restoreBlockedReason?: string | null;
@@ -146,11 +175,18 @@ type ForumDiscussion = {
   updatedAt: string | null;
   removedAt: string | null;
   removedBy?: string | null;
+  removedByStaff?: StaffActor | null;
+  removedByMember?: ForumPerson | null;
   removalReason?: string | null;
   canRestore?: boolean;
   restoreBlockedReason?: string | null;
   lastCommentAt: string | null;
   lastActivityAt: string | null;
+  /** Detail only: who set the current lock and pin. */
+  lockedBy?: StaffActorStamp | null;
+  pinnedBy?: StaffActorStamp | null;
+  /** Detail only: staff actions on the discussion and its comments. */
+  moderationHistory?: ForumModerationEntry[];
   comments?: ForumComment[];
 };
 
@@ -180,11 +216,15 @@ type ForumGroup = {
   createdAt: string | null;
   deletedAt: string | null;
   archivedBy?: string | null;
+  archivedByStaff?: StaffActor | null;
+  archivedByMember?: ForumPerson | null;
   archiveReason?: string | null;
   canReactivate?: boolean;
   reactivateBlockedReason?: string | null;
   members?: ForumMember[];
   discussions?: ForumDiscussion[];
+  /** Detail only: staff actions on the group (archive, reactivate, member bans). */
+  moderationHistory?: ForumModerationEntry[];
 };
 
 type ForumStats = {
@@ -301,14 +341,61 @@ const REMOVED_BY_LABEL: Record<string, string> = {
   staff: 'Removed by staff',
 };
 
-function removedByLabel(value?: string | null) {
-  return value ? REMOVED_BY_LABEL[value] || 'Removed' : 'Removed (source not recorded)';
+/** "Name (role)" for a staff member. */
+function staffActorLabel(actor?: StaffActor | null) {
+  if (!actor) return null;
+  return actor.role ? `${actor.name} (${actor.role})` : actor.name;
 }
 
-function archivedByLabel(value?: string | null) {
+/** Who removed it, naming the staff member (or the member) when it was recorded. */
+function removedByLabel(item: RemovalActors) {
+  const value = item.removedBy;
+  if (value === 'staff' && item.removedByStaff) return `Removed by ${staffActorLabel(item.removedByStaff)}`;
+  const base = value ? REMOVED_BY_LABEL[value] || 'Removed' : 'Removed (source not recorded)';
+  return item.removedByMember && value !== 'author' ? `${base}: ${personLabel(item.removedByMember)}` : base;
+}
+
+function archivedByLabel(group: Pick<ForumGroup, 'archivedBy' | 'archivedByStaff' | 'archivedByMember'>) {
+  const value = group.archivedBy;
   if (value === 'owner') return 'Deleted by its owner';
-  if (value === 'staff') return 'Archived by staff';
+  if (value === 'staff') {
+    return group.archivedByStaff ? `Archived by ${staffActorLabel(group.archivedByStaff)}` : 'Archived by staff';
+  }
   return 'Archived (source not recorded)';
+}
+
+/**
+ * Staff actions on a group or discussion, newest first, each with the staff member who took
+ * it and the reason they gave.
+ */
+function ModerationHistoryList({ entries, empty }: { entries?: ForumModerationEntry[]; empty: string }) {
+  const list = entries || [];
+  return (
+    <section>
+      <p className="mb-2 flex items-center gap-1.5 text-sm font-medium text-white">
+        <History className="h-4 w-4 text-zinc-400" />
+        Staff actions
+        <span className="rounded-full bg-white/5 px-2 py-0.5 text-[10px] font-medium text-zinc-400">{list.length}</span>
+      </p>
+      {list.length === 0 ? (
+        <p className="rounded-xl border border-dashed border-white/10 px-3 py-3 text-center text-xs text-zinc-600">{empty}</p>
+      ) : (
+        <ol className="space-y-1.5">
+          {list.map((entry) => (
+            <li key={entry.id} className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-3 py-2">
+              <p className="text-xs text-zinc-200">{entry.action}</p>
+              {entry.reason ? <p className="mt-0.5 text-[11px] text-zinc-400">“{entry.reason}”</p> : null}
+              <p className="mt-0.5 text-[11px] text-zinc-500">
+                By <span className="font-medium text-zinc-300">{staffActorLabel(entry.by) || 'staff (not recorded)'}</span>
+                {' · '}
+                <span title={formatDateTime(entry.at)}>{formatRelative(entry.at)}</span>
+              </p>
+            </li>
+          ))}
+        </ol>
+      )}
+    </section>
+  );
 }
 
 function groupParams(search: string, status: string) {
@@ -1139,7 +1226,7 @@ function DiscussionCards({
               ) : null}
               {removed ? (
                 <p className="mt-3 rounded-lg border border-rose-500/20 bg-rose-500/[0.06] px-2.5 py-1.5 text-[11px] text-rose-100/90">
-                  {removedByLabel(item.removedBy)}
+                  {removedByLabel(item)}
                   {item.removalReason ? ` · “${item.removalReason}”` : ''}
                 </p>
               ) : null}
@@ -1258,7 +1345,7 @@ function GroupCards({
                 ) : null}
                 {archived ? (
                   <p className="mt-2.5 text-[11px] text-amber-200/80">
-                    {archivedByLabel(group.archivedBy)}
+                    {archivedByLabel(group)}
                     {group.archiveReason ? ` · “${group.archiveReason}”` : ''}
                   </p>
                 ) : null}
@@ -1850,6 +1937,7 @@ function GroupDetail({
                       {member.handle ? `@${member.handle}` : 'No handle'}
                       {member.joinedAt ? ` · joined ${formatRelative(member.joinedAt)}` : ''}
                       {member.isBanned && member.bannedAt ? ` · banned ${formatRelative(member.bannedAt)}` : ''}
+                      {member.isBanned && member.bannedBy ? ` by ${staffActorLabel(member.bannedBy)}` : ''}
                     </p>
                   </div>
                 </div>
@@ -1926,7 +2014,7 @@ function GroupDetail({
           </p>
           {group.status !== 'active' ? (
             <p className="mt-2 text-xs text-zinc-300">
-              {archivedByLabel(group.archivedBy)}
+              {archivedByLabel(group)}
               {group.archiveReason ? ` · “${group.archiveReason}”` : ''}
             </p>
           ) : null}
@@ -1966,6 +2054,11 @@ function GroupDetail({
             </div>
           </div>
         </section>
+
+        <ModerationHistoryList
+          entries={group.moderationHistory}
+          empty="No staff action has been taken on this group yet."
+        />
       </div>
     </>
   );
@@ -2120,7 +2213,7 @@ function CommentNode({
             {comment.isDeleted ? (
               <div className="flex shrink-0 items-center gap-1.5">
                 <span className="rounded-full border border-white/10 bg-white/[0.03] px-2 py-0.5 text-[10px] text-zinc-500">
-                  {removedByLabel(comment.removedBy)}
+                  {removedByLabel(comment)}
                 </span>
                 {comment.canRestore ? (
                   <button
@@ -2355,8 +2448,19 @@ function DiscussionDetail({
           </p>
           {isRemoved ? (
             <p className="mt-2 text-xs text-zinc-300">
-              {removedByLabel(discussion.removedBy)}
+              {removedByLabel(discussion)}
               {discussion.removalReason ? ` · “${discussion.removalReason}”` : ''}
+            </p>
+          ) : null}
+          {discussion.isLocked || discussion.isSticky ? (
+            <p className="mt-1 text-xs text-zinc-400">
+              {discussion.isLocked
+                ? `Replies locked${discussion.lockedBy ? ` by ${staffActorLabel(discussion.lockedBy)}` : ''}`
+                : null}
+              {discussion.isLocked && discussion.isSticky ? ' · ' : null}
+              {discussion.isSticky
+                ? `Pinned${discussion.pinnedBy ? ` by ${staffActorLabel(discussion.pinnedBy)}` : ''}`
+                : null}
             </p>
           ) : null}
           <div className="mt-3 space-y-3">
@@ -2454,6 +2558,11 @@ function DiscussionDetail({
             </p>
           )}
         </section>
+
+        <ModerationHistoryList
+          entries={discussion.moderationHistory}
+          empty="No staff action has been taken on this discussion or its comments yet."
+        />
       </div>
     </>
   );

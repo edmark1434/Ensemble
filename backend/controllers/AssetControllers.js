@@ -57,9 +57,17 @@ async function listAssetsController(req, res) {
   } catch (error) { return handleAssetError(res, error); }
 }
 
+/** A live staff session (not just a staff token), so a revoked session loses the wider view. */
+function staffViewer(req) {
+  return req.session?.type === 'Staff';
+}
+
 async function getAssetController(req, res) {
   try {
-    return res.json({ success: true, asset: await getAssetServices(req.params.assetId, req.user?.account_id) });
+    return res.json({
+      success: true,
+      asset: await getAssetServices(req.params.assetId, req.user?.account_id, { staffViewer: staffViewer(req) }),
+    });
   } catch (error) { return handleAssetError(res, error); }
 }
 
@@ -156,7 +164,10 @@ async function assignAssetLicenseController(req, res) {
 
 async function listCommentsController(req, res) {
   try {
-    return res.json({ success: true, comments: await listCommentsServices(req.params.assetId, req.user?.account_id) });
+    return res.json({
+      success: true,
+      comments: await listCommentsServices(req.params.assetId, req.user?.account_id, { staffViewer: staffViewer(req) }),
+    });
   } catch (error) { return handleAssetError(res, error); }
 }
 
@@ -254,7 +265,7 @@ async function listAssetReviewsController(req, res) {
   try {
     return res.json({
       success: true,
-      reviews: await listAssetReviewsServices(req.params.assetId, req.user?.account_id),
+      reviews: await listAssetReviewsServices(req.params.assetId, req.user?.account_id, { staffViewer: staffViewer(req) }),
     });
   } catch (error) { return handleAssetError(res, error); }
 }

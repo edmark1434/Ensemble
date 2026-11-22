@@ -246,7 +246,7 @@ function menuItems(posting: JobsGigsPosting): MenuItem[] {
   return [
     { id: "view", label: "Review posting", icon: Eye },
     { id: "history", label: "Owner history", icon: History },
-    ...actionsForPostingStatus(posting.status).map((action) => ({
+    ...actionsForPostingStatus(posting.status, Boolean(posting.staffHoldAt)).map((action) => ({
       id: action,
       label: POSTING_ACTIONS[action].label,
       icon: POSTING_ACTIONS[action].icon,
@@ -803,6 +803,15 @@ export default function JobsGigsControl({
                                 : "Hidden from the board"}
                             {p.staffHoldAt && p.status !== "active" ? " · staff hold" : ""}
                           </p>
+                          {p.lastStaffAction?.status && (
+                            <p className="mt-0.5 text-[11px] text-zinc-500" title={formatDateTime(p.lastStaffAction.at)}>
+                              {p.lastStaffAction.status === "active" ? "Reopened" : (
+                                <span className="capitalize">{p.lastStaffAction.status}</span>
+                              )}{" "}
+                              by{" "}
+                              <span className="text-zinc-300">{p.lastStaffAction.by?.name || "staff"}</span>
+                            </p>
+                          )}
                         </td>
                         <td className="px-4 py-3.5 align-top">
                           <span

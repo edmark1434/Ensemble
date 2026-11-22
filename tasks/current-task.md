@@ -1,5 +1,64 @@
 # Current Task
 
+# Parallel task: what happens to a restricted member's work and resources
+
+## Objective
+
+When a member (or team) is suspended, locked or banned, nothing they offer stays actionable, nobody's credits are stranded, nobody is punished twice for being blocked, and an accepted ban appeal gives their work back without a ticket. Forum posts, comments and listings show the public standing chip. See docs/punishment-system.md §9, §9.1, §9.2, §11.
+
+## Acceptance Criteria
+
+- **Paused gate.** `lib/OwnerAvailability.js` (deactivated, live suspension / lock / ban, team leader banned / locked / missing). Job and gig browse hide them; proposals, invites, offers, offer signing, gig orders and confirmations refuse with 409 `OWNER_UNAVAILABLE` (nothing charged). Locked / banned creators' assets leave the catalog and stop selling (`ASSET_CREATOR_UNAVAILABLE`); suspended creators keep selling. Detail pages show a paused notice; owners see why.
+- **Money.** Banned / locked / deactivated members can see and stop plan renewal (allowlists + appeal-page card); a permanent ban stops renewal. Transfers to deactivated / locked / banned wallets refuse (`RECIPIENT_UNAVAILABLE`); transfer errors no longer surface as 500.
+- **Reach.** New DMs to banned / locked members, team invites to deactivated / locked / banned members and subcontract hires of unavailable members refuse. Discovery browse leaves out banned / locked members.
+- **Live work.** Counterparties of live contracts are told when a side becomes suspended / locked / banned and when it can act again (staff, auto-suspend, expiry, reversal). Staff queue "Restricted parties" (`GET /api/moderator/restricted-work`) on Jobs, Support and Admin consoles with escrow and open dispute.
+- **No double hits.** Missed-review warnings skip windows a penalty touched. Auto-abandonment refunds and cancellation auto-approval wait while the party is suspended / locked (+48 h).
+- **Restore.** Migration `1830800000000_ban-cleanup-items` records what a ban closed. Accepted ban appeals restore by default (`restoreClosedItems`), unban offers `restoreBanItems`, User & Team shows *Closed by a ban* with restore; items changed since stay closed. Reversing an unban re-runs the clean-up.
+- **Teams.** A banned / locked leader pauses the team's listings; Owners / Admins are told no ticket is needed, and told again when it ends.
+- **Visibility.** `StandingChip` on forum posts, comments, members and owner, and on job / gig / asset authors; visitors do not see badges while banned, locked or Frozen.
+
+# Parallel task: Analytics definitions, staff Reopen only for staff-closed postings
+
+## Objective
+
+Admin → Analytics explains every figure (what it is, how it is worked out, where it comes from) without crowding the page, and Jobs & Gigs Control only offers Reopen on postings staff closed.
+
+## Acceptance Criteria
+
+- **Popovers.** An ⓘ next to each tile, panel title and key row opens a popover with the meaning, formula, source and caveats (`analyticsGlossary.ts`, `InfoButton` in `analyticsInfo.tsx`). Clicks inside link tiles never navigate; Esc or a click outside closes it; it opens above the button near the screen bottom.
+- **Definitions drawer.** A header "Definitions" button (every tab but Feedback) opens a drawer with a section per tab plus "Reading this page" (range, change badge, live figures, cache, members, credit value) and search across all terms. "All definitions" in a popover opens the drawer at that term.
+- **Coverage.** Overview, Members, Community, Revenue & credits (Net cash, Cash in/out, Credits outstanding, MRR, records…), Operations and Traffic & rate limits.
+- **Reopen.** A closed job or gig without a staff hold (owner closed it, every hire filled, or the application window ended) offers Pause / Archive instead of Reopen, and the posting dialog says why. `PATCH …/jobs/postings/:type/:id` with `status: active` on such a posting is 409 `POSTING_NOT_STAFF_CLOSED`. Staff-paused, staff-closed and archived postings keep Reopen / Restore.
+
+# Parallel task: every staff decision names the staff member who made it
+
+## Objective
+
+Wherever staff approve, decline, reject, delist, pause, close, archive, remove, lock, pin, ban, freeze or grant something, the staff desks show who did it (name and role). Members never see staff names (sellers still see "Marketplace review team").
+
+## Acceptance Criteria
+
+- **Jobs & Gigs.** `lastStaffAction.by { name, role }` on posting rows; cards, the table's Status column and the review modal say "Paused by …"; the modal's Activity card shows the last staff action and its staff member, and Moderation history rows lead with "By …" (with the report number when there was one).
+- **Marketplace.** `reviewedBy` carries `role`; the listing modal header says "Rejected / Delisted / Approved by …", the Record card shows the role, and the seller-history modal lists who decided each listing.
+- **Forum.** Discussions and comments carry `removedByStaff` (or `removedByMember` for a group moderator / discussion owner), groups carry `archivedByStaff` / `archivedByMember`, discussion detail carries `lockedBy` / `pinnedBy`, group roster bans carry `bannedBy`, and both group and discussion detail carry `moderationHistory` (from `account_activity`, with who did each). Forum Control and the admin Forum desk show all of it; report cases and ticket case files name who removed or archived the content.
+- **Video.** "Removed by staff" names the staff member from the project's history.
+- **Verification.** User verification logs name the staff member (and role) behind the last approve / decline / resubmit request instead of "System"; team logs include the role.
+- **Badges.** Current holders show "Granted by …".
+
+# Parallel task: ticket catalog review and bug reports in every category
+
+## Objective
+
+The ticket catalog matches what Ensemble actually has, and members can report a bug from every ticket category, each routed to that category's desk.
+
+## Acceptance Criteria
+
+- **Bug reports.** Each category has its own bug report type (Account, Billing, Video Editing Platform, Messaging, Safety and appeals, General, Forum, Marketplace, Jobs and Gigs) with the same questions: where it happened (area-specific list), link to the page, steps, expected vs. what happened, how often, whether it blocks the member, error message. A blocking bug is filed as High priority. They count toward their category's open-ticket limit.
+- **Missing types.** "Business verification" (Account, picks the team) and "Team funds and distributions" (Billing, picks the team); "Workspaces and team projects" (Jobs and Gigs, picks the contract).
+- **Fixes.** Options cover real features (badges, comments and mentions, watermark / plan limits, trash and templates, license assignment, where a user was reported). "Delivery and disputes" asks whether a dispute was filed and points to the dispute form. "Editor problems" is crashes and slowness; a tool that behaves wrong is a video editor bug report. Unused `PUBLIC_TICKET_GROUPS` and `ROLE_TO_TICKET_TYPE` are removed.
+- **Storage.** Migration `1830900000000_ticket-catalog-bug-reports` widens `tickets_type_enum` and seeds reply guides for the new types; `down` moves new-type tickets to the nearest old type.
+- **Staff.** Bug reports get a "Bug report" case tab (area, frequency, blocking, page, browser, and other open bug reports in the same area); frontend catalog lists, descriptions and desk subtitles include the new types.
+
 # Parallel task: Jobs & Gigs Control member view, paused / archived visibility
 
 ## Objective
@@ -14,6 +73,7 @@ Moderators see each job and gig the way members see it on the board, with modera
 - **Status guide.** The desk explains the purpose of Active, Paused, Closed and Archived (members, owner, what comes next); the reason dialog says the owner is notified with the reason and an appeal link.
 - **Board visibility.** Staff-paused jobs and gigs leave browse (owners still see their own). Staff-archived gigs (`deleted_at`) leave browse, saved gigs and the gig page, as archived jobs already did.
 - **Notices.** Every staff pause / close / archive / reopen notifies the owner (already in place); the closed notice no longer claims the posting is hidden.
+- **Owner page notice.** While a job or gig is paused or closed on a staff hold, its page shows the people who manage it a "Paused / Closed by the Ensemble team" notice: what that means, the reason (or a pointer to the notification), the report number when there is one, and an "Ask for a review" link to the "Appeal a jobs action" ticket. It comes from `ownerStaffHoldNotice` as job `staff_hold` / gig `staffHold`, only for people who manage the posting. A paused job shows "Application Window Closed" to everyone else.
 
 # Parallel task: forum comment edit and delete history for staff
 
@@ -46,6 +106,20 @@ Whatever a ticket names (listing, asset, purchase, contract, job, gig, proposal,
 - **Billing.** Payout references match cashout reference / disbursement ids; invoice ids match subscription invoices.
 - **Every area.** All five desks (Admin, Support, Forum, Jobs & Gigs, Marketplace) share the panel. "Seller verification" / "Listing review" show selling eligibility; "Uploads and storage" shows the member's recent uploads; sections for a record the type never asks for (listing, contract, project) are left out instead of saying "none named".
 - **Links.** Case records open in platform view; Details form answers and the member's "What you reported" link to the picked record (`formValues[].href`).
+
+# Parallel task: ticket intake security, staff see assets that are not live
+
+## Objective
+
+Members cannot pile up or race duplicate tickets about the same thing, ticket replies and lookups are rate limited, and staff can still open a banned seller's (or any not-live) asset for information. A missing ffmpeg on the server no longer fails sellers' uploads for good.
+
+## Acceptance Criteria
+
+- **Same record.** A second open ticket by the same member naming the same record (picked id, id in a pasted link, listing ≡ its asset, reported person, payment reference, appeal case number) is 409 `TICKET_RECORD_OPEN` with the ticket to use; the form links to it. Self-reports are 400 `TICKET_SELF_REPORT`.
+- **Races.** Intake runs under a per-member lock, so parallel submits cannot all pass the duplicate, same-record and category checks.
+- **Limits.** Replies ≤ 5,000 characters (staff 10,000); `ticketReply`, `ticketAction`, `ticketLookup` and `technicalReport` route limiters; invite and rating errors never echo internal messages.
+- **Staff asset view.** A live staff session reads the asset page, comments and reviews of draft / delisted / banned / trashed / seller-deleted assets with the listing state and a staff notice; writes and downloads keep member rules.
+- **Media tools.** ffmpeg falls back from a missing bundled binary to `PATH`; a missing tool keeps jobs queued without using attempts (images keep running) and old ENOENT failures are re-queued once it works; staff see a readable error.
 
 # Earlier task
 

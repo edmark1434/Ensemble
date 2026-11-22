@@ -185,7 +185,13 @@ export function LastStaffActionNote({ posting }: { posting: JobsGigsPosting }) {
     <p className="flex items-start gap-1.5 text-[11px] leading-snug text-zinc-400" title={formatDateTime(action.at)}>
       <Bell className="mt-0.5 h-3 w-3 shrink-0 text-sky-300" />
       <span className="line-clamp-2">
-        <span className="font-medium text-zinc-200">{ACTION_VERB[action.status] || action.status}</span>{" "}
+        <span className="font-medium text-zinc-200">{ACTION_VERB[action.status] || action.status}</span>
+        {action.by ? (
+          <>
+            {" "}by <span className="font-medium text-zinc-200">{action.by.name}</span>
+            {action.by.role ? <span className="text-zinc-500"> ({action.by.role})</span> : null}
+          </>
+        ) : null}{" "}
         {relativeTime(action.at)} · owner notified
         {action.reportNumber ? ` · ${action.reportNumber}` : ""}
         {action.reason ? <span className="text-zinc-500"> · “{action.reason}”</span> : null}

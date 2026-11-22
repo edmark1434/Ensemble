@@ -1,4 +1,5 @@
 import { sampleCategories } from "../6_job_market/job_datasets";
+import type { PostingStaffHold } from "@/components/postings/StaffHoldNotice";
 
 export type QuestionnaireType = "fill-in-blank" | "file-upload" | "multiple-choice";
 
@@ -81,6 +82,8 @@ export interface Gig {
   isSaved: boolean;
   isOwnGig: boolean;
   canManageGig?: boolean;
+  /** Only for people who manage the gig: staff paused or closed it (see StaffHoldNotice). */
+  staffHold?: PostingStaffHold | null;
   isPersonalGig?: boolean;
   savesCount?: number;
   ordersCount?: number;
@@ -91,6 +94,10 @@ export interface Gig {
   freelancerMerit?: number;
   freelancerSubscriptionPlan?: string;
   freelancerIsVerified?: boolean;
+  /** Set while the seller cannot take orders (deactivated, suspended, locked, banned, team leader restricted). */
+  sellerUnavailableReason?: string | null;
+  /** Public standing chip for the seller (Banned / Suspended / Locked / Timeout). */
+  sellerStanding?: import("@/pages/user/7_profile/Displays/AccountStanding").PublicStanding | null;
   discoveryOrderKey?: number;
   team_id?: string | null;
   teamId?: string | null;

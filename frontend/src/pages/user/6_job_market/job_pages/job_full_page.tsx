@@ -38,6 +38,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { DotLottieReact } from "@lottiefiles/dotlottie-react";
 import ShapeGrid from "@/components/ui/ShapeGrid";
 import UserHeader from "@/components/nav/user_header";
+import { StaffHoldNotice } from "@/components/postings/StaffHoldNotice";
 import api from "@/lib/axios";
 import useGlobalState from "@/lib/global_state";
 import { CreditIcon } from "@/components/ui/credit-icon";
@@ -49,6 +50,8 @@ import { JobRichText } from "../job_components/JobRichText";
 import { JobsOtherPosts } from "../job_components/jobs_other_posts";
 import PopupReportJob from "../job_components/job_popups/popup_report_job";
 import type { Job } from "../job_components/job_lists";
+import StandingChip from "@/components/account/StandingChip";
+import { normalizeUnavailableReason, ownPausedText, pausedListingText } from "@/lib/ownerAvailability";
 import { computeJobRankingBreakdown } from "../job_ranking";
 import { formatDistanceToNow } from "date-fns";
 
@@ -235,7 +238,10 @@ const JobFullPage: React.FC = () => {
             hardDeadline: j.hard_deadline,
             freeExtensionCount: parseInt(j.free_extension_count, 10) || 0,
             applicationExtendedAt: j.application_extended_at,
-            postingFeeCredits: parseInt(j.posting_fee_credits, 10) || 50
+            postingFeeCredits: parseInt(j.posting_fee_credits, 10) || 50,
+            staffHold: j.staff_hold || null,
+            ownerUnavailableReason: normalizeUnavailableReason(j.owner_unavailable_reason),
+            clientStanding: j.client_standing || null
           };
 
           setJob(mappedJob);
@@ -323,6 +329,8 @@ const JobFullPage: React.FC = () => {
   const isWindowExpired = Boolean(
     job?.status?.toLowerCase() === "expired" ||
     job?.status?.toLowerCase() === "closed" ||
+    // Only staff pause a job; it takes no proposals until they reopen it.
+    job?.status?.toLowerCase() === "paused" ||
     (appDeadlineTime && appDeadlineTime <= nowTime)
   );
   const hoursRemaining = appDeadlineTime ? Math.max(0, Math.round((appDeadlineTime - nowTime) / (1000 * 60 * 60))) : null;
@@ -641,8 +649,29 @@ const JobFullPage: React.FC = () => {
                 </div>
               )}
 
+              {/* Staff hold: only people who manage the job receive it */}
+              <StaffHoldNotice hold={job.staffHold} noun="job" />
+
+              {/* Paused while the client cannot hire: the owner hears why, everyone else that it is paused */}
+              {job.ownerUnavailableReason && !job.staffHold && (
+                <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 flex items-start gap-2 text-xs font-semibold text-amber-800 dark:text-amber-200">
+                  <CheckCircle2 className="h-4 w-4 shrink-0 mt-0.5" />
+                  <span>
+                    {job.isManageablePost
+                      ? ownPausedText(job.ownerUnavailableReason)
+                      : pausedListingText(job.ownerUnavailableReason, "client")}
+                  </span>
+                </div>
+              )}
+
               {/* Closed Job Notice */}
-              {(job.status?.toLowerCase() === "expired" || job.status?.toLowerCase() === "closed") && (
+              {!job.staffHold && job.status?.toLowerCase() === "paused" && (
+                <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-100 dark:bg-zinc-800/40 p-4 flex items-center gap-2 text-xs font-semibold text-zinc-700 dark:text-zinc-300">
+                  <CheckCircle2 className="h-4 w-4 text-zinc-500 shrink-0" />
+                  <span>This job is not taking proposals right now.</span>
+                </div>
+              )}
+              {!job.staffHold && (job.status?.toLowerCase() === "expired" || job.status?.toLowerCase() === "closed") && (
                 <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-100 dark:bg-zinc-800/40 p-4 flex items-center justify-between gap-3 text-xs text-zinc-700 dark:text-zinc-300">
                   <div className="flex items-center gap-2 font-semibold">
                     <CheckCircle2 className="h-4 w-4 text-zinc-500 shrink-0" />
@@ -1113,6 +1142,7 @@ const JobFullPage: React.FC = () => {
                       </p>
                       <VerificationIcon verified={job.clientIsVerified} sizeClassName="w-4 h-4" />
                       <SubscriptionIcon plan={job.clientSubscriptionPlan} sizeClassName="w-4 h-4" />
+                      <StandingChip standing={job.clientStanding} className="shrink-0" />
                     </div>
                     <div className="flex items-center gap-1 mt-0.5 text-xs text-gray-500 dark:text-zinc-400">
                       <Star className="h-3 w-3 text-yellow-500 fill-yellow-500" />
@@ -1354,6 +1384,10 @@ const JobFullPage: React.FC = () => {
                             You have applied for a milestone role on this team project.
                           </span>
                         )}
+                      </div>
+                    ) : job.ownerUnavailableReason ? (
+                      <div className="w-full rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-3.5 text-center text-xs font-bold text-amber-800 dark:text-amber-200 select-none">
+                        Not taking proposals right now
                       </div>
                     ) : isWindowExpired ? (
                       <div className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-100 dark:bg-zinc-800/60 py-3.5 text-center text-xs font-bold text-zinc-500 dark:text-zinc-400 select-none">

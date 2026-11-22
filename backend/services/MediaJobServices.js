@@ -8,6 +8,8 @@ const {
 } = require('@aws-sdk/client-s3');
 const s3 = require('../lib/AmazonS3');
 const {
+  MEDIA_TOOLS_MISSING,
+  mediaToolsAvailable,
   processVideo,
   processAudio,
   makeWorkDir,
@@ -18,8 +20,17 @@ const { createWatermarkSvg, createImageThumbnail, generateImageDerivatives, prep
 const {
   claimMediaAssetJobRepository,
   failMediaAssetJobRepository,
+  releaseMediaAssetJobRepository,
+  requeueMissingToolFailuresRepository,
   completeMediaAssetJobRepository,
 } = require('../repositories/MediaJobRepositories');
+
+/** How long video and audio jobs wait before ffmpeg / ffprobe are tried again. */
+const TOOLS_MISSING_BACKOFF_MS = 60 * 1000;
+/** Kinds that need ffmpeg; image jobs use sharp and keep running meanwhile. */
+const FFMPEG_KINDS = ['video', 'audio'];
+// Per process: the embedded cron, inline asset creation and the media worker each back off.
+let toolsMissingUntil = 0;
 
 const DEFAULT_TAG_PATH = path.join(__dirname, '..', 'assets', 'ensemble-tag.mp3');
 
@@ -137,6 +148,13 @@ async function runMediaJob(job) {
     return 'done';
   } catch (error) {
     await deleteKeys(uploaded);
+    // A broken server install is not the file's fault: keep the job queued and its attempts intact.
+    if (error?.code === MEDIA_TOOLS_MISSING) {
+      await releaseMediaAssetJobRepository(job, error.message);
+      if (Date.now() >= toolsMissingUntil) console.error(`Media job ${job.media_asset_job_id} waiting: ${error.message}`);
+      toolsMissingUntil = Date.now() + TOOLS_MISSING_BACKOFF_MS;
+      return 'tools_missing';
+    }
     const willRetry = await failMediaAssetJobRepository(job, error.message);
     console.error(`Media job ${job.media_asset_job_id} failed${willRetry ? ' (will retry)' : ''}:`, error.message);
     return willRetry ? 'retry' : 'failed';
@@ -147,8 +165,29 @@ async function runMediaJob(job) {
 
 // Processes at most one job; returns null when the queue is empty.
 async function processNextMediaJob() {
-  const job = await claimMediaAssetJobRepository();
+  const job = await claimMediaAssetJobRepository({
+    skipKinds: Date.now() < toolsMissingUntil ? FFMPEG_KINDS : [],
+  });
   return job ? runMediaJob(job) : null;
+}
+
+/**
+ * At start-up: when ffmpeg and ffprobe work, uploads that failed only because they were missing
+ * go back to the queue. When they do not, say so once and let video / audio jobs wait.
+ */
+async function recoverMissingToolFailures() {
+  try {
+    if (!(await mediaToolsAvailable())) {
+      console.error('Media previews: ffmpeg / ffprobe are not available. Video and audio jobs wait until they are (set FFMPEG_PATH / FFPROBE_PATH).');
+      return 0;
+    }
+    const requeued = await requeueMissingToolFailuresRepository();
+    if (requeued) console.log(`Media previews: re-queued ${requeued} job(s) that failed while ffmpeg was missing.`);
+    return requeued;
+  } catch (error) {
+    console.error('Media previews: could not re-queue jobs:', error.message);
+    return 0;
+  }
 }
 
 async function runMediaWorker({ concurrency = 1, idleMs = 3000 } = {}) {
@@ -158,6 +197,7 @@ async function runMediaWorker({ concurrency = 1, idleMs = 3000 } = {}) {
   process.once('SIGINT', stop);
   process.once('SIGTERM', stop);
   const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+  await recoverMissingToolFailures();
   const lane = async () => {
     while (!stopping) {
       let outcome = null;
@@ -172,4 +212,4 @@ async function runMediaWorker({ concurrency = 1, idleMs = 3000 } = {}) {
   await Promise.all(Array.from({ length: Math.max(1, concurrency) }, lane));
 }
 
-module.exports = { runMediaJob, processNextMediaJob, runMediaWorker };
+module.exports = { runMediaJob, processNextMediaJob, runMediaWorker, recoverMissingToolFailures };

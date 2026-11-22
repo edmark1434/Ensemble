@@ -47,6 +47,8 @@ import AssetPurchaseModal from "./AssetPurchaseModal";
 import AssetSubmissionThread from "./AssetSubmissionThread";
 import TemplateUseModal from "./TemplateUseModal";
 import { marketTemplatePreviewUrl } from "./templatePreview";
+import StandingChip from "@/components/account/StandingChip";
+import { normalizeUnavailableReason, pausedListingText } from "@/lib/ownerAvailability";
 import { isVideoPreviewPath, mediaUrl, readableDuration, readableSize, type AssetComment, type AssetMediaFile, type AssetPurchaseResponse, type AssetRecord, type AssetReply, type AssetReview } from "./assetTypes";
 
 function errorMessage(error: unknown, fallback: string) {
@@ -61,6 +63,42 @@ function formatDate(value: string, includeTime = false) {
   return new Intl.DateTimeFormat(undefined, includeTime
     ? { dateStyle: "medium", timeStyle: "short" }
     : { dateStyle: "medium" }).format(new Date(value));
+}
+
+const STAFF_REVIEW_LABEL: Record<string, string> = {
+  pending: "In review",
+  scheduled: "Approved, not live yet",
+  approved: "Approved",
+  rejected: "Rejected",
+  delisted: "Delisted",
+  draft: "Draft",
+};
+
+/**
+ * Staff reading this page in platform view: what members see, and why. Shown whenever the asset
+ * is not plainly live, so a banned seller's or a failed upload's page still reads clearly.
+ */
+function StaffAssetNotice({ asset }: { asset: AssetRecord }) {
+  const live = asset.status === "published" && !asset.trashed_at && !asset.seller_removed;
+  const facts = [
+    asset.review_status ? `Listing: ${STAFF_REVIEW_LABEL[asset.review_status] || asset.review_status}` : null,
+    asset.review_status === "scheduled" && asset.review_publish_at ? `goes live ${formatDate(asset.review_publish_at, true)}` : null,
+    asset.processing_status === "failed" ? "preview processing failed" : null,
+    asset.processing_status === "processing" ? "preview still processing" : null,
+    asset.seller_removed ? "the seller's account was deleted" : null,
+  ].filter(Boolean);
+  const reason = asset.rejection_reason || asset.review_note;
+  if (live && !facts.length) return null;
+  return (
+    <div className="mb-6 rounded-xl border border-amber-400/40 bg-amber-50 p-4 text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100">
+      <p className="flex items-center gap-2 text-sm font-semibold">
+        <Eye className="h-4 w-4 shrink-0" />
+        {live ? "Staff view" : "Staff view: members cannot see or buy this asset right now."}
+      </p>
+      {facts.length ? <p className="mt-1 text-xs">{facts.join(" · ")}</p> : null}
+      {reason ? <p className="mt-1 text-xs">Reason on record: {reason}</p> : null}
+    </div>
+  );
 }
 
 function getTypeIcon(type: string) {
@@ -461,6 +499,9 @@ export default function AssetDetails() {
     }
   };
 
+  // New sales pause while the creator is locked or banned; licenses already owned still work.
+  const creatorPausedReason = normalizeUnavailableReason(asset?.creator_unavailable_reason);
+
   const requestPurchase = () => {
     if (isGuestView) {
       setPurchaseOpen(false);
@@ -519,7 +560,8 @@ export default function AssetDetails() {
     );
   }
 
-  if (asset.processing_status === "processing" || asset.processing_status === "failed") {
+  // Staff still get the page (with a notice) so they can see what the seller uploaded.
+  if (!asset.staff_view && (asset.processing_status === "processing" || asset.processing_status === "failed")) {
     return <div className="min-h-screen bg-gray-50 text-gray-900 dark:bg-dark-base dark:text-white">
       <UserHeader pageTitle="Asset upload" />
       <main className="mx-auto flex min-h-[65vh] max-w-xl flex-col items-center justify-center gap-4 p-6 text-center">
@@ -539,11 +581,15 @@ export default function AssetDetails() {
       <main className="mx-auto w-full max-w-6xl p-5 md:p-8">
         <button type="button" onClick={() => navigate("/assets")} className="mb-5 inline-flex items-center gap-2 rounded-lg px-2 py-2 text-sm font-semibold text-gray-600 transition hover:bg-gray-100 hover:text-gray-900 dark:text-zinc-400 dark:hover:bg-white/5 dark:hover:text-white"><ArrowLeft className="h-4 w-4" /> Back to Assets</button>
 
+        {asset.staff_view ? <StaffAssetNotice asset={asset} /> : null}
+
         {asset.trashed_at && (
           <div className="mb-6 flex flex-wrap items-center justify-between gap-4 rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-red-600 dark:text-red-300">
             <div className="flex items-center gap-2">
               <Trash2 className="h-5 w-5 shrink-0" />
-              <span className="text-sm font-semibold">This asset is currently in your Trash.</span>
+              <span className="text-sm font-semibold">
+                {asset.is_owner ? "This asset is currently in your Trash." : "The seller moved this asset to their Trash."}
+              </span>
             </div>
             {asset.is_owner && (
               <div className="flex items-center gap-2">
@@ -649,13 +695,21 @@ export default function AssetDetails() {
                         <span className="text-xs font-medium text-emerald-100">{asset.available_license_count} {asset.available_license_count === 1 ? "license" : "licenses"} available</span>
                       </button>
                   )}
-                  {!asset.is_owner && asset.is_purchased && asset.available_license_count === 0 && (
+                  {!asset.is_owner && creatorPausedReason && asset.available_license_count === 0 && (
+                    <span
+                      title={pausedListingText(creatorPausedReason, "creator") || undefined}
+                      className="inline-flex items-center gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-2.5 text-xs font-bold text-amber-800 dark:text-amber-200"
+                    >
+                      <ShoppingCart className="h-4 w-4" /> Not for sale right now
+                    </span>
+                  )}
+                  {!asset.is_owner && !creatorPausedReason && asset.is_purchased && asset.available_license_count === 0 && (
                       <button type="button" onClick={requestPurchase} className="inline-flex flex-wrap items-center gap-x-2 gap-y-0 rounded-xl bg-blue-600 px-3.5 py-2.5 text-left text-white transition hover:bg-blue-500">
                         <ShoppingCart className="h-4 w-4 shrink-0" />
                         <span className="whitespace-nowrap text-sm font-bold">{asset.type === "template" ? "Purchase template" : "Purchase asset"}</span>
                       </button>
                   )}
-                  {!asset.is_owner && !asset.is_purchased && asset.available_license_count === 0 && asset.status === "published" && (
+                  {!asset.is_owner && !creatorPausedReason && !asset.is_purchased && asset.available_license_count === 0 && asset.status === "published" && (
                     <button type="button" onClick={requestPurchase} className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-6 py-2.5 text-sm font-bold text-white transition hover:bg-blue-500">
                       <ShoppingCart className="h-4 w-4" /> {asset.price_credits === 0 ? (asset.type === "template" ? "Get template" : "Get asset") : (asset.type === "template" ? "Purchase template" : "Purchase asset")}
                     </button>
@@ -739,6 +793,7 @@ export default function AssetDetails() {
               <p className="text-[9px] uppercase font-bold tracking-wider text-gray-500 dark:text-zinc-500 mb-0.5">Uploaded By</p>
               <div className="flex items-center gap-2 mb-0.5">
                 <p className="text-sm font-bold text-gray-900 dark:text-white leading-tight truncate">{asset.creator_name}</p>
+                <StandingChip standing={asset.creator_standing} className="shrink-0" />
                 {asset.is_admin_asset ? (
                   <span className="inline-flex items-center gap-1 rounded-md bg-blue-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-blue-600 dark:text-blue-400 border border-blue-500/20">
                     Official

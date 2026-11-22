@@ -3,6 +3,8 @@ import { AlertTriangle, CheckCircle2, Gauge, Loader2, Network, RefreshCw, Rotate
 import api from '@/lib/axios';
 import { showErrorToast, showSuccessToast } from '@/components/utility/toast';
 import { ChartCard, LineChart } from './AnalyticsCharts';
+import type { GlossaryId } from '../analyticsGlossary';
+import { InfoButton } from '../analyticsInfo';
 
 // account: signed in · device: one signed-out browser · ip: ceiling for all signed-out traffic from one network
 type Scope = 'account' | 'device' | 'ip';
@@ -121,11 +123,26 @@ const SCOPE_BADGES: Record<Scope, { label: string; className: string }> = {
   ip: { label: 'Network ceiling', className: 'border-amber-500/30 bg-amber-500/10 text-amber-100' },
 };
 
-function Stat({ label, value, sub, tone = 'default' }: { label: string; value: string | number; sub?: string; tone?: 'default' | 'warn' | 'bad' }) {
+function Stat({
+  label,
+  value,
+  sub,
+  tone = 'default',
+  info,
+}: {
+  label: string;
+  value: string | number;
+  sub?: string;
+  tone?: 'default' | 'warn' | 'bad';
+  info?: GlossaryId;
+}) {
   const color = tone === 'bad' ? 'text-red-300' : tone === 'warn' ? 'text-amber-200' : 'text-white';
   return (
     <div className="rounded-2xl border border-white/[0.07] bg-[#12131a] p-4">
-      <p className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500">{label}</p>
+      <p className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
+        {label}
+        {info && <InfoButton id={info} />}
+      </p>
       <p className={`mt-1.5 text-2xl font-semibold tabular-nums tracking-tight ${color}`}>{value}</p>
       {sub && <p className="mt-1 text-xs text-zinc-500">{sub}</p>}
     </div>
@@ -157,11 +174,14 @@ function UsageBar({ count, limit }: { count: number; limit: number }) {
   );
 }
 
-function Section({ title, subtitle, children }: { title: string; subtitle?: string; children: ReactNode }) {
+function Section({ title, subtitle, info, children }: { title: string; subtitle?: string; info?: GlossaryId; children: ReactNode }) {
   return (
     <section className="overflow-hidden rounded-2xl border border-white/[0.07] bg-[#12131a]">
       <div className="border-b border-white/[0.06] px-4 py-3">
-        <h3 className="text-sm font-semibold text-white">{title}</h3>
+        <h3 className="flex items-center gap-1.5 text-sm font-semibold text-white">
+          {title}
+          {info && <InfoButton id={info} />}
+        </h3>
         {subtitle && <p className="mt-0.5 text-xs text-zinc-500">{subtitle}</p>}
       </div>
       <div className="overflow-x-auto">{children}</div>
@@ -193,7 +213,10 @@ function ClientIpCard({ info }: { info: RateLimitMonitor['clientIp'] }) {
       <div className="flex items-start gap-3">
         <Icon className={`mt-0.5 h-5 w-5 shrink-0 ${iconColor}`} />
         <div className="min-w-0">
-          <h3 className="text-sm font-semibold text-white">IP pass-through check (your request)</h3>
+          <h3 className="flex items-center gap-1.5 text-sm font-semibold text-white">
+            IP pass-through check (your request)
+            <InfoButton id="ipCheck" />
+          </h3>
           <p className="mt-1 text-sm text-zinc-300">{info.message}</p>
           {info.localBypass && (
             <p className="mt-1 text-xs text-amber-200">
@@ -296,8 +319,9 @@ export default function RateLimitMonitorPanel() {
             <Gauge className="h-3 w-3" />
             Counters: {data.store === 'redis' ? 'Redis' : 'in-memory (single process)'}
           </span>
-          <span className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5 text-zinc-400">
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5 text-zinc-400">
             Monitoring this API process for {formatSince(data.startedAt)} · updated {formatTime(data.generatedAt)}
+            <InfoButton id="trafficScope" />
           </span>
           {data.storeErrors.count > 0 && (
             <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1.5 text-amber-100">
@@ -327,21 +351,24 @@ export default function RateLimitMonitorPanel() {
       <ClientIpCard info={data.clientIp} />
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-        <Stat label="Requests · last hour" value={lastHourTotal.toLocaleString()} sub={`${data.currentMinute.allowed + data.currentMinute.blocked} this minute`} />
+        <Stat label="Requests · last hour" info="requests" value={lastHourTotal.toLocaleString()} sub={`${data.currentMinute.allowed + data.currentMinute.blocked} this minute`} />
         <Stat
           label="Blocked (429) · last hour"
+          info="blocked"
           value={data.lastHour.blocked.toLocaleString()}
           sub={`${blockRate.toFixed(blockRate > 0 && blockRate < 1 ? 2 : 1)}% of requests`}
           tone={data.lastHour.blocked > 0 ? 'bad' : 'default'}
         />
-        <Stat label="Active accounts" value={data.liveBuckets.accounts} sub="Each has its own budget" />
+        <Stat label="Active accounts" info="liveAccounts" value={data.liveBuckets.accounts} sub="Each has its own budget" />
         <Stat
           label="Signed-out browsers"
+          info="liveBrowsers"
           value={data.liveBuckets.devices}
           sub={`From ${data.liveBuckets.ips} network${data.liveBuckets.ips === 1 ? '' : 's'}`}
         />
         <Stat
           label="Near or over limit"
+          info="nearLimit"
           value={data.liveBuckets.nearLimit}
           sub={`${data.liveBuckets.blocked} currently blocked`}
           tone={data.liveBuckets.blocked > 0 ? 'bad' : data.liveBuckets.nearLimit > 0 ? 'warn' : 'default'}
@@ -363,6 +390,7 @@ export default function RateLimitMonitorPanel() {
       <div className="grid gap-6 xl:grid-cols-2">
         <Section
           title="Limits"
+          info="policies"
           subtitle="Signed-in people count per account and are never limited by IP. Signed-out people count per browser; the network ceiling caps all signed-out traffic from one IP."
         >
           <table className="w-full text-left text-sm">
@@ -402,6 +430,7 @@ export default function RateLimitMonitorPanel() {
 
         <Section
           title="Shared networks"
+          info="sharedIps"
           subtitle="IPs used by several people at once (campus or office Wi-Fi). Each person still has their own budget."
         >
           <table className="w-full text-left text-sm">
@@ -447,7 +476,7 @@ export default function RateLimitMonitorPanel() {
         </Section>
       </div>
 
-      <Section title="Busiest rate-limit windows" subtitle="Live windows sorted by how close they are to their limit. Reset clears one window immediately.">
+      <Section title="Busiest rate-limit windows" info="busiestWindows" subtitle="Live windows sorted by how close they are to their limit. Reset clears one window immediately.">
         <table className="w-full text-left text-sm">
           <thead>
             <tr className="border-b border-white/[0.06] bg-[#0c0d12] text-[10px] uppercase tracking-wide text-zinc-600">
@@ -503,7 +532,7 @@ export default function RateLimitMonitorPanel() {
         </table>
       </Section>
 
-      <Section title="Recent 429 responses" subtitle="Newest first. Retries of the same request within a minute are grouped.">
+      <Section title="Recent 429 responses" info="recent429" subtitle="Newest first. Retries of the same request within a minute are grouped.">
         <table className="w-full text-left text-sm">
           <thead>
             <tr className="border-b border-white/[0.06] bg-[#0c0d12] text-[10px] uppercase tracking-wide text-zinc-600">

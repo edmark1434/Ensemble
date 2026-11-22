@@ -11,6 +11,8 @@ import { VerificationIcon } from "@/components/ui/VerificationIcon";
 import PopupReportGig from "./PopupReportGig";
 import api from "@/lib/axios";
 import useGlobalState from "@/lib/global_state";
+import StandingChip from "@/components/account/StandingChip";
+import { normalizeUnavailableReason, ownPausedText, pausedListingText } from "@/lib/ownerAvailability";
 import { GuestLoginModal } from "@/components/ui/GuestLoginModal";
 import { showSuccessToast, showErrorToast } from "@/components/utility/toast";
 import { JobRichText } from "../../6_job_market/job_components/JobRichText";
@@ -78,6 +80,8 @@ const GigViewDetails: React.FC<GigViewDetailsProps> = ({ selectedGig, onClose, o
 
   const effectiveStatus = statusOverride || selectedGig?.status || "Open";
   const isClosed = effectiveStatus.toLowerCase() === "closed" || selectedGig?.raw_status === "closed";
+  // Paused while the seller cannot take orders; it comes back on its own when that ends.
+  const sellerPausedReason = normalizeUnavailableReason(selectedGig?.sellerUnavailableReason);
   const isPaused = effectiveStatus.toLowerCase() === "paused" || (!isClosed && Number(selectedGig?.slots || 0) > 0 && Number(selectedGig?.active_orders_count || 0) >= Number(selectedGig?.slots || 0));
 
   const handleToggleStatus = async () => {
@@ -669,6 +673,7 @@ const GigViewDetails: React.FC<GigViewDetailsProps> = ({ selectedGig, onClose, o
                       </p>
                       <VerificationIcon verified={selectedGig.freelancerIsVerified} />
                       <SubscriptionIcon plan={selectedGig.freelancerSubscriptionPlan} />
+                      <StandingChip standing={selectedGig.sellerStanding} className="shrink-0" />
                     </div>
                     <div className="space-y-0.5">
                       <div className="flex items-center gap-1.5 text-[10px] text-gray-500 dark:text-zinc-400">
@@ -701,6 +706,13 @@ const GigViewDetails: React.FC<GigViewDetailsProps> = ({ selectedGig, onClose, o
                 )}
               </div>
 
+              {sellerPausedReason && (
+                <div className="mb-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-[11px] font-semibold text-amber-800 dark:text-amber-200">
+                  {selectedGig.canManageGig || selectedGig.isOwnGig
+                    ? ownPausedText(sellerPausedReason)
+                    : pausedListingText(sellerPausedReason, "seller")}
+                </div>
+              )}
               {selectedGig.canManageGig ? (
                 <div className="flex items-center gap-2">
                   <button
@@ -783,6 +795,15 @@ const GigViewDetails: React.FC<GigViewDetailsProps> = ({ selectedGig, onClose, o
                         className="flex-1 flex items-center justify-center gap-2 rounded-xl py-3 text-xs font-bold transition shadow-lg bg-blue-500 text-white hover:bg-blue-600 shadow-blue-500/20 active:scale-[0.98]"
                       >
                         View My Order
+                      </button>
+                    ) : sellerPausedReason ? (
+                      <button
+                        disabled
+                        title={pausedListingText(sellerPausedReason, "seller") || undefined}
+                        className="flex-1 flex items-center justify-center gap-2 rounded-xl py-3 text-xs font-bold bg-amber-100 dark:bg-amber-500/20 text-amber-800 dark:text-amber-300 cursor-not-allowed border border-amber-300 dark:border-amber-500/40"
+                      >
+                        <Clock className="h-4 w-4" />
+                        <span>Not taking orders right now</span>
                       </button>
                     ) : isClosed ? (
                       <button

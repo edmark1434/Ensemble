@@ -291,10 +291,15 @@ async function announceStandingLift({ accountId, previousStatus, nextStatus = 'A
   // The other side of each live contract hears this side can act again. A suspended team kept
   // working, so its counterparties were never told it stopped.
   try {
-    const team = await require('../services/TeamStandingServices').describeTeamAccount(accountId);
+    const teamStanding = require('../services/TeamStandingServices');
+    const team = await teamStanding.describeTeamAccount(accountId);
     if (!(team.isTeam && penalty === 'suspension')) {
       const { notifyLiveWorkCounterparties } = require('../services/RestrictedWorkServices');
       await notifyLiveWorkCounterparties(accountId, 'Active');
+    }
+    // Teams this member leads were paused by a ban or lock: they can take new work again.
+    if (!team.isTeam && (penalty === 'ban' || penalty === 'lock')) {
+      await teamStanding.notifyTeamsOfLeaderStanding(accountId, { restricted: false });
     }
   } catch (err) {
     console.warn('Counterparty lift notice skipped:', err.message);

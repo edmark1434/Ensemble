@@ -9,6 +9,7 @@
 - PostgreSQL stores relational/business data. MongoDB is used by features that need document-oriented storage. Redis supports transient/shared state.
 - `backend/lib/BackgroundJob.js` starts reconciliation work after database connections initialize.
 - Asset previews (images, videos, audio) run through `media_asset_jobs` after listing creation. Pending proxy/thumbnail references are nullable. The backend drains one job at a time every three seconds; set `MEDIA_WORKER_EMBEDDED=false` when running the separate `npm run media:worker` process. Listings remain drafts until previews finish, and the asset UI polls processing records for completion or failure.
+- ffmpeg / ffprobe resolve as `FFMPEG_PATH` / `FFPROBE_PATH`, else the `ffmpeg-static` / `ffprobe-static` binary only if its file exists (its download can be skipped by `--ignore-scripts` or fail), else `ffmpeg` / `ffprobe` on `PATH` (`lib/MediaProcessing.js`). A missing tool is `MEDIA_TOOLS_MISSING`, not the file's fault: the job goes back to the queue without using an attempt, video and audio jobs pause for 60 s per process while image jobs keep running, and at start-up (embedded cron and `media:worker`) jobs that failed with `spawn …ffmpeg ENOENT` are re-queued once the tools work (`recoverMissingToolFailures`). Fix a server with `npm rebuild ffmpeg-static ffprobe-static`, a system ffmpeg, or the env paths. Staff desks show job errors through `describeProcessingError` (no server paths).
 
 ## Video upload normalization
 

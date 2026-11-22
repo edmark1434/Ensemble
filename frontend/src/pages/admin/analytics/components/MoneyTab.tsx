@@ -13,6 +13,7 @@ import {
   sumKpis,
 } from '../analyticsFormat';
 import { MetricRows, Notice, Panel, SimpleTable, StatTile } from '../analyticsUi';
+import { InfoButton } from '../analyticsInfo';
 import { LineChart, VerticalBarChart } from './AnalyticsCharts';
 import FinanceLedger from './FinanceLedger';
 
@@ -52,6 +53,7 @@ export default function MoneyTab({
       <div className="console-stagger grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
         <StatTile
           label="Cash in"
+          info="cashIn"
           icon={ArrowDownLeft}
           value={cashIn.value}
           kpi={cashIn}
@@ -61,6 +63,7 @@ export default function MoneyTab({
         />
         <StatTile
           label="Cash out"
+          info="cashOut"
           icon={ArrowUpRight}
           value={summary.cashoutsPaidPhp.value}
           kpi={summary.cashoutsPaidPhp}
@@ -71,6 +74,7 @@ export default function MoneyTab({
         />
         <StatTile
           label="Net cash"
+          info="netCash"
           icon={Scale}
           value={money.cash.netPhp}
           format={fmtPhpShort}
@@ -79,6 +83,7 @@ export default function MoneyTab({
         />
         <StatTile
           label="Top-up sales"
+          info="topupSales"
           icon={Coins}
           value={summary.topupRevenuePhp.value}
           kpi={summary.topupRevenuePhp}
@@ -88,6 +93,7 @@ export default function MoneyTab({
         />
         <StatTile
           label="Subscriptions"
+          info="subscriptionRevenue"
           icon={CreditCard}
           value={summary.subscriptionRevenuePhp.value}
           kpi={summary.subscriptionRevenuePhp}
@@ -97,6 +103,7 @@ export default function MoneyTab({
         />
         <StatTile
           label="Credits outstanding"
+          info="creditsOutstanding"
           icon={Landmark}
           value={credits ? credits.liabilityPhp : null}
           format={fmtPhpShort}
@@ -105,7 +112,7 @@ export default function MoneyTab({
         />
       </div>
 
-      <Panel title="Cash flow" subtitle={`Pesos per ${range.bucket}. Top-ups by paid date, subscriptions by invoice date, cashouts by request date.`}>
+      <Panel title="Cash flow" info="cashFlow" subtitle={`Pesos per ${range.bucket}. Top-ups by paid date, subscriptions by invoice date, cashouts by request date.`}>
         <LineChart
           labels={labels}
           tooltipLabels={titles}
@@ -121,6 +128,7 @@ export default function MoneyTab({
       <div className="grid gap-5 xl:grid-cols-2">
         <Panel
           title="Top-ups"
+          info="topupOrders"
           subtitle="Orders placed in this period"
           action={
             <button type="button" className={linkCls} onClick={() => showRecords('topups')}>
@@ -135,13 +143,16 @@ export default function MoneyTab({
                   ['Paid orders', fmtInt(topups.paidCount)],
                   ['Paid', fmtPhp(topups.paidPhp)],
                   ['Average order', fmtPhp(topups.paidCount ? topups.paidPhp / topups.paidCount : 0)],
-                  ['Credits issued', fmtCredits(topups.creditsIssued)],
+                  ['Credits issued', fmtCredits(topups.creditsIssued), undefined, 'creditsIssued'],
                   ['Still pending', fmtInt(topups.pendingCount)],
                   ['Failed or expired', fmtInt(topups.failedCount)],
                 ]}
               />
               <div>
-                <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-zinc-500">By payment channel</p>
+                <p className="mb-2 flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
+                  By payment channel
+                  <InfoButton id="paymentChannel" />
+                </p>
                 {topups.byChannel.length ? (
                   <MetricRows rows={topups.byChannel.map((c) => [c.channel, fmtPhp(c.php), `${fmtInt(c.count)} orders`])} />
                 ) : (
@@ -156,6 +167,7 @@ export default function MoneyTab({
 
         <Panel
           title="Subscriptions"
+          info="planCounts"
           subtitle="Members on each plan right now"
           action={
             <Link to="/admin/system-settings?tab=economy" className={linkCls}>
@@ -189,14 +201,17 @@ export default function MoneyTab({
               />
               <MetricRows
                 rows={[
-                  ['New paid subscriptions', fmtInt(subscriptions.period.started), 'Started in this period'],
+                  ['New paid subscriptions', fmtInt(subscriptions.period.started), 'Started in this period', 'subscriptionPeriod'],
                   ['Cancelled', fmtInt(subscriptions.period.canceled), 'Cancelled in this period'],
                   ['Renewals charged', fmtInt(subscriptions.period.paidInvoices)],
                   ['Renewals failed', fmtInt(subscriptions.period.failedInvoices)],
                   ['Upgrade payments', fmtInt(subscriptions.period.upgradePayments)],
                 ]}
               />
-              <p className="text-[11px] text-zinc-600">Monthly recurring revenue uses list prices of current paying members.</p>
+              <p className="flex items-center gap-1.5 text-[11px] text-zinc-600">
+                Monthly recurring revenue uses list prices of current paying members.
+                <InfoButton id="mrr" />
+              </p>
             </div>
           ) : (
             <p className="text-sm text-zinc-500">Subscription figures could not be loaded.</p>
@@ -207,6 +222,7 @@ export default function MoneyTab({
       <div className="grid gap-5 xl:grid-cols-3">
         <Panel
           title="Platform fees"
+          info="feeTypes"
           subtitle="Credits collected in this period, net of refunds"
           action={
             <Link to="/admin/credit-economy?tab=ledger" className={linkCls}>
@@ -217,8 +233,9 @@ export default function MoneyTab({
           {fees ? (
             <>
               <p className="text-2xl font-semibold tabular-nums text-white">{fmtCredits(fees.netCredits)}</p>
-              <p className="mt-0.5 text-xs text-zinc-500">
+              <p className="mt-0.5 flex items-center gap-1.5 text-xs text-zinc-500">
                 ≈ {fmtPhp(fees.netCredits * money.creditValuePhp)} at {fmtPhp(money.creditValuePhp)} per credit
+                <InfoButton id="creditValue" />
               </p>
               <div className="mt-4">
                 <MetricRows
@@ -240,6 +257,7 @@ export default function MoneyTab({
 
         <Panel
           title="Cashouts"
+          info="cashoutBreakdown"
           subtitle="Requested in this period"
           action={
             <button type="button" className={linkCls} onClick={() => showRecords('cashouts')}>
@@ -259,7 +277,10 @@ export default function MoneyTab({
                 ]}
               />
               <div className="mt-4 rounded-xl border border-white/[0.06] bg-[#0c0d12] px-4 py-3">
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500">In flight now</p>
+                <p className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
+                  In flight now
+                  <InfoButton id="inFlight" />
+                </p>
                 <p className="mt-1 text-sm text-white">
                   {fmtInt(cashouts.inFlight.count)} cashouts · {fmtPhp(cashouts.inFlight.php)}
                 </p>
@@ -277,6 +298,7 @@ export default function MoneyTab({
 
         <Panel
           title="Credits"
+          info="creditBalances"
           subtitle="Balances right now"
           action={
             <Link to="/admin/credit-economy" className={linkCls}>
@@ -291,7 +313,7 @@ export default function MoneyTab({
                   ['Held by members', fmtCredits(credits.circulating), `${fmtCredits(credits.held)} of it on staff hold`],
                   ['In contract escrow', fmtCredits(credits.escrow)],
                   ['Platform wallet', fmtCredits(credits.platform)],
-                  ['Members could cash out', fmtPhp(credits.liabilityPhp), `At ${fmtPhp(money.creditValuePhp)} per credit, before fees`],
+                  ['Members could cash out', fmtPhp(credits.liabilityPhp), `At ${fmtPhp(money.creditValuePhp)} per credit, before fees`, 'creditsOutstanding'],
                 ]}
               />
               {credits.negativeWallets > 0 && (
@@ -311,7 +333,7 @@ export default function MoneyTab({
         </Panel>
       </div>
 
-      <Panel title="Fee revenue over time" subtitle={`Net fee credits per ${range.bucket}`}>
+      <Panel title="Fee revenue over time" info="feeChart" subtitle={`Net fee credits per ${range.bucket}`}>
         <VerticalBarChart
           data={series.map((p, i) => ({ label: labels[i], value: Math.max(0, p.feeCredits) }))}
           tooltipLabels={titles}

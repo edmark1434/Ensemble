@@ -12,6 +12,36 @@ const ticketCreateLimiter = createRateLimiter('ticketCreate', {
     networkLimit: 300,
     message: 'You have opened several tickets in a short time. Add details to an open ticket in Cases, or try again later.',
 });
+// Replies on tickets, per account: plenty for a conversation, not enough to flood a support desk.
+const ticketReplyLimiter = createRateLimiter('ticketReply', {
+    windowMs: 10 * 60 * 1000,
+    accountLimit: 40,
+    anonymousLimit: 40,
+    networkLimit: 600,
+    message: 'You have sent a lot of replies in a short time. Wait a few minutes; support sees what you already sent.',
+});
+// Accepting or declining a ticket invite and rating a closed ticket.
+const ticketActionLimiter = createRateLimiter('ticketAction', {
+    windowMs: 10 * 60 * 1000,
+    accountLimit: 30,
+    anonymousLimit: 30,
+    networkLimit: 600,
+});
+// Form pickers that look records up by name or link: enough to type with, not to scrape with.
+const ticketLookupLimiter = createRateLimiter('ticketLookup', {
+    windowMs: 60 * 1000,
+    accountLimit: 90,
+    anonymousLimit: 90,
+    networkLimit: 1500,
+});
+// Technical-problem reports are support tickets too.
+const technicalReportLimiter = createRateLimiter('technicalReport', {
+    windowMs: 60 * 60 * 1000,
+    accountLimit: 10,
+    anonymousLimit: 10,
+    networkLimit: 300,
+    message: 'You have sent several problem reports in a short time. Try again later.',
+});
 const {
     getAllUsers,
     signup,
@@ -84,8 +114,8 @@ router.post('/update-personal-details', [checkSession, requireAuth],updatePerson
 // Support tickets (Postgres metadata + Mongo chat)
 router.get('/ticket-catalog', getPublicTicketCatalog);
 router.get('/ticket-context', [checkSession, requireAuth], getTicketContext);
-router.get('/ticket-teams', [checkSession, requireAuth], getTicketTeamSearch);
-router.get('/ticket-search', [checkSession, requireAuth], getTicketItemSearch);
+router.get('/ticket-teams', [checkSession, requireAuth, ticketLookupLimiter], getTicketTeamSearch);
+router.get('/ticket-search', [checkSession, requireAuth, ticketLookupLimiter], getTicketItemSearch);
 router.post('/tickets', [checkSession, requireAuth, ticketCreateLimiter], createPublicTicket);
 router.get('/tickets', [checkSession, requireAuth], listMyTickets);
 router.get('/tickets/:id', [checkSession, requireAuth], getMyTicket);
@@ -94,10 +124,10 @@ router.get('/disputes/:id', [checkSession, requireAuth], getMyDispute);
 router.get('/cases/summary', [checkSession, requireAuth], getMyCaseSummary);
 // Active penalties, each with its own appeal (banned and locked members may read it).
 router.get('/appeals', [checkSession, requireAuth], getMyAppealOptions);
-router.post('/tickets/:id/messages', [checkSession, requireAuth], postMyTicketMessage);
-router.post('/tickets/:id/invite', [checkSession, requireAuth], postMyTicketInvite);
-router.post('/tickets/:id/satisfaction', [checkSession, requireAuth], postMyTicketSatisfaction);
-router.post('/reports', [checkSession, requireAuth], createMyTechnicalReport);
+router.post('/tickets/:id/messages', [checkSession, requireAuth, ticketReplyLimiter], postMyTicketMessage);
+router.post('/tickets/:id/invite', [checkSession, requireAuth, ticketActionLimiter], postMyTicketInvite);
+router.post('/tickets/:id/satisfaction', [checkSession, requireAuth, ticketActionLimiter], postMyTicketSatisfaction);
+router.post('/reports', [checkSession, requireAuth, technicalReportLimiter], createMyTechnicalReport);
 router.get('/check-username', [checkSession, requireAuth], checkUsernameUniqueness);
 
 router.get('/:email', [checkSession, requireAuth], getUserByEmail);

@@ -750,6 +750,8 @@ export type PostingStaffAction = {
   previousStatus: string | null;
   reason: string | null;
   reportNumber: string | null;
+  /** The staff member who made the change; null for rows logged without one. */
+  by?: { name: string; role: string | null } | null;
   at: string;
 };
 
@@ -776,6 +778,7 @@ export type PostingModerationEntry = {
   previousStatus: string | null;
   status: string | null;
   reason: string | null;
+  reportNumber?: string | null;
   actor: { name: string; role: string } | null;
   createdAt: string;
 };

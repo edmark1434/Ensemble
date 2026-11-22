@@ -1,4 +1,4 @@
-import { Coins, Flag, LayoutDashboard, Scale, Ticket, Users } from 'lucide-react';
+import { Coins, Flag, LayoutDashboard, Scale, Ticket, UserX, Users } from 'lucide-react';
 import ModeratorNavbar from '../shared/ModeratorNavbar';
 
 // No Restrictions item: Support enforces from a report case or User & Team → Users.
@@ -9,6 +9,7 @@ const navItems = [
   { label: 'Reports', icon: Flag, to: '/moderator/support/reports' },
   { label: 'User & Team', icon: Users, to: '/moderator/support/user-team' },
   { label: 'Credits & Wallets', icon: Coins, to: '/moderator/support/credits' },
+  { label: 'Restricted parties', icon: UserX, to: '/moderator/support/restricted-work' },
 ];
 
 const SupportModeratorNavbar = () => (

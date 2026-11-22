@@ -11,6 +11,7 @@ import {
   seriesLabels,
 } from '../analyticsFormat';
 import { AlertList, Panel, StatTile } from '../analyticsUi';
+import { InfoButton } from '../analyticsInfo';
 import { LineChart } from './AnalyticsCharts';
 
 const BUCKET_NOUN = { day: 'day', week: 'week', month: 'month' } as const;
@@ -28,6 +29,7 @@ export default function OverviewTab({ data }: { data: PlatformAnalytics }) {
       <div className="console-stagger grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
         <StatTile
           label="New members"
+          info="newMembers"
           icon={UserPlus}
           value={summary.newMembers.value}
           kpi={summary.newMembers}
@@ -37,6 +39,7 @@ export default function OverviewTab({ data }: { data: PlatformAnalytics }) {
         />
         <StatTile
           label="Active members"
+          info="activeMembers"
           icon={Activity}
           value={summary.activeMembers?.value ?? null}
           kpi={summary.activeMembers}
@@ -51,6 +54,7 @@ export default function OverviewTab({ data }: { data: PlatformAnalytics }) {
         />
         <StatTile
           label="Top-up sales"
+          info="topupSales"
           icon={Coins}
           value={summary.topupRevenuePhp.value}
           format={fmtPhpShort}
@@ -62,6 +66,7 @@ export default function OverviewTab({ data }: { data: PlatformAnalytics }) {
         />
         <StatTile
           label="Subscription revenue"
+          info="subscriptionRevenue"
           icon={CreditCard}
           value={summary.subscriptionRevenuePhp.value}
           format={fmtPhpShort}
@@ -73,6 +78,7 @@ export default function OverviewTab({ data }: { data: PlatformAnalytics }) {
         />
         <StatTile
           label="Fee revenue"
+          info="feeRevenue"
           icon={Wallet}
           value={summary.feeRevenueCredits.value}
           format={fmtCredits}
@@ -83,6 +89,7 @@ export default function OverviewTab({ data }: { data: PlatformAnalytics }) {
         />
         <StatTile
           label="Cashouts paid"
+          info="cashoutsPaid"
           icon={ArrowUpRight}
           value={summary.cashoutsPaidPhp.value}
           format={fmtPhpShort}
@@ -108,14 +115,14 @@ export default function OverviewTab({ data }: { data: PlatformAnalytics }) {
             ]}
           />
         </Panel>
-        <Panel title="Needs attention" subtitle="Open work across the platform">
+        <Panel title="Needs attention" info="needsAttention" subtitle="Open work across the platform">
           {/* Load failures are announced once at the top of the page. */}
           <AlertList alerts={alerts.filter((a) => a.id !== 'problems')} limit={6} />
         </Panel>
       </div>
 
       <div className="grid gap-5 xl:grid-cols-2">
-        <Panel title="Money in and out" subtitle={`Pesos per ${noun}. Cashouts are dated by request.`}>
+        <Panel title="Money in and out" info="moneyChart" subtitle={`Pesos per ${noun}. Cashouts are dated by request.`}>
           <LineChart
             labels={labels}
             tooltipLabels={titles}
@@ -127,7 +134,7 @@ export default function OverviewTab({ data }: { data: PlatformAnalytics }) {
             ]}
           />
         </Panel>
-        <Panel title="Support and moderation volume" subtitle={`New items per ${noun}`}>
+        <Panel title="Support and moderation volume" info="volumeChart" subtitle={`New items per ${noun}`}>
           <LineChart
             labels={labels}
             tooltipLabels={titles}
@@ -142,22 +149,27 @@ export default function OverviewTab({ data }: { data: PlatformAnalytics }) {
 
       <section>
         <div className="mb-3">
-          <h3 className="text-sm font-semibold text-white">Right now</h3>
+          <h3 className="flex items-center gap-1.5 text-sm font-semibold text-white">
+            Right now
+            <InfoButton id="snapshot" />
+          </h3>
           <p className="text-xs text-zinc-500">Current queue sizes. These are not limited to the date range.</p>
         </div>
         <div className="console-stagger grid gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-6">
           <StatTile
             label="Open tickets"
+            info="openTickets"
             value={tickets?.open ?? null}
             href="/admin/ticket-management?tab=tickets"
             sub={tickets ? `${fmtInt(tickets.unassigned)} unassigned · oldest ${fmtAge(tickets.oldestOpenAt)}` : undefined}
           />
-          <StatTile label="Open reports" value={queues?.openReports ?? null} href="/admin/moderation?tab=cases&queue=reports" />
-          <StatTile label="Open disputes" value={queues?.openDisputes ?? null} href="/admin/moderation?tab=cases&queue=disputes" />
-          <StatTile label="Listings to review" value={queues?.pendingListings ?? null} href="/admin/moderation?tab=cases&queue=listings" />
-          <StatTile label="Identity checks" value={queues?.pendingVerifications ?? null} href="/admin/moderation?tab=cases&queue=identity" />
+          <StatTile label="Open reports" info="openReports" value={queues?.openReports ?? null} href="/admin/moderation?tab=cases&queue=reports" />
+          <StatTile label="Open disputes" info="openDisputes" value={queues?.openDisputes ?? null} href="/admin/moderation?tab=cases&queue=disputes" />
+          <StatTile label="Listings to review" info="pendingListings" value={queues?.pendingListings ?? null} href="/admin/moderation?tab=cases&queue=listings" />
+          <StatTile label="Identity checks" info="identityChecks" value={queues?.pendingVerifications ?? null} href="/admin/moderation?tab=cases&queue=identity" />
           <StatTile
             label="Cashouts in flight"
+            info="inFlight"
             value={money.cashouts?.inFlight.count ?? null}
             href="/admin/credit-economy"
             sub={money.cashouts ? `${fmtPhp(money.cashouts.inFlight.php)} · ${fmtInt(money.cashouts.inFlight.stale)} over 24 h` : undefined}

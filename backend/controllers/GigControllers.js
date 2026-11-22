@@ -304,6 +304,11 @@ async function getGigByIdController(req, res) {
         if (!gig) {
             return res.status(404).json({ success: false, message: 'Gig not found' });
         }
+        // People who manage the gig see why staff hold it and how to appeal; nobody else gets the reason.
+        if (gig.canManageGig) {
+            const { ownerStaffHoldNotice } = require('../services/PostingModerationServices');
+            gig.staffHold = await ownerStaffHoldNotice('gig', gig.id);
+        }
         res.status(200).json({ success: true, data: gig });
     } catch (error) {
         console.error("Error in getGigByIdController:", error);

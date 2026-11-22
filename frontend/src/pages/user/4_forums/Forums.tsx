@@ -48,6 +48,8 @@ import { showSuccessToast, showErrorToast } from "@/components/utility/toast";
 import api from "@/lib/axios";
 import { reconcileForumDiscussions, useForumRealtime } from "@/pages/user/4_forums/forumRealtime";
 import { identityFromDetails, loadCurrentForumAvatar } from "@/pages/user/4_forums/forumIdentity";
+import StandingChip from "@/components/account/StandingChip";
+import type { PublicStanding } from "@/pages/user/7_profile/Displays/AccountStanding";
 import useGlobalState from "@/lib/global_state";
 import { useForumTimeout, isRestrictionErrorHandled } from "@/pages/user/4_forums/useForumTimeout";
 import { FORUM_LOCKED_CLASS, ForumTimeoutComposerLock, ForumTimeoutPill } from "@/pages/user/4_forums/ForumTimeoutLock";
@@ -77,6 +79,8 @@ type PublicForumIdentity = {
   display_name: string;
   handle?: string | null;
   avatar_preset_url?: string | null;
+  /** Public standing chip data (Banned / Suspended / Locked / Timeout). */
+  standing?: PublicStanding | null;
 };
 
 type Comment = {
@@ -843,6 +847,7 @@ const CommentItem = ({
                   title={`${commentSubscriptionPlan} Tier`}
                 />
               )}
+              <StandingChip standing={commentIdentity?.standing || (commentAuthor as any).standing} />
               <span className="text-xs text-gray-500 dark:text-zinc-500">{getTimeAgo(comment.created_at)}</span>
               {comment.is_edited && (
                 <span className="text-[10px] text-zinc-600">(edited)</span>
@@ -1386,7 +1391,7 @@ const Forums = () => {
   const [groupDiscussions, setGroupDiscussions] = useState<Post[]>([]);
   const [myDiscussionPosts, setMyDiscussionPosts] = useState<Post[]>([]);
   const [savedDiscussions, setSavedDiscussions] = useState<Post[]>([]);
-  const [membersDetailsMap, setMembersDetailsMap] = useState<Record<number | string, { name: string; avatar: string; accountId?: string | null; isVerified?: boolean; subscriptionPlan?: string }>>({});
+  const [membersDetailsMap, setMembersDetailsMap] = useState<Record<number | string, { name: string; avatar: string; accountId?: string | null; isVerified?: boolean; subscriptionPlan?: string; standing?: PublicStanding | null }>>({});
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -1718,7 +1723,9 @@ const Forums = () => {
       
       const isLiked = post.likes?.some(like => like.user_id === currentUserId) || false;
       const isSaved = post.saves?.some(save => save.user_id === currentUserId) || false;
-      
+      // Live public standing (Banned / Suspended / Locked / Timeout) for the chip by the name.
+      const authorStanding = post.author_identity?.standing || membersDetailsMap[post.user_id]?.standing || null;
+
       return {
         ...post,
         arrayIndex: index,
@@ -1728,6 +1735,7 @@ const Forums = () => {
         authorAccountId,
         authorIsVerified,
         authorSubscriptionPlan,
+        authorStanding,
         excerpt: post.content,
         ago: getTimeAgo(post.created_at),
         tagsList: post.tags || [],
@@ -2426,6 +2434,7 @@ const Forums = () => {
                     {post.authorSubscriptionPlan && (
                       <img src={getSubscriptionIcon(post.authorSubscriptionPlan)} alt={post.authorSubscriptionPlan} className="h-3.5 w-3.5 object-contain drop-shadow-[0_0_8px_rgba(255,255,255,0.15)]" title={`${post.authorSubscriptionPlan} Tier`} />
                     )}
+                    <StandingChip standing={post.authorStanding} />
                   </div>
                   <span className="text-xs text-gray-500 dark:text-zinc-500">{post.ago}</span>
                 </div>

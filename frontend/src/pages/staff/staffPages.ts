@@ -44,16 +44,19 @@ export const JobsTicketManagement = lazyWithPreload(() => import('@/pages/modera
 export const JobsDisputes = lazyWithPreload(() => import('@/pages/moderator/jobs-moderator/Disputes'));
 export const JobsReports = lazyWithPreload(() => import('@/pages/moderator/jobs-moderator/Reports'));
 export const JobsUserTeam = lazyWithPreload(() => import('@/pages/moderator/jobs-moderator/UserTeam'));
+export const JobsRestrictedWork = lazyWithPreload(() => import('@/pages/moderator/jobs-moderator/RestrictedWork'));
+export const SupportRestrictedWork = lazyWithPreload(() => import('@/pages/moderator/support-moderator/RestrictedWork'));
+export const AdminRestrictedWorkPage = lazyWithPreload(() => import('@/pages/admin/moderation/RestrictedWorkPage'));
 
 export type StaffConsole = 'admin' | 'staff' | 'forum' | 'marketplace' | 'support' | 'jobs';
 
 const CONSOLE_PAGES: Record<StaffConsole, Preloadable[]> = {
-  admin: [AdminDashboard, AdminFeedbacksPage, AdminBadgesPage, AdminWarningsPage, UserTeamPage, CreditEconomyPage, ModerationPage, AnalyticsPage, TicketManagementPage, SystemSettingsPage, StaffPlatformPreviewPage],
+  admin: [AdminDashboard, AdminFeedbacksPage, AdminBadgesPage, AdminWarningsPage, UserTeamPage, CreditEconomyPage, ModerationPage, AnalyticsPage, TicketManagementPage, SystemSettingsPage, AdminRestrictedWorkPage, StaffPlatformPreviewPage],
   staff: [StaffDashboard, StaffPlatformPreviewPage],
   forum: [ForumModeratorDashboard, ForumDiscussion, ForumGroups, ForumTicketManagement, ForumReports, ForumUserTeam, ForumDisputes, ForumRestrictions, StaffPlatformPreviewPage],
   marketplace: [MarketplaceModeratorDashboard, MarketplaceControl, MarketplaceTicketManagement, MarketplaceReports, MarketplaceUserTeam, MarketplaceDisputes, StaffPlatformPreviewPage],
-  support: [SupportModeratorDashboard, SupportTicketManagement, SupportDisputes, SupportUserTeam, SupportReports, SupportCreditsWallets, StaffPlatformPreviewPage],
-  jobs: [JobsModeratorDashboard, JobsGigsControl, JobsTicketManagement, JobsDisputes, JobsReports, JobsUserTeam, StaffPlatformPreviewPage],
+  support: [SupportModeratorDashboard, SupportTicketManagement, SupportDisputes, SupportUserTeam, SupportReports, SupportCreditsWallets, SupportRestrictedWork, StaffPlatformPreviewPage],
+  jobs: [JobsModeratorDashboard, JobsGigsControl, JobsTicketManagement, JobsDisputes, JobsReports, JobsUserTeam, JobsRestrictedWork, StaffPlatformPreviewPage],
 };
 
 /** Fetches every page chunk of a console so sidebar navigation never waits on a download. */

@@ -344,13 +344,20 @@ function validateReviewPayload(payload) {
   };
 }
 
-function publicAsset(asset, feePercent = DEFAULT_MARKETPLACE_ASSET_TRANSACTION_FEE_PERCENT) {
+function publicAsset(asset, feePercent = DEFAULT_MARKETPLACE_ASSET_TRANSACTION_FEE_PERCENT, { staffViewer = false } = {}) {
   if (!asset) return asset;
-  const { owner_account_id: _ownerAccountId, total_count: _totalCount, ...safeAsset } = asset;
+  const {
+    owner_account_id: _ownerAccountId,
+    total_count: _totalCount,
+    owner_deleted_at: ownerDeletedAt,
+    ...safeAsset
+  } = asset;
   const priceCredits = Number(safeAsset.price_credits);
   const isAdminAsset = Boolean(safeAsset.is_admin_asset);
   const effectiveFeePercent = isAdminAsset ? 0 : feePercent;
   const transactionFeeCredits = isAdminAsset ? 0 : calculateAssetTransactionFee(priceCredits, effectiveFeePercent);
+  // Review state is the owner's; staff reading the page see it too.
+  const showsReview = Boolean(safeAsset.is_owner || staffViewer);
   return {
     ...safeAsset,
     is_admin_asset: isAdminAsset,
@@ -358,11 +365,14 @@ function publicAsset(asset, feePercent = DEFAULT_MARKETPLACE_ASSET_TRANSACTION_F
     creator_handle: isAdminAsset ? 'ensemble' : (safeAsset.creator_handle || null),
     creator_avatar_path: isAdminAsset ? '/ensemble_lg.svg' : (safeAsset.creator_avatar_path || null),
     owner_account_id: _ownerAccountId,
-    review_status: safeAsset.is_owner ? (safeAsset.review_status || null) : undefined,
-    rejection_reason: safeAsset.is_owner ? (safeAsset.rejection_reason || null) : undefined,
-    // Delist / re-review reason and the go-live time of a scheduled listing: owner only.
-    review_note: safeAsset.is_owner ? (safeAsset.review_note || null) : undefined,
-    review_publish_at: safeAsset.is_owner ? (safeAsset.review_publish_at || null) : undefined,
+    review_status: showsReview ? (safeAsset.review_status || null) : undefined,
+    rejection_reason: showsReview ? (safeAsset.rejection_reason || null) : undefined,
+    // Delist / re-review reason and the go-live time of a scheduled listing: owner (and staff) only.
+    review_note: showsReview ? (safeAsset.review_note || null) : undefined,
+    review_publish_at: showsReview ? (safeAsset.review_publish_at || null) : undefined,
+    // Staff reading a page members may not reach: the page says what members see instead.
+    staff_view: staffViewer && !safeAsset.is_owner ? true : undefined,
+    seller_removed: staffViewer ? Boolean(ownerDeletedAt) : undefined,
     like_count: Number(safeAsset.like_count || 0),
     save_count: Number(safeAsset.save_count || 0),
     review_count: Number(safeAsset.review_count || 0),
@@ -485,14 +495,20 @@ async function listAssetsServices(accountId, query = {}) {
   };
 }
 
-async function getAssetServices(assetId, accountId) {
+/**
+ * `staffViewer`: a staff session reading the page (platform view). Staff see assets that are not
+ * live (pending, delisted, removed by a ban, trashed, or whose seller left) with the listing
+ * state, so a case can be checked. Only the page, comment and review reads pass it: every write
+ * path calls this without it, so staff never act on an asset members cannot reach.
+ */
+async function getAssetServices(assetId, accountId, { staffViewer = false } = {}) {
   requireUuid(assetId);
   const { ensureAnimatedGifDerivativesBackfilled } = require('./AssetPreviewServices');
   await ensureAnimatedGifDerivativesBackfilled();
   const feePercent = await getMarketplaceTransactionFeePercent();
-  const asset = await getAssetRepository(assetId, accountId);
+  const asset = await getAssetRepository(assetId, accountId, { staffViewer });
   if (!asset) throw new AssetError('Asset not found.', 404, 'ASSET_NOT_FOUND');
-  return publicAsset(asset, feePercent);
+  return publicAsset(asset, feePercent, { staffViewer });
 }
 
 async function createAssetServices(accountId, payload, { isAdminAsset = false, staffId = null } = {}) {
@@ -828,8 +844,8 @@ async function restoreAssetServices(assetId, accountId) {
   }
 }
 
-async function listCommentsServices(assetId, accountId) {
-  await getAssetServices(assetId, accountId);
+async function listCommentsServices(assetId, accountId, { staffViewer = false } = {}) {
+  await getAssetServices(assetId, accountId, { staffViewer });
   return listCommentsRepository(assetId, accountId);
 }
 
@@ -981,9 +997,9 @@ async function reportAssetServices(assetId, accountId, payload) {
   });
 }
 
-async function listAssetReviewsServices(assetId, accountId) {
+async function listAssetReviewsServices(assetId, accountId, { staffViewer = false } = {}) {
   requireUuid(assetId);
-  await getAssetServices(assetId, accountId);
+  await getAssetServices(assetId, accountId, { staffViewer });
   return listAssetReviewsRepository(assetId, accountId);
 }
 

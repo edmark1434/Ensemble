@@ -13,6 +13,7 @@ import {
   Flag,
   History,
   Inbox,
+  Info,
   Layers,
   Loader2,
   Lock,
@@ -44,6 +45,7 @@ import {
   formatDateTime,
   initials,
   memberViewFor,
+  ownerClosedNote,
   relativeTime,
   statusPill,
   typeBadge,
@@ -82,7 +84,8 @@ function postingFromDetail(detail: JobsGigsPostingDetail): JobsGigsPosting {
           status: latest.status,
           previousStatus: latest.previousStatus,
           reason: latest.reason,
-          reportNumber: null,
+          reportNumber: latest.reportNumber || null,
+          by: latest.actor ? { name: latest.actor.name, role: latest.actor.role } : null,
           at: latest.createdAt,
         }
       : null,
@@ -552,6 +555,21 @@ export default function PostingDetailModal({
                   <DetailRow label="Last updated" value={relativeTime(detail.updatedAt)} />
                   <DetailRow label="Last viewed" value={relativeTime(detail.lastViewedAt)} />
                   {detail.archivedAt && <DetailRow label="Archived" value={formatDateTime(detail.archivedAt)} />}
+                  {history[0] && (
+                    <DetailRow
+                      label="Last staff action"
+                      value={
+                        <>
+                          {history[0].status === "active" ? "Reopened" : (
+                            <span className="capitalize">{history[0].status || "Changed"}</span>
+                          )}{" "}
+                          by{" "}
+                          {history[0].actor?.name || "staff (not recorded)"}
+                          <span className="block text-[10px] text-zinc-500">{formatDateTime(history[0].createdAt)}</span>
+                        </>
+                      }
+                    />
+                  )}
                   <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
                     <Tag className="h-3.5 w-3.5 text-zinc-600" />
                     {detail.tags.length === 0 ? (
@@ -725,7 +743,12 @@ export default function PostingDetailModal({
                           {h.reason ? h.reason : <span className="italic text-zinc-600">No reason recorded</span>}
                         </p>
                         <p className="mt-0.5 text-[11px] text-zinc-600">
-                          {h.actor ? `${h.actor.name} · ${h.actor.role}` : "Staff"} · owner notified
+                          By{" "}
+                          <span className="font-medium text-zinc-300">
+                            {h.actor ? h.actor.name : "staff (not recorded)"}
+                          </span>
+                          {h.actor?.role ? ` · ${h.actor.role}` : ""}
+                          {h.reportNumber ? ` · ${h.reportNumber}` : ""} · {formatDateTime(h.createdAt)} · owner notified
                         </p>
                       </li>
                     ))}
@@ -739,7 +762,7 @@ export default function PostingDetailModal({
         {detail && (
           <div className="flex flex-wrap items-center gap-2 border-t border-white/[0.06] bg-[#0f1016] px-6 py-3.5">
             <span className="mr-1 text-[10px] font-semibold uppercase tracking-widest text-zinc-600">Moderate</span>
-            {actionsForPostingStatus(detail.status).map((action) => {
+            {actionsForPostingStatus(detail.status, Boolean(detail.staffHoldAt)).map((action) => {
               const meta = POSTING_ACTIONS[action];
               const Icon = meta.icon;
               return (
@@ -756,6 +779,12 @@ export default function PostingDetailModal({
             })}
             {(saving || loading) && <Loader2 className="ml-1 h-4 w-4 animate-spin text-zinc-500" />}
             <span className="ml-auto text-[11px] text-zinc-600">Every action is logged with its reason.</span>
+            {detail.status === "closed" && !detail.staffHoldAt && (
+              <p className="flex w-full items-start gap-1.5 text-[11px] leading-relaxed text-zinc-500">
+                <Info className="mt-0.5 h-3 w-3 shrink-0" />
+                No Reopen here. {ownerClosedNote(target.type)}
+              </p>
+            )}
           </div>
         )}
       </div>

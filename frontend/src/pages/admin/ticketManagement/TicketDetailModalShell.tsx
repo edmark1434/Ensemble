@@ -1256,9 +1256,19 @@ export default function TicketDetailModalShell({
       // Reset the form fields too: keeping the old "In Progress" here made "Save changes" reopen it.
       if (response.data?.data) applyLoadedTicket(response.data.data as TicketDetail, true);
       setAppealChoice(null);
-      const followUpFailed = response.data?.data?.appealOutcomeSummary?.followUp?.applied === false;
+      const summary = response.data?.data?.appealOutcomeSummary;
+      const followUpFailed = summary?.followUp?.applied === false;
+      // An accepted ban appeal also restores what the ban closed: say how much came back.
+      const banRestore = summary?.banRestore;
+      const restoreNote = banRestore
+        ? banRestore.error
+          ? ' Restoring what the ban closed failed; use User & Team → Closed by a ban.'
+          : ` Restored ${banRestore.restored?.length || 0} item${banRestore.restored?.length === 1 ? '' : 's'} the ban closed${
+              banRestore.skipped?.length ? `; ${banRestore.skipped.length} stayed closed` : ''
+            }.`
+        : '';
       if (followUpFailed) showErrorToast(response.data?.message || 'The decision was saved, but the further action failed.');
-      else showSuccessToast(response.data?.message || 'Appeal decision saved');
+      else showSuccessToast(`${response.data?.message || 'Appeal decision saved'}${restoreNote}`);
       // The decision changes the member's standing and appeal hold shown in the case file.
       void loadCase();
       onUpdated();
@@ -1652,6 +1662,7 @@ export default function TicketDetailModalShell({
                           </div>
                           <textarea
                             value={reply}
+                            maxLength={10000}
                             onChange={(e) => setReply(e.target.value)}
                             onKeyDown={(event) => {
                               if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {

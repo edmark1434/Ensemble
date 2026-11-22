@@ -315,6 +315,12 @@ export function SellerListingsModal({
                           <p className="text-[11px] text-zinc-500">
                             {l.number} · {l.category || 'Uncategorized'} ·{' '}
                             {l.priceCredits.toLocaleString()} credits · {formatDate(l.createdAt)}
+                            {l.reviewedBy ? (
+                              <span title={formatDateTime(l.reviewedAt)}>
+                                {' · '}
+                                {decisionVerb(l.status)} by <span className="text-zinc-300">{l.reviewedBy.name}</span>
+                              </span>
+                            ) : null}
                           </p>
                         </div>
                         {listingStatusPill(l.status)}
@@ -389,6 +395,22 @@ function historyTone(event: ListingReviewEvent) {
   if (event.status === 'rejected') return 'bg-red-400';
   if (event.status === 'delisted') return 'bg-zinc-300';
   return 'bg-amber-400';
+}
+
+/** The decision a listing's status records, for "… by <staff>" lines. */
+function decisionVerb(status: string, permanentlyRejected?: boolean) {
+  switch (status) {
+    case 'approved':
+      return 'Approved';
+    case 'scheduled':
+      return 'Approved (scheduled)';
+    case 'rejected':
+      return permanentlyRejected ? 'Rejected permanently' : 'Rejected';
+    case 'delisted':
+      return 'Delisted';
+    default:
+      return 'Reviewed';
+  }
 }
 
 /** Heading for a thread entry; plain replies have none. */
@@ -681,6 +703,13 @@ export default function ListingDetailModal({
               <h2 className="mt-1 truncate pr-4 text-lg font-bold text-white">
                 {listing?.title || 'Loading…'}
               </h2>
+              {listing?.reviewedBy && listing.status !== 'pending' && (
+                <p className="mt-0.5 text-xs text-zinc-500" title={formatDateTime(listing.reviewedAt)}>
+                  {decisionVerb(listing.status, listing.permanentlyRejected)} by{' '}
+                  <span className="font-medium text-zinc-300">{listing.reviewedBy.name}</span>
+                  {listing.reviewedBy.role ? ` · ${listing.reviewedBy.role}` : ''} · {relativeTime(listing.reviewedAt)}
+                </p>
+              )}
             </div>
           </div>
           <button
@@ -1134,7 +1163,14 @@ export default function ListingDetailModal({
                   <DetailRow label="Listing" value={<span className="font-mono">{listing.number}</span>} />
                   <DetailRow label="Created" value={formatDateTime(listing.createdAt)} />
                   <DetailRow label="Updated" value={relativeTime(listing.updatedAt)} />
-                  <DetailRow label="Reviewed by" value={listing.reviewedBy?.name || '—'} />
+                  <DetailRow
+                    label="Reviewed by"
+                    value={
+                      listing.reviewedBy
+                        ? `${listing.reviewedBy.name}${listing.reviewedBy.role ? ` · ${listing.reviewedBy.role}` : ''}`
+                        : '—'
+                    }
+                  />
                   <DetailRow label="Reviewed at" value={formatDateTime(listing.reviewedAt)} />
                   {(listing.status === 'scheduled' || listing.status === 'approved') && listing.publishAt && (
                     <DetailRow

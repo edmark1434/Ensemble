@@ -215,6 +215,32 @@ async function getStaffById(staffId) {
 }
 
 /**
+ * Who a stored staff id is, for "done by" lines on the staff desks: display name and role,
+ * keyed by staff id. Unknown ids are left out. Never sent to members.
+ */
+async function getStaffIdentities(staffIds) {
+    const ids = [...new Set((staffIds || []).filter(Boolean).map(String))];
+    if (!ids.length) return new Map();
+    const result = await pool.query(
+        `SELECT s.staff_id, s.role::text AS role,
+                COALESCE(
+                  a.display_name,
+                  NULLIF(TRIM(COALESCE(s.first_name, '') || ' ' || COALESCE(s.last_name, '')), '')
+                ) AS name
+         FROM staff s
+         LEFT JOIN accounts a ON a.account_id = s.account_id
+         WHERE s.staff_id::text = ANY($1::text[])`,
+        [ids]
+    );
+    return new Map(
+        result.rows.map((row) => [
+            String(row.staff_id),
+            { staffId: String(row.staff_id), name: row.name || 'Staff', role: row.role || null },
+        ])
+    );
+}
+
+/**
  * Update staff profile, role, account status, and optionally password.
  */
 async function updateStaffAccount(staffId, payload = {}, actor = null) {
@@ -387,6 +413,7 @@ module.exports = {
     updateStaffAccount,
     deleteStaffAccount,
     getStaffById,
+    getStaffIdentities,
     getStaffByEmail,
     getStaffByUsername,
     getStaffEmailAndPasswordHashByEmail,

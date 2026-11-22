@@ -271,6 +271,10 @@ export type ChartSegment = { label: string; value: number; color?: string };
 export const TICKET_STATUS_OPTIONS = ['Open', 'In Progress', 'Closed'] as const;
 export const TICKET_PRIORITY_OPTIONS = ['Low', 'Medium', 'High'] as const;
 
+/**
+ * Mirrors backend/lib/TicketEnums.js. Every category ends with its own bug report type
+ * (backend/lib/TicketBugReports.js), routed to that category's desk.
+ */
 export const SUPPORT_SUBGROUPS: { label: string; types: readonly string[] }[] = [
   {
     label: 'Account',
@@ -278,28 +282,44 @@ export const SUPPORT_SUBGROUPS: { label: string; types: readonly string[] }[] = 
       'Sign-in and password',
       'Account compromised',
       'Identity verification',
+      'Business verification',
       'Profile and settings',
       'Teams',
       'Delete account or export data',
+      'Account bug report',
     ],
   },
   {
     label: 'Billing',
-    types: ['Subscriptions and plans', 'Credits and balance', 'Payouts and withdrawals', 'Charges and receipts'],
+    types: [
+      'Subscriptions and plans',
+      'Credits and balance',
+      'Payouts and withdrawals',
+      'Charges and receipts',
+      'Team funds and distributions',
+      'Billing bug report',
+    ],
   },
   {
     label: 'Video Editing Platform',
-    types: ['Editor problems', 'Export and rendering', 'Uploads and storage', 'Project files', 'Sharing and collaboration'],
+    types: [
+      'Editor problems',
+      'Export and rendering',
+      'Uploads and storage',
+      'Project files',
+      'Sharing and collaboration',
+      'Video editor bug report',
+    ],
   },
   {
     label: 'Messaging',
-    types: ['Inbox, chat, and calls', 'Notifications and email'],
+    types: ['Inbox, chat, and calls', 'Notifications and email', 'Messaging bug report'],
   },
   {
     label: 'Safety and appeals',
-    types: ['Report a user', 'Copyright claim', 'Appeal an account penalty'],
+    types: ['Report a user', 'Copyright claim', 'Appeal an account penalty', 'Safety tools bug report'],
   },
-  { label: 'General', types: ['Other'] },
+  { label: 'General', types: ['Website bug report', 'Other'] },
 ];
 
 export const SUPPORT_TICKET_TYPES = SUPPORT_SUBGROUPS.flatMap((group) => group.types);
@@ -309,6 +329,7 @@ export const FORUM_TICKET_TYPES = [
   'Forum groups',
   'Report a post or member',
   'Appeal a forum action',
+  'Forum bug report',
 ] as const;
 
 export const MARKETPLACE_TICKET_TYPES = [
@@ -320,17 +341,20 @@ export const MARKETPLACE_TICKET_TYPES = [
   'Report a listing or seller',
   'Asset reviews',
   'Appeal a marketplace action',
+  'Marketplace bug report',
 ] as const;
 
 export const JOBS_TICKET_TYPES = [
   'Job and gig listings',
   'Proposals and hiring',
   'Contracts, milestones, and orders',
+  'Workspaces and team projects',
   'Delivery and disputes',
   'Cancellations and refunds',
   'Report a listing or user',
   'Gig reviews',
   'Appeal a jobs action',
+  'Jobs and gigs bug report',
 ] as const;
 
 export const TICKET_TYPE_OPTIONS = [
@@ -355,44 +379,56 @@ export const TICKET_TYPE_DESCRIPTIONS: Record<string, string> = {
   'Sign-in and password': 'The member cannot sign in, reset their password, or stay logged in.',
   'Account compromised': 'Suspicious logins, unauthorized account changes, or two-factor authentication issues.',
   'Identity verification': 'The account identity check is pending, rejected, or unclear. This is different from seller verification.',
-  'Profile and settings': 'Issues with the profile, photo, banner, email, or account settings.',
-  Teams: 'Problems with team invitations, roles, removals, or suspended team memberships.',
+  'Business verification': "A team's business verification is pending, rejected, or its verified badge is missing. This is different from identity verification.",
+  'Profile and settings': 'Issues with the profile, photo, banner, badges, email, or account settings.',
+  Teams: 'Problems with team invitations, join requests, roles, removals, ownership, or suspended team memberships.',
   'Delete account or export data': 'Requests to delete an account or obtain a copy of personal data.',
+  'Account bug report': 'Something on sign-in, sign-up, onboarding, profile, settings, verification, or team pages does not work as it should.',
   'Subscriptions and plans': 'Issues with plans, renewals, upgrades, downgrades, or cancellations.',
   'Credits and balance': 'Missing credits, duplicate deductions, early expiration, or an incorrect balance.',
   'Payouts and withdrawals': 'Missing, delayed, held, or rejected earnings payouts.',
   'Charges and receipts': 'Incorrect charges, invoices, or receipts.',
-  'Editor problems': 'The editor crashes, freezes, lags, or its tools do not work properly.',
-  'Export and rendering': 'Failed exports, unfinished rendering, or incorrect output.',
+  'Team funds and distributions': 'Adding funds to a team wallet, or a distribution to team members that is missing, wrong, or stuck.',
+  'Billing bug report': 'Something on the credits shop, checkout, subscriptions, wallet, transaction history, or cash-out pages does not work as it should.',
+  'Editor problems': 'The editor crashes, freezes, or runs slowly on a project.',
+  'Export and rendering': 'Failed exports, unfinished rendering, watermarks, or incorrect output.',
   'Uploads and storage': 'Failed or stuck uploads, or incorrect storage quotas.',
-  'Project files': 'Missing projects, projects that will not open, or lost content.',
-  'Sharing and collaboration': 'Problems with project invitations, permissions, syncing, or lost edits.',
+  'Project files': 'Missing projects, projects that will not open, trash and restore, templates, or lost content.',
+  'Sharing and collaboration': 'Problems with project invitations, permissions, comments, syncing, or lost edits.',
+  'Video editor bug report': 'A tool, panel, or page of the editor or the Projects page does not work as it should.',
   'Inbox, chat, and calls': 'Missing messages, broken conversations, or failed calls.',
   'Notifications and email': 'Missing, duplicated, or incorrectly delivered alerts and emails.',
+  'Messaging bug report': 'Something in the inbox, chat, calls, or notifications does not work as it should.',
   'Report a user': 'Harassment, impersonation, or scams outside the forum, marketplace, or jobs sections.',
   'Copyright claim': "Someone is using or selling the member's work without permission anywhere on Ensemble.",
   'Appeal an account penalty': 'One appeal per penalty: a ban, lock, suspension, forum timeout, warning, automatic punishment, or credit hold.',
+  'Safety tools bug report': 'A report form, the account standing page, an appeal, or Cases does not work as it should.',
+  'Website bug report': 'Something elsewhere on Ensemble (home, navigation, search, discovery, dashboard, support pages) does not work as it should.',
   Other: 'Any issue that does not fit the available types.',
   'Posts and replies': 'Missing discussions, posts, or replies, or content displaying incorrectly.',
   'Forum groups': 'Problems with groups, memberships, or settings.',
   'Report a post or member': 'Reports involving forum posts, replies, groups, or members breaking the rules.',
   'Appeal a forum action': 'Appeals for removed content or restrictions on forum participation.',
+  'Forum bug report': 'Something on the forum feed, groups, discussions, or comments does not work as it should.',
   'Seller verification': 'The eligibility check required to sell is pending, rejected, or unclear. This is different from account identity verification.',
   'Listing review': "The member's listing is stuck in review or was rejected.",
-  'Asset purchase and download': 'The buyer paid but did not receive the file, or the download failed.',
+  'Asset purchase and download': 'The buyer paid but did not receive the file, the download failed, or the license is not on their project.',
   'File is wrong or broken': 'The delivered file is damaged, incomplete, or different from what was advertised.',
   'Marketplace refunds': 'The buyer wants credits from an asset purchase returned.',
   'Report a listing or seller': 'Reports involving scams, misleading listings, or rule violations.',
   'Asset reviews': 'Reports about fake, abusive, or unfair reviews of an asset or seller.',
   'Appeal a marketplace action': 'Appeals for removed listings or restrictions on selling.',
+  'Marketplace bug report': 'Something on the Asset Library, an asset page, checkout, or the listing editor does not work as it should.',
   'Job and gig listings': 'Missing listings, stuck submissions, or incorrect listing details.',
-  'Proposals and hiring': 'Missing proposals or applications, or hiring processes that fail.',
+  'Proposals and hiring': 'Missing proposals, applications, invitations, or gig order requests, or hiring steps that fail.',
   'Contracts, milestones, and orders': 'Problems with agreements, escrow, milestone payments, or gig orders.',
-  'Delivery and disputes': 'Work was not delivered, does not match the agreement, or the parties disagree about the result.',
+  'Workspaces and team projects': 'Problems with a contract workspace or team project: taskboard, submissions, members, subcontractors, chat, or linked video projects.',
+  'Delivery and disputes': 'Work was not delivered or does not match the agreement. Staff rule on it through a dispute filed from the contract; this ticket is for help before or around one.',
   'Cancellations and refunds': 'Requests to cancel a contract or gig order, or return escrowed funds.',
   'Report a listing or user': 'Reports involving scams or rule violations by jobs, gigs, clients, or freelancers.',
-  'Gig reviews': 'Reports about fake, abusive, or unfair reviews of gigs, clients, or freelancers.',
+  'Gig reviews': 'Reports about fake, abusive, or unfair reviews left on a job contract or gig order.',
   'Appeal a jobs action': 'Appeals for removed listings or restrictions on Jobs & Gigs.',
+  'Jobs and gigs bug report': 'Something on job or gig pages, proposals, orders, contracts, the dashboard, or workspaces does not work as it should.',
 };
 
 export const DEFAULT_TICKET_PRIORITY: Record<string, 'Low' | 'Medium' | 'High'> = {
@@ -549,7 +585,7 @@ export type TicketDetail = {
 
 /* ---------- Category case file (backend/repositories/TicketCaseRepositories.js) ---------- */
 
-export type CaseKind = 'appeal' | 'marketplace' | 'jobs' | 'forum' | 'billing' | 'account' | 'editor' | 'safety' | 'general';
+export type CaseKind = 'appeal' | 'marketplace' | 'jobs' | 'forum' | 'billing' | 'account' | 'editor' | 'safety' | 'bug' | 'general';
 
 /** The member's item as it read when staff acted on it from platform view. */
 export type CasePenaltyEvidence = {
@@ -1018,7 +1054,10 @@ export type CaseForumPost = {
   createdAt: string | null;
   removedAt: string | null;
   removedBy?: string | null;
+  /** The staff member (or member) who removed it. */
+  removedByName?: string | null;
   removalReason?: string | null;
+  lockedByName?: string | null;
   reports: CaseReportRef[];
 };
 
@@ -1036,6 +1075,8 @@ export type CaseForum = {
     discussionCount: number;
     removedDiscussionCount: number;
     archivedBy?: string | null;
+    /** The staff member (or owner) who archived it. */
+    archivedByName?: string | null;
     archiveReason?: string | null;
     createdAt: string | null;
     deletedAt: string | null;
@@ -1073,7 +1114,25 @@ export type CaseBilling =
             createdAt: string;
           }
         | null;
+      /** "Team funds and distributions": the team named, with its wallet. */
+      team?: (CaseTeam & { wallet: { balanceCredits: number; frozenCredits: number; status: string | null } | null }) | null;
     };
+
+/** Bug reports (every category): how it was described and other open reports of the same bug type. */
+export type CaseBug = {
+  area: string | null;
+  frequency: string | null;
+  blocking: string | null;
+  /** The member said it stops them finishing what they were doing (filed as High). */
+  blocksMember: boolean;
+  pageLink: string | null;
+  errorMessage: string | null;
+  /** Open bug reports of this type from the last 60 days, besides this one. */
+  similarTotal: number;
+  /** Of those, the ones naming the same area. */
+  sameAreaTotal: number;
+  similar: (CaseTicketRef & { area: string | null; sameArea: boolean })[];
+};
 
 export type CaseAccount = {
   verification: {
@@ -1188,6 +1247,7 @@ export type TicketCaseContext = {
   account?: CaseAccount | null;
   editor?: CaseEditor | null;
   safety?: CaseSafety | null;
+  bug?: CaseBug | null;
 };
 
 export function ticketTypeOf(t: { type?: string; category?: string }) {

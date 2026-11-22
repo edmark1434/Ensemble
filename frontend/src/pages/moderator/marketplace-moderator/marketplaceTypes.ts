@@ -181,7 +181,8 @@ export type MarketplaceListing = {
   /** Detail only: the conversation with the seller, oldest first. */
   thread?: ListingThreadMessage[];
   submittedBy: ListingPerson;
-  reviewedBy: { staffId: number; name: string } | null;
+  /** The staff member behind the current decision (cleared when the seller resubmits). */
+  reviewedBy: ListingReviewer | null;
   reviewedAt: string | null;
   createdAt: string;
   updatedAt: string;
@@ -351,7 +352,11 @@ export type SellerListingSummary = {
   createdAt: string;
   updatedAt: string;
   reviewedAt: string | null;
+  reviewedBy?: ListingReviewer | null;
 };
+
+/** The staff member who made a listing decision (staff desks only; sellers see the review team). */
+export type ListingReviewer = { staffId: number | string; name: string; role?: string | null };
 
 export type SellerListingsHistory = {
   account: {

@@ -13,6 +13,8 @@ type ActionOptions = {
   memberScope?: 'leader' | 'selected' | 'all';
   /** With `memberScope: 'selected'`: the chosen active members. */
   memberAccountIds?: string[];
+  /** Unban / restore of a banned account: also put back the jobs, gigs and listings the ban closed. */
+  restoreBanItems?: boolean;
 };
 
 export async function setAccountStatus(accountId: string, action: string, options?: ActionOptions) {
@@ -26,6 +28,7 @@ export async function setAccountStatus(accountId: string, action: string, option
     customDuration: options?.customDuration,
     memberScope: options?.memberScope,
     memberAccountIds: options?.memberAccountIds,
+    restoreBanItems: options?.restoreBanItems === true ? true : undefined,
   });
   if (!res.data?.success) throw new Error(res.data?.message || 'Status update failed');
   if (!options?.silent) {

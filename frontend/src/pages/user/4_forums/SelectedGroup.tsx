@@ -72,6 +72,8 @@ import {
 } from "@/pages/user/4_forums/forumCommentUtils";
 import { reconcileForumDiscussions, useForumRealtime } from "@/pages/user/4_forums/forumRealtime";
 import { DEFAULT_FORUM_AVATAR, identityFromDetails, loadCurrentForumAvatar } from "@/pages/user/4_forums/forumIdentity";
+import StandingChip from "@/components/account/StandingChip";
+import type { PublicStanding } from "@/pages/user/7_profile/Displays/AccountStanding";
 
 type Tab = "posts" | "members" | "about";
 
@@ -96,6 +98,8 @@ type PublicForumIdentity = {
   display_name: string;
   handle?: string | null;
   avatar_preset_url?: string | null;
+  /** Public standing chip data (Banned / Suspended / Locked / Timeout). */
+  standing?: PublicStanding | null;
 };
 
 type Comment = {
@@ -183,6 +187,7 @@ type MemberWithDetails = {
   joinedAt: string;
   isVerified?: boolean;
   subscriptionPlan?: string;
+  standing?: PublicStanding | null;
 };
 
 const getTagColor = (tagId: number) => {
@@ -798,6 +803,7 @@ const CommentItem = ({
                   title={`${commentSubscriptionPlan} Tier`}
                 />
               )}
+              <StandingChip standing={commentIdentity?.standing || (commentAuthor as any).standing} />
               <span className="text-xs text-gray-500 dark:text-zinc-500">{getTimeAgo(comment.created_at)}</span>
               {comment.is_edited && (
                 <span className="text-[10px] text-zinc-600">(edited)</span>
@@ -1108,6 +1114,7 @@ const SelectedGroup = () => {
       accountId: member?.accountId || (participant as any)?.accountId || (typeof userId === "string" && userId.length > 10 ? userId : null),
       isVerified: Boolean(member?.isVerified),
       subscriptionPlan: member?.subscriptionPlan || "Free",
+      standing: member?.standing || null,
     };
   };
 
@@ -1166,6 +1173,7 @@ const SelectedGroup = () => {
             joinedAt: member.joined_at,
             isVerified: Boolean((identity as any).isVerified),
             subscriptionPlan: (identity as any).subscriptionPlan || "Free",
+            standing: (identity as any).standing || null,
           };
         });
         console.log("Group discussion:", result2.data.discussions);
@@ -1278,6 +1286,8 @@ const SelectedGroup = () => {
         (postIdentity?.subscriptionPlan && postIdentity.subscriptionPlan !== "Free"
           ? postIdentity.subscriptionPlan
           : authorDetails.subscriptionPlan) || "Free",
+      // Live public standing for the chip by the name.
+      authorStanding: postIdentity?.standing || (authorDetails as any).standing || null,
       excerpt: post.content,
       content: post.content,
       ago: getTimeAgo(post.created_at),
@@ -2077,6 +2087,7 @@ const SelectedGroup = () => {
     (ownerFromGroup?.identity as any)?.subscription_plan ||
     (ownerFromGroup?.identity as any)?.subscriptionPlan ||
     "Free";
+  const ownerStanding = ownerFromDetails?.standing || (ownerFromGroup?.identity as any)?.standing || null;
   const isActiveMember = group?.members.some(
     (member) => String(member.userId) === String(currentUserId) && !member.is_banned
   ) || false;
@@ -2291,6 +2302,7 @@ const SelectedGroup = () => {
                     title={`${ownerSubscriptionPlan} Tier`}
                   />
                 )}
+                <StandingChip standing={ownerStanding} />
               </div>
               <span className="text-gray-300 dark:text-zinc-600" aria-hidden="true">|</span>
               <div className="flex items-center gap-1.5">
@@ -2491,6 +2503,7 @@ const SelectedGroup = () => {
                                     {post.authorSubscriptionPlan && (
                                       <img src={getSubscriptionIcon(post.authorSubscriptionPlan)} alt={post.authorSubscriptionPlan} className="h-3.5 w-3.5 object-contain drop-shadow-[0_0_8px_rgba(255,255,255,0.15)]" title={`${post.authorSubscriptionPlan} Tier`} />
                                     )}
+                                    <StandingChip standing={post.authorStanding} />
                                   </div>
                                   <span className="text-xs text-gray-500 dark:text-zinc-500">{post.ago}</span>
                                 </div>
@@ -2772,6 +2785,7 @@ const SelectedGroup = () => {
                                   title={`${member.subscriptionPlan} Tier`}
                                 />
                               )}
+                              <StandingChip standing={member.standing} className="shrink-0" />
                             </div>
                             <div className="mt-1 flex flex-wrap items-center gap-2">
                               <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-[11px] font-semibold ${roleBadgeClass}`}>
@@ -2893,6 +2907,7 @@ const SelectedGroup = () => {
                             title={`${ownerSubscriptionPlan} Tier`}
                           />
                         )}
+                        <StandingChip standing={ownerStanding} className="shrink-0" />
                       </div>
                     </div>
                     <div className="flex items-center justify-between border-b border-gray-100 dark:border-white/10 pb-2.5">

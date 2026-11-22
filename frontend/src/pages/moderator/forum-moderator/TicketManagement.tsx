@@ -12,7 +12,7 @@ export default function ForumTicketManagement() {
     <ModeratorTicketDesk
       roleLabel="Forum Moderator"
       title="Ticket Management"
-      subtitle="Forum-only queue: posts and replies, groups, report a post or member, and forum appeals. Escalate or move a ticket to another category when it was filed in the wrong place."
+      subtitle="Forum-only queue: posts and replies, groups, report a post or member, forum appeals and forum bug reports. Escalate or move a ticket to another category when it was filed in the wrong place."
       endpointBase="/api/moderator/forum/tickets"
       accent="violet"
       queueKey="forum"

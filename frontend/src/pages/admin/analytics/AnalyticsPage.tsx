@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Activity,
   AlertTriangle,
@@ -24,6 +24,8 @@ import { AdminFeedbacksPanel } from '../feedbacks/AdminFeedbacksPage';
 import type { Bucket, LedgerKind, PlatformAnalytics, RangeKey } from './analyticsTypes';
 import { fmtDay } from './analyticsFormat';
 import { Notice } from './analyticsUi';
+import type { GlossaryId } from './analyticsGlossary';
+import { DefinitionsButton, DefinitionsDrawer, GlossaryProvider } from './analyticsInfo';
 import AnalyticsRangePicker, { type RangeSelection } from './components/AnalyticsRangePicker';
 import OverviewTab from './components/OverviewTab';
 import MembersTab from './components/MembersTab';
@@ -118,6 +120,9 @@ export default function AnalyticsPage() {
   const [failure, setFailure] = useState<{ key: string; message: string } | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [reloadToken, setReloadToken] = useState(0);
+  const [definitions, setDefinitions] = useState<{ open: boolean; focus: GlossaryId | null }>({ open: false, focus: null });
+  const glossary = useMemo(() => ({ open: (focus?: GlossaryId) => setDefinitions({ open: true, focus: focus ?? null }) }), []);
+  const closeDefinitions = useCallback(() => setDefinitions({ open: false, focus: null }), []);
 
   useEffect(() => {
     if (standalone) return;
@@ -224,6 +229,7 @@ export default function AnalyticsPage() {
           : 'Platform analytics';
 
   return (
+    <GlossaryProvider value={glossary}>
     <main className="relative min-h-screen md:pl-[260px]">
       <header className="sticky top-0 z-20 border-b border-white/[0.06] bg-[#06070c]/90 backdrop-blur-xl">
         <div className="flex flex-col gap-3 px-6 py-4 md:px-8 xl:flex-row xl:items-center xl:justify-between">
@@ -249,8 +255,11 @@ export default function AnalyticsPage() {
               )}
             </p>
           </div>
-          {!standalone && (
+          {tab !== 'feedback' && (
             <div className="flex flex-wrap items-center gap-2">
+              <DefinitionsButton onClick={() => glossary.open()} />
+              {!standalone && (
+                <>
               <AnalyticsRangePicker
                 value={selection}
                 days={upToDate ? range?.days ?? null : null}
@@ -267,6 +276,8 @@ export default function AnalyticsPage() {
                 <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
                 Refresh
               </button>
+                </>
+              )}
             </div>
           )}
         </div>
@@ -319,6 +330,8 @@ export default function AnalyticsPage() {
           </div>
         )}
       </div>
+      <DefinitionsDrawer open={definitions.open} focus={definitions.focus} section={tab} onClose={closeDefinitions} />
     </main>
+    </GlossaryProvider>
   );
 }

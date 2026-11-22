@@ -1,7 +1,11 @@
 /**
  * Ticket catalogs for staff desks.
  * Member intake still accepts the previous labels; they map onto these types.
+ *
+ * Every category has its own bug report type (lib/TicketBugReports.js); the labels below must
+ * match `BUG_REPORT_TYPE_BY_CATEGORY`.
  */
+const { BUG_REPORT_TYPES, BUG_REPORT_TYPE_BY_CATEGORY, isBugReportType, bugReportPriority } = require('./TicketBugReports');
 
 const SUPPORT_GROUPS = Object.freeze([
   {
@@ -10,9 +14,11 @@ const SUPPORT_GROUPS = Object.freeze([
       ['Sign-in and password', 'The member cannot sign in, reset their password, or stay logged in.'],
       ['Account compromised', 'Suspicious logins, unauthorized account changes, or two-factor authentication issues.'],
       ['Identity verification', 'The account identity check is pending, rejected, or unclear. This is different from seller verification.'],
-      ['Profile and settings', 'Issues with the profile, photo, banner, email, or account settings.'],
-      ['Teams', 'Problems with team invitations, roles, removals, or suspended team memberships.'],
+      ['Business verification', 'A team\'s business verification is pending, rejected, or its verified badge is missing. This is different from identity verification.'],
+      ['Profile and settings', 'Issues with the profile, photo, banner, badges, email, or account settings.'],
+      ['Teams', 'Problems with team invitations, join requests, roles, removals, ownership, or suspended team memberships.'],
       ['Delete account or export data', 'Requests to delete an account or obtain a copy of personal data.'],
+      ['Account bug report', 'Something on sign-in, sign-up, onboarding, profile, settings, verification, or team pages does not work as it should.'],
     ]),
   },
   {
@@ -22,16 +28,19 @@ const SUPPORT_GROUPS = Object.freeze([
       ['Credits and balance', 'Missing credits, duplicate deductions, early expiration, or an incorrect balance.'],
       ['Payouts and withdrawals', 'Missing, delayed, held, or rejected earnings payouts.'],
       ['Charges and receipts', 'Incorrect charges, invoices, or receipts.'],
+      ['Team funds and distributions', 'Adding funds to a team wallet, or a distribution to team members that is missing, wrong, or stuck.'],
+      ['Billing bug report', 'Something on the credits shop, checkout, subscriptions, wallet, transaction history, or cash-out pages does not work as it should.'],
     ]),
   },
   {
     label: 'Video Editing Platform',
     types: Object.freeze([
-      ['Editor problems', 'The editor crashes, freezes, lags, or its tools do not work properly.'],
-      ['Export and rendering', 'Failed exports, unfinished rendering, or incorrect output.'],
+      ['Editor problems', 'The editor crashes, freezes, or runs slowly on a project.'],
+      ['Export and rendering', 'Failed exports, unfinished rendering, watermarks, or incorrect output.'],
       ['Uploads and storage', 'Failed or stuck uploads, or incorrect storage quotas.'],
-      ['Project files', 'Missing projects, projects that will not open, or lost content.'],
-      ['Sharing and collaboration', 'Problems with project invitations, permissions, syncing, or lost edits.'],
+      ['Project files', 'Missing projects, projects that will not open, trash and restore, templates, or lost content.'],
+      ['Sharing and collaboration', 'Problems with project invitations, permissions, comments, syncing, or lost edits.'],
+      ['Video editor bug report', 'A tool, panel, or page of the editor or the Projects page does not work as it should.'],
     ]),
   },
   {
@@ -39,6 +48,7 @@ const SUPPORT_GROUPS = Object.freeze([
     types: Object.freeze([
       ['Inbox, chat, and calls', 'Missing messages, broken conversations, or failed calls.'],
       ['Notifications and email', 'Missing, duplicated, or incorrectly delivered alerts and emails.'],
+      ['Messaging bug report', 'Something in the inbox, chat, calls, or notifications does not work as it should.'],
     ]),
   },
   {
@@ -47,11 +57,13 @@ const SUPPORT_GROUPS = Object.freeze([
       ['Report a user', 'Harassment, impersonation, or scams outside the forum, marketplace, or jobs sections.'],
       ['Copyright claim', 'Someone is using or selling the member\'s work without permission anywhere on Ensemble.'],
       ['Appeal an account penalty', 'One appeal per penalty: a ban, lock, suspension, forum timeout, warning, automatic punishment, or credit hold. Filed from the account standing page.'],
+      ['Safety tools bug report', 'A report form, the account standing page, an appeal, or Cases does not work as it should.'],
     ]),
   },
   {
     label: 'General',
     types: Object.freeze([
+      ['Website bug report', 'Something elsewhere on Ensemble (home, navigation, search, discovery, dashboard, support pages) does not work as it should.'],
       ['Other', 'Any issue that does not fit the available types.'],
     ]),
   },
@@ -64,6 +76,7 @@ const FORUM_GROUP = Object.freeze({
     ['Forum groups', 'Problems with groups, memberships, or settings.'],
     ['Report a post or member', 'Reports involving forum posts, replies, groups, or members breaking the rules.'],
     ['Appeal a forum action', 'Appeals for removed content or restrictions on forum participation.'],
+    ['Forum bug report', 'Something on the forum feed, groups, discussions, or comments does not work as it should.'],
   ]),
 });
 
@@ -72,12 +85,13 @@ const MARKETPLACE_GROUP = Object.freeze({
   types: Object.freeze([
     ['Seller verification', 'The eligibility check required to sell is pending, rejected, or unclear. This is different from account identity verification.'],
     ['Listing review', 'The member\'s listing is stuck in review or was rejected.'],
-    ['Asset purchase and download', 'The buyer paid but did not receive the file, or the download failed.'],
+    ['Asset purchase and download', 'The buyer paid but did not receive the file, the download failed, or the license is not on their project.'],
     ['File is wrong or broken', 'The delivered file is damaged, incomplete, or different from what was advertised.'],
     ['Marketplace refunds', 'The buyer wants credits from an asset purchase returned.'],
     ['Report a listing or seller', 'Reports involving scams, misleading listings, or rule violations.'],
     ['Asset reviews', 'Reports about fake, abusive, or unfair reviews of an asset or seller.'],
     ['Appeal a marketplace action', 'Appeals for removed listings or restrictions on selling.'],
+    ['Marketplace bug report', 'Something on the Asset Library, an asset page, checkout, or the listing editor does not work as it should.'],
   ]),
 });
 
@@ -85,13 +99,15 @@ const JOBS_GROUP = Object.freeze({
   label: 'Jobs and Gigs',
   types: Object.freeze([
     ['Job and gig listings', 'Missing listings, stuck submissions, or incorrect listing details.'],
-    ['Proposals and hiring', 'Missing proposals or applications, or hiring processes that fail.'],
+    ['Proposals and hiring', 'Missing proposals, applications, invitations, or gig order requests, or hiring steps that fail.'],
     ['Contracts, milestones, and orders', 'Problems with agreements, escrow, milestone payments, or gig orders.'],
-    ['Delivery and disputes', 'Work was not delivered, does not match the agreement, or the parties disagree about the result.'],
+    ['Workspaces and team projects', 'Problems with a contract workspace or team project: taskboard, submissions, members, subcontractors, chat, or linked video projects.'],
+    ['Delivery and disputes', 'Work was not delivered or does not match the agreement. Staff rule on it through a dispute filed from the contract; this ticket is for help before or around one.'],
     ['Cancellations and refunds', 'Requests to cancel a contract or gig order, or return escrowed funds.'],
     ['Report a listing or user', 'Reports involving scams or rule violations by jobs, gigs, clients, or freelancers.'],
-    ['Gig reviews', 'Reports about fake, abusive, or unfair reviews of gigs, clients, or freelancers.'],
+    ['Gig reviews', 'Reports about fake, abusive, or unfair reviews left on a job contract or gig order.'],
     ['Appeal a jobs action', 'Appeals for removed listings or restrictions on Jobs & Gigs.'],
+    ['Jobs and gigs bug report', 'Something on job or gig pages, proposals, orders, contracts, the dashboard, or workspaces does not work as it should.'],
   ]),
 });
 
@@ -146,12 +162,6 @@ const ROLE_TO_TICKET_TYPES = Object.freeze({
   Administrator: [...TICKET_TYPES],
   Admin: [...TICKET_TYPES],
 });
-
-const ROLE_TO_TICKET_TYPE = Object.freeze(
-  Object.fromEntries(
-    Object.entries(ROLE_TO_TICKET_TYPES).map(([role, types]) => [role, types[0]])
-  )
-);
 
 const TYPE_META = new Map();
 for (const group of SUPPORT_GROUPS) {
@@ -210,6 +220,13 @@ const LEGACY_TYPE_MAP = Object.freeze({
   gig: 'Job and gig listings',
   'jobs and gigs': 'Job and gig listings',
   dispute: 'Delivery and disputes',
+  bug: 'Website bug report',
+  'bug report': 'Website bug report',
+  'report a bug': 'Website bug report',
+  'business verification': 'Business verification',
+  workspaces: 'Workspaces and team projects',
+  'team projects': 'Workspaces and team projects',
+  'team wallet': 'Team funds and distributions',
   other: 'Other',
   'account access': 'Sign-in and password',
   'account verification': 'Identity verification',
@@ -273,14 +290,23 @@ const SPECIFIC_REPLIES = Object.freeze({
   'Marketplace refunds': 'Name the asset and why you want the credits returned. We do not return credits until the purchase is confirmed on the account.',
   'File is wrong or broken': 'Describe what the listing promised and what the file actually contains. Attach a screenshot of the broken file if you can.',
   'Contracts, milestones, and orders': 'Name the contract or order and which milestone is stuck. We look at escrow before moving credits.',
-  'Delivery and disputes': 'Say what was delivered, what was agreed, and what you want to happen next. This stays open while the two sides disagree.',
   'Cancellations and refunds': 'Say who cancelled and whether escrow should be released or returned. We do not move credits until that is confirmed.',
+  'Business verification': 'Tell us which team this is for and what the business verification page shows. We review it from the verification desk; documents stay there, not on this ticket.',
+  'Team funds and distributions': 'Name the team, the amount, and when you added funds or ran the distribution. We check the team wallet and what it still owes members before moving anything.',
+  'Workspaces and team projects': 'Name the contract and what in the workspace is not working (taskboard, submissions, members, chat, or a linked video project).',
+  'Delivery and disputes': 'Say what was delivered, what was agreed, and what you want to happen next. If you want staff to rule and hold escrow, file a dispute from the contract page; this ticket helps around it.',
 });
+
+/** One shared first reply for every bug report type. */
+const BUG_REPORT_REPLY = 'Thanks for reporting this bug. We try it ourselves from the steps you gave. If you can, reply with a screenshot or screen recording and tell us whether it still happens after a page refresh.';
 
 const CANNED_REPLIES = Object.freeze(
   TICKET_TYPES.map((label) => {
     const meta = TYPE_META.get(label);
     const specific = SPECIFIC_REPLIES[label];
+    if (BUG_REPORT_TYPES.includes(label)) {
+      return { type: label, title: label, body: BUG_REPORT_REPLY };
+    }
     return {
       type: label,
       title: specific ? label : `First reply: ${label}`,
@@ -405,49 +431,6 @@ function isClosedStatus(status) {
   return normalizeTicketStatus(status) === 'Closed';
 }
 
-/** Previous member-facing groups. The public form keeps these until that page is redesigned. */
-const PUBLIC_TICKET_GROUPS = Object.freeze([
-  {
-    label: 'Support',
-    queueRole: 'Support Moderator',
-    types: [
-      'Account Access',
-      'Account Verification',
-      'Profile and Settings',
-      'Subscriptions and Plans',
-      'Credit Top-ups',
-      'Withdrawing Earnings',
-      'Billing and Payments',
-      'Video Editor',
-      'Notifications and Email',
-      'Technical Issue',
-      'Other',
-    ],
-  },
-  {
-    label: 'Forums',
-    queueRole: 'Forum Moderator',
-    types: ['Forums', 'Forum Posts', 'Forum Groups', 'Forum Comments', 'Forum Reports'],
-  },
-  {
-    label: 'Marketplace',
-    queueRole: 'Marketplace Moderator',
-    types: [
-      'Asset Marketplace',
-      'Listing Issues',
-      'Purchase and Delivery',
-      'Seller Verification',
-      'Marketplace Refunds',
-      'Asset Quality',
-    ],
-  },
-  {
-    label: 'Jobs and Gigs',
-    queueRole: 'Jobs N Gigs Moderator',
-    types: ['Jobs and Gigs', 'Job Posts', 'Gig Posts', 'Applications and Hiring', 'Contracts and Milestones'],
-  },
-]);
-
 /**
  * The category a ticket type is filed under on the member form: the support area for support
  * types (Account, Billing, …), else Forum, Marketplace or Jobs and Gigs. Open-ticket limits count
@@ -483,8 +466,9 @@ module.exports = {
   JOBS_TYPES,
   SPECIALIST_TYPES,
   QUEUE_SCOPES,
-  ROLE_TO_TICKET_TYPE,
   ROLE_TO_TICKET_TYPES,
+  BUG_REPORT_TYPES,
+  BUG_REPORT_TYPE_BY_CATEGORY,
   CANNED_REPLIES,
   STORED_TYPE_REMAP,
   getEscalateTypesForRole,
@@ -494,6 +478,8 @@ module.exports = {
   normalizeTicketPriority,
   defaultPriorityForType,
   resolveTicketPriority,
+  isBugReportType,
+  bugReportPriority,
   ticketTypeMeta,
   isValidTicketType,
   isValidTicketStatus,

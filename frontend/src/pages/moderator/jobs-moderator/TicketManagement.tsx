@@ -10,7 +10,7 @@ export default function JobsTicketManagement() {
     <ModeratorTicketDesk
       roleLabel="Jobs & Gigs Moderator"
       title="Ticket Management"
-      subtitle="Job and gig listings, proposals and hiring, contracts and orders, delivery, cancellations, reviews and Jobs & Gigs appeals. Filed under the wrong type? Open the ticket and use Move ticket to send it to the right category or queue, or escalate it to an admin."
+      subtitle="Job and gig listings, proposals and hiring, contracts and orders, workspaces and team projects, delivery, cancellations, reviews, Jobs & Gigs appeals and bug reports. Filed under the wrong type? Open the ticket and use Move ticket to send it to the right category or queue, or escalate it to an admin."
       endpointBase="/api/moderator/jobs/tickets"
       accent="emerald"
       queueKey="jobs"

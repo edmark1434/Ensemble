@@ -757,7 +757,24 @@ function ProjectDetailOverlay({
                     />
                   ) : null}
                   {detail.removedAt ? (
-                    <Metric label="Removed by staff" value={formatDateTime(detail.removedAt)} />
+                    <Metric
+                      label="Removed by staff"
+                      value={(() => {
+                        // History is newest first: the latest removal is the one in force.
+                        const removal = (detail.history || []).find((entry) => entry.eventCode === 'VIDEO_PROJECT_REMOVED');
+                        return (
+                          <>
+                            {formatDateTime(detail.removedAt)}
+                            {removal ? (
+                              <span className="ml-1.5 text-xs text-zinc-500">
+                                by {removal.by}
+                                {removal.byRole ? ` (${removal.byRole})` : ''}
+                              </span>
+                            ) : null}
+                          </>
+                        );
+                      })()}
+                    />
                   ) : null}
                   {detail.trashedAt ? (
                     <Metric label="Deleted by owner" value={formatDateTime(detail.trashedAt)} />

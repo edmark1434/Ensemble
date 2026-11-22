@@ -807,10 +807,12 @@ async function postMyTicketInvite(req, res) {
     if (!data) return res.status(404).json({ success: false, message: 'Ticket not found' });
     res.status(200).json({ success: true, data });
   } catch (err) {
-    console.error('Error responding to ticket invite:', err);
-    res.status(err.statusCode || 400).json({
+    // Only messages written for the member go back; database errors stay in the log.
+    const status = err.statusCode && err.statusCode < 500 ? err.statusCode : 500;
+    if (status >= 500) console.error('Error responding to ticket invite:', err);
+    res.status(status).json({
       success: false,
-      message: err.message || 'Failed to respond to the invite',
+      message: status < 500 ? err.message : 'Failed to respond to the invite',
     });
   }
 }
@@ -822,7 +824,9 @@ async function postMyTicketSatisfaction(req, res) {
     const data = await submitTicketSatisfaction(req.params.id, accountId, req.body?.score, req.body?.comment);
     res.status(200).json({ success: true, data });
   } catch (err) {
-    res.status(400).json({ success: false, message: err.message || 'Failed to save rating' });
+    const status = err.statusCode && err.statusCode < 500 ? err.statusCode : 500;
+    if (status >= 500) console.error('Error saving ticket rating:', err);
+    res.status(status).json({ success: false, message: status < 500 ? err.message : 'Failed to save rating' });
   }
 }
 

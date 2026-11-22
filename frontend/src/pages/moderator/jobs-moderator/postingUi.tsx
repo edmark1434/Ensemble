@@ -97,13 +97,25 @@ export const POSTING_ACTIONS: Record<PostingAction, PostingActionMeta> = {
   },
 };
 
-/** Actions offered for a posting in its current state, in display order. */
-export function actionsForPostingStatus(status: string): PostingAction[] {
+/**
+ * Actions offered for a posting in its current state, in display order. `staffHeld` is whether
+ * staff closed it (staff hold): staff reopen only what staff closed. A posting closed without a
+ * hold was closed by its owner or by the system (a job whose hires are all filled or whose
+ * application window ended), so reopening it stays the owner's call, as with their own gigs.
+ */
+export function actionsForPostingStatus(status: string, staffHeld = false): PostingAction[] {
   const s = String(status || "").toLowerCase();
   if (s === "archived") return ["restore"];
   if (s === "paused") return ["activate", "close", "archive"];
-  if (s === "closed") return ["activate", "archive"];
+  if (s === "closed") return staffHeld ? ["activate", "archive"] : ["pause", "archive"];
   return ["pause", "close", "archive"];
+}
+
+/** Why a closed posting has no Reopen: shown where staff would look for it. */
+export function ownerClosedNote(type: "job" | "gig") {
+  return type === "job"
+    ? "Closed by its owner or automatically (every hire filled, or the application window ended), not by staff. Only the owner can reopen it."
+    : "Closed by its owner, not by staff. Only the owner can reopen it.";
 }
 
 /**
@@ -126,15 +138,15 @@ export const POSTING_STATUS_GUIDE: Record<
     title: "Paused",
     purpose: "A temporary hold while staff investigate, usually because of a report. Nothing is decided yet.",
     members: "Hidden from the board and search. An existing link shows it as Closed and takes no new proposals or orders.",
-    owner: "Notified with your reason. Still sees it in their own posts but cannot reopen it, and is pointed to a support ticket.",
+    owner: "Notified with your reason. Still sees it in their own posts, and its page shows a notice with your reason and a support ticket link. Cannot reopen it.",
     undo: "Reopen when it checks out, or archive if the violation is confirmed.",
   },
   closed: {
     title: "Closed",
     purpose: "Stop new hiring but keep the posting visible, such as duplicates, misleading terms or a posting that should not take more work.",
     members: "Still on the board, marked Closed. No new proposals or orders.",
-    owner: "Notified with your reason. Cannot reopen it.",
-    undo: "Reopen.",
+    owner: "Notified with your reason, also shown on its page with a support ticket link. Cannot reopen it.",
+    undo: "Reopen. A job its owner closed, or one that closed itself when every hire was filled or its application window ended, has no Reopen: that stays the owner's call.",
   },
   archived: {
     title: "Archived",

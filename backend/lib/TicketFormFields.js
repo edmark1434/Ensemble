@@ -4,6 +4,12 @@
  * description, and files stay on the ticket and its chat.
  */
 
+const {
+  BUG_REPORT_TYPE_BY_CATEGORY,
+  BUG_BLOCKING_OPTIONS,
+  BUG_FREQUENCY_OPTIONS,
+} = require('./TicketBugReports');
+
 const LOGGED_OUT_TICKET_TYPES = Object.freeze([
   'Sign-in and password',
   'Account compromised',
@@ -55,6 +61,29 @@ const MARKETPLACE_APPEAL_ACTIONS = Object.freeze([
   'Other',
 ]);
 
+/**
+ * Bug report questions, the same for every category: where it happened (that category's own
+ * areas), the page, steps, expected versus actual, how often, whether it blocks the member and
+ * the error. `record` is an optional picker for the item the bug showed up on. The browser,
+ * device and the page the member came from are saved with every ticket already.
+ */
+function bugReportFields(areas, record = []) {
+  return [
+    select('bug_area', 'Where it happened', [...areas, 'Somewhere else']),
+    ...record,
+    optionalText('page_link', 'Link to the page', {
+      hint: "Copy the address from your browser's address bar while you are on that page.",
+    }),
+    area('steps', 'Steps to make it happen', {
+      hint: 'What you clicked or typed, in order, starting from a page we can open.',
+    }),
+    area('expected_vs_actual', 'What you expected, and what happened instead'),
+    select('frequency', 'How often does it happen?', [...BUG_FREQUENCY_OPTIONS]),
+    select('blocking', 'Can you still finish what you were doing?', [...BUG_BLOCKING_OPTIONS]),
+    optionalText('error_message', 'Error message shown, if any'),
+  ];
+}
+
 const project = [text('project', 'Project', { picker: 'project' })];
 const listing = [text('listing', 'Listing', { picker: 'listing' })];
 const order = [text('order', 'Order', { picker: 'order' })];
@@ -81,13 +110,20 @@ const TICKET_FORM_FIELDS = Object.freeze({
     optionalText('submission_date', 'Submission date'),
     optionalText('rejection_reason', 'Rejection reason shown, if any'),
   ],
+  // Business verification is per team; documents stay on the verification desk, never here.
+  'Business verification': [
+    text('team_name', 'Team', { picker: 'team' }),
+    select('issue', 'Issue', ['Pending too long', 'Rejected', 'Verified badge missing', 'Cannot submit']),
+    optionalText('submission_date', 'Submission date'),
+    optionalText('rejection_reason', 'Rejection reason shown, if any'),
+  ],
   'Profile and settings': [
-    select('which_setting', 'Which setting', ['Profile info', 'Photo', 'Banner', 'Email', 'Privacy', 'Other']),
+    select('which_setting', 'Which setting', ['Profile info', 'Photo', 'Banner', 'Badges', 'Email', 'Privacy', 'Other']),
     optionalText('error_message', 'Error message shown'),
   ],
   Teams: [
     text('team_name', 'Team', { picker: 'team' }),
-    select('issue', 'Issue', ['Invite', 'Role', 'Removal', 'Suspended membership']),
+    select('issue', 'Issue', ['Invite', 'Join request', 'Role', 'Removal', 'Ownership transfer', 'Suspended membership']),
     optionalText('affected_username', "Affected member's username"),
   ],
   'Delete account or export data': [
@@ -118,6 +154,13 @@ const TICKET_FORM_FIELDS = Object.freeze({
     text('payout_method', 'Payout method'),
     text('status_shown', 'Status shown'),
   ],
+  'Team funds and distributions': [
+    text('team_name', 'Team', { picker: 'team' }),
+    select('issue', 'Issue', ['Adding funds', 'Distribution missing', 'Distribution amount wrong', 'Team balance wrong']),
+    optionalText('amount', 'Amount'),
+    optionalText('event_date', 'Date'),
+    optionalText('affected_username', "Affected member's username"),
+  ],
   'Charges and receipts': [
     text('transaction_id', 'Transaction ID'),
     text('amount', 'Amount'),
@@ -125,16 +168,17 @@ const TICKET_FORM_FIELDS = Object.freeze({
     select('issue', 'Issue', ['Unrecognized', 'Charged twice', 'Wrong amount', 'Receipt missing or wrong']),
     optionalText('card_last4', 'Last 4 digits of the card'),
   ],
+  // A tool that behaves wrong is a "Video editor bug report"; this type is crashes and slowness.
   'Editor problems': [
     ...project,
-    select('issue', 'Issue', ['Crash', 'Freeze', 'Lag', 'Tool not working']),
-    optionalText('tool', 'Which tool or feature'),
+    select('issue', 'Issue', ['Crash', 'Freeze', 'Lag', 'Playback stutters']),
+    optionalText('tool', 'What you were doing when it happened'),
     area('steps', 'Steps to reproduce'),
   ],
   'Export and rendering': [
     ...project,
     text('export_settings', 'Export settings (resolution, format, fps)'),
-    select('issue', 'Issue', ['Failed', 'Stuck', 'Wrong output']),
+    select('issue', 'Issue', ['Failed', 'Stuck', 'Wrong output', 'Unexpected watermark or plan limit']),
     optionalText('error_message', 'Error message'),
   ],
   'Uploads and storage': [
@@ -145,12 +189,12 @@ const TICKET_FORM_FIELDS = Object.freeze({
   ],
   'Project files': [
     ...project,
-    select('issue', 'Issue', ['Missing', "Won't open", 'Lost content']),
+    select('issue', 'Issue', ['Missing', "Won't open", 'Lost content', 'Trash or restore', 'Template did not create a project']),
     text('last_worked', 'When it last worked'),
   ],
   'Sharing and collaboration': [
     ...project,
-    select('issue', 'Issue', ['Invite', 'Permission', 'Sync', 'Lost edits']),
+    select('issue', 'Issue', ['Invite', 'Permission', 'Comments and mentions', 'Sync', 'Lost edits']),
     optionalText('collaborator', "Affected collaborator's username"),
     optionalText('lost_edit_time', 'Approximate time of the lost edits', whenEquals('issue', 'Lost edits')),
   ],
@@ -167,7 +211,7 @@ const TICKET_FORM_FIELDS = Object.freeze({
   'Report a user': [
     text('reported_username', 'Reported username'),
     select('reason', 'Reason', ['Harassment', 'Impersonation', 'Scam', 'Other']),
-    select('where_it_happened', 'Where it happened', ['DM', 'Call', 'Profile']),
+    select('where_it_happened', 'Where it happened', ['DM', 'Call', 'Profile', 'Team', 'Video project', 'Other']),
     area('evidence', 'Evidence'),
   ],
   'Copyright claim': [
@@ -214,7 +258,7 @@ const TICKET_FORM_FIELDS = Object.freeze({
   ],
   'Asset purchase and download': [
     ...order,
-    select('issue', 'Issue', ['Not received', 'Download fails']),
+    select('issue', 'Issue', ['Not received', 'Download fails', 'License not on my project']),
     optionalText('error_message', 'Error message'),
   ],
   'File is wrong or broken': [
@@ -274,13 +318,29 @@ const TICKET_FORM_FIELDS = Object.freeze({
     optionalText('milestone', 'Milestone'),
     optionalText('amount', 'Amount'),
   ],
+  // Staff rule on delivery through a dispute filed from the contract; this ticket helps around it.
   'Delivery and disputes': [
     ...contract,
+    select('dispute_filed', 'Have you filed a dispute on this contract?', ['Yes, it is open', 'Not yet'], {
+      hint: 'To have staff rule on it and hold the escrow, file a dispute from the contract page.',
+    }),
     select('role', 'Your role', ['Client', 'Freelancer']),
     select('issue', 'Issue', ['Not delivered', "Doesn't match", 'Disagreement']),
     area('agreed_versus_happened', 'What was agreed versus what happened'),
     area('evidence', 'Evidence'),
     select('desired_outcome', 'Desired outcome', ['Full refund', 'Partial refund', 'Revision', 'Release payment']),
+  ],
+  'Workspaces and team projects': [
+    ...contract,
+    select('issue', 'Issue', [
+      'Workspace missing',
+      'Taskboard',
+      'Submissions',
+      'Members or subcontractors',
+      'Workspace chat',
+      'Linked video project',
+    ]),
+    optionalText('affected_username', "Affected member's username"),
   ],
   'Cancellations and refunds': [
     ...contract,
@@ -310,6 +370,81 @@ const TICKET_FORM_FIELDS = Object.freeze({
     optionalText('listing', 'Job or gig the action was on, if any', { picker: 'job' }),
     area('explanation', 'Explanation'),
   ],
+
+  [BUG_REPORT_TYPE_BY_CATEGORY.Account]: bugReportFields([
+    'Sign-in or sign-up',
+    'Onboarding',
+    'Profile page',
+    'Account settings',
+    'Identity or business verification',
+    'Teams',
+  ]),
+  [BUG_REPORT_TYPE_BY_CATEGORY.Billing]: bugReportFields([
+    'Credits shop and checkout',
+    'Subscriptions page',
+    'Wallet and transaction history',
+    'Cash-out',
+    'Team wallet',
+  ]),
+  [BUG_REPORT_TYPE_BY_CATEGORY['Video Editing Platform']]: bugReportFields(
+    [
+      'Timeline and editing tools',
+      'Preview and playback',
+      'Uploads and media',
+      'Export and rendering',
+      'Collaboration and comments',
+      'Templates',
+      'Marketplace assets in the editor',
+      'Projects page',
+    ],
+    [optionalText('project', 'Project, if any', { picker: 'project' })]
+  ),
+  [BUG_REPORT_TYPE_BY_CATEGORY.Messaging]: bugReportFields([
+    'Inbox and chat',
+    'Calls and meetings',
+    'In-app notifications',
+    'Email',
+  ]),
+  [BUG_REPORT_TYPE_BY_CATEGORY['Safety and appeals']]: bugReportFields([
+    'Report forms',
+    'Account standing page',
+    'Appeals',
+    'Cases',
+  ]),
+  [BUG_REPORT_TYPE_BY_CATEGORY.General]: bugReportFields([
+    'Home and navigation',
+    'Search and discovery',
+    'Dashboard',
+    'Support pages and ticket form',
+    'Theme and display',
+  ]),
+  [BUG_REPORT_TYPE_BY_CATEGORY.Forum]: bugReportFields(
+    ['Forum feed', 'Groups', 'Discussions and comments', 'Saved discussions', 'Live updates'],
+    [optionalText('post_link', 'Link to the post or group, if any')]
+  ),
+  [BUG_REPORT_TYPE_BY_CATEGORY.Marketplace]: bugReportFields(
+    [
+      'Browsing and search',
+      'Asset page',
+      'Purchase and checkout',
+      'Downloads and licenses',
+      'Listing editor and uploads',
+      'Reviews and comments',
+    ],
+    [optionalText('listing', 'Asset, if any', { picker: 'asset' })]
+  ),
+  [BUG_REPORT_TYPE_BY_CATEGORY['Jobs and Gigs']]: bugReportFields(
+    [
+      'Browsing and search',
+      'Posting a job or gig',
+      'Proposals and orders',
+      'Contracts and milestones',
+      'Dashboard tasks and reviews',
+      'Workspaces and team projects',
+      'Disputes',
+    ],
+    [optionalText('listing', 'Job or gig, if any', { picker: 'posting' })]
+  ),
 });
 
 function fieldIsVisible(field, source) {

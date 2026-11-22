@@ -15,6 +15,8 @@ export type AppealDecisionPayload = {
   endsAt?: string;
   note?: string;
   followUp?: { action: 'none' | 'suspend' | 'ban'; punishmentId?: string; reason?: string; days?: number | null };
+  /** Accepted ban appeal: also put back the jobs, gigs and listings the ban closed (default on). */
+  restoreClosedItems?: boolean;
 };
 
 type CatalogRow = { slug?: string; id?: string; label: string; kind: string; durationDays: number | null; permanent?: boolean; note?: string };
@@ -102,6 +104,9 @@ export default function AppealDecisionDialog({
   const [customDays, setCustomDays] = useState('');
   const [permanentBan, setPermanentBan] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // An accepted ban appeal restores what the ban closed unless staff untick it.
+  const offersBanRestore = choice === 'accept' && (target?.type === 'ban' || legacy);
+  const [restoreClosedItems, setRestoreClosedItems] = useState(true);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -161,6 +166,7 @@ export default function AppealDecisionDialog({
           payload.endsAt = at.toISOString();
         }
       }
+      if (offersBanRestore) payload.restoreClosedItems = restoreClosedItems;
     } else if (action !== 'none') {
       if (!punishmentId) {
         setError(`Pick which ${action === 'ban' ? 'ban' : 'suspension'} to issue.`);
@@ -270,6 +276,24 @@ export default function AppealDecisionDialog({
                   ) : null}
                 </div>
               )}
+              {offersBanRestore ? (
+                <label className="flex cursor-pointer items-start gap-2.5 rounded-lg border border-emerald-500/25 bg-emerald-500/[0.06] px-3 py-2">
+                  <input
+                    type="checkbox"
+                    checked={restoreClosedItems}
+                    onChange={(event) => setRestoreClosedItems(event.target.checked)}
+                    className="mt-0.5"
+                  />
+                  <span className="min-w-0">
+                    <span className="block text-sm font-medium text-zinc-100">Restore what the ban closed</span>
+                    <span className="block text-[11px] text-zinc-400">
+                      Their jobs, gigs and marketplace listings go back exactly as they were (hidden until the ban ends). Items
+                      that changed since, or whose application window ended, stay closed. Withdrawn proposals, offers and
+                      orders cannot come back. No ticket needed from the member.
+                    </span>
+                  </span>
+                </label>
+              ) : null}
             </section>
           ) : (
             <section className="space-y-2">

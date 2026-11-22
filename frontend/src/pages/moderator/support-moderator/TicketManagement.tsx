@@ -464,7 +464,7 @@ export default function SupportTicketManagement() {
         {tab === "tickets" && (
           <TicketsTab
             title="Support ticket queue"
-            subtitle="Account, billing, video editor, messaging, safety and appeals tickets. Forum, Marketplace, Jobs and Admin tickets stay with their own desks."
+            subtitle="Account, billing, video editor, messaging, safety and appeals tickets, and bug reports from those areas. Forum, Marketplace, Jobs and Admin tickets stay with their own desks."
             tickets={filteredTickets}
             allTickets={allTickets}
             totalCount={allTickets.length}

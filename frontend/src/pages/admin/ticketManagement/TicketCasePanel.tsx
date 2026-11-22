@@ -18,6 +18,7 @@ import type {
   CaseAppealTarget,
   CaseAssetReviews,
   CaseBilling,
+  CaseBug,
   CaseContract,
   CaseForum,
   CaseForumPost,
@@ -30,6 +31,7 @@ import type {
   CasePosting,
   CaseProposal,
   CaseReportRef,
+  CaseTeam,
   CaseTeamMembership,
   CaseTicketRef,
   TicketCaseContext,
@@ -1365,7 +1367,16 @@ function ForumPostCard({ post }: { post: CaseForumPost }) {
       <p className="mt-2 text-xs text-zinc-400">
         {post.commentCount} comments · {post.removedComments} removed
         {post.imageCount ? ` · ${post.imageCount} image${post.imageCount === 1 ? '' : 's'}` : ''}
-        {post.removedAt ? ` · post removed ${caseWhen(post.removedAt)}${post.removedBy ? ` by ${post.removedBy}` : ''}` : ''}
+        {post.removedAt
+          ? ` · post removed ${caseWhen(post.removedAt)}${
+              post.removedByName
+                ? ` by ${post.removedByName}${post.removedBy ? ` (${post.removedBy.replace(/_/g, ' ')})` : ''}`
+                : post.removedBy
+                  ? ` by ${post.removedBy.replace(/_/g, ' ')}`
+                  : ''
+            }`
+          : ''}
+        {post.isLocked && post.lockedByName ? ` · locked by ${post.lockedByName}` : ''}
       </p>
       {post.removalReason ? <p className="mt-1 text-xs text-amber-100">Removal reason: {post.removalReason}</p> : null}
     </Card>
@@ -1394,7 +1405,12 @@ function ForumCase({ data }: { data: CaseForum }) {
             </div>
             {data.group.archiveReason || data.group.archivedBy ? (
               <p className="mt-1 text-xs text-amber-100">
-                Archived{data.group.archivedBy ? ` by the ${data.group.archivedBy}` : ''}
+                Archived
+                {data.group.archivedByName
+                  ? ` by ${data.group.archivedByName}${data.group.archivedBy ? ` (${data.group.archivedBy})` : ''}`
+                  : data.group.archivedBy
+                    ? ` by the ${data.group.archivedBy}`
+                    : ''}
                 {data.group.archiveReason ? `: ${data.group.archiveReason}` : ''}
               </p>
             ) : null}
@@ -1494,7 +1510,70 @@ function BillingCase({ data }: { data: CaseBilling }) {
           )}
         </PanelSection>
       ) : null}
+      {data.team ? (
+        <TeamSections
+          team={data.team}
+          extra={
+            <>
+              <Fact label="Team balance" value={data.team.wallet ? credits(data.team.wallet.balanceCredits) : '—'} />
+              <Fact label="Team on hold" value={data.team.wallet ? credits(data.team.wallet.frozenCredits) : '—'} />
+            </>
+          }
+        />
+      ) : null}
       <p className="text-[11px] text-zinc-500">Recent payments, credits and withdrawals are listed in the Details tab.</p>
+    </>
+  );
+}
+
+/** The team a ticket names (Teams, Business verification, Team funds) and the member it is about. */
+function TeamSections({ team, extra }: { team: CaseTeam; extra?: ReactNode }) {
+  return (
+    <>
+      <PanelSection title="Team">
+        <Card>
+          <div className="flex flex-wrap items-start justify-between gap-2">
+            <p className="text-sm font-semibold text-white">
+              {team.name}
+              {team.handle ? <span className="font-normal text-zinc-500"> @{team.handle}</span> : null}
+            </p>
+            <span className="flex flex-wrap items-center gap-1.5">
+              {team.contractWorkspace ? <Pill className="border-white/15 text-zinc-300">Contract workspace</Pill> : null}
+              {team.visibility ? <Pill className="border-white/15 text-zinc-300">{team.visibility}</Pill> : null}
+              <StatusPill status={team.status} />
+              <CaseOpenLink path={`/teams/${team.id}`} label="Team page" />
+            </span>
+          </div>
+          <dl className="mt-3 grid gap-2 sm:grid-cols-4">
+            <Fact label="Owner" value={<PersonLink person={team.owner} />} />
+            <Fact
+              label="Members"
+              value={`${team.activeMembers ?? '—'} active${team.otherMembers ? ` · ${team.otherMembers} invited or suspended` : ''}`}
+            />
+            <Fact label="Created" value={caseDay(team.createdAt)} />
+            <Fact
+              label="Requester on this team"
+              value={
+                <span className={team.requesterMembership?.status === 'Active' ? '' : 'text-amber-300'}>
+                  {membershipLine(team.requesterMembership)}
+                </span>
+              }
+            />
+            {extra}
+          </dl>
+        </Card>
+      </PanelSection>
+      {team.affectedMember ? (
+        <PanelSection title="Member the ticket is about">
+          <Card>
+            <StaffStandingSummary account={team.affectedMember} />
+            <div className="mt-2.5 flex flex-wrap items-center justify-between gap-2">
+              <p className="text-xs text-zinc-300">On this team: {membershipLine(team.affectedMember.membership)}</p>
+              <CaseOpenLink path={profilePath(team.affectedMember)} label="Profile" />
+            </div>
+          </Card>
+        </PanelSection>
+      ) : null}
     </>
   );
 }
@@ -1515,51 +1594,7 @@ function AccountCase({ data }: { data: NonNullable<TicketCaseContext['account']>
           <EmptyNote>No verification record.</EmptyNote>
         )}
       </PanelSection>
-      {data.team ? (
-        <PanelSection title="Team">
-          <Card>
-            <div className="flex flex-wrap items-start justify-between gap-2">
-              <p className="text-sm font-semibold text-white">
-                {data.team.name}
-                {data.team.handle ? <span className="font-normal text-zinc-500"> @{data.team.handle}</span> : null}
-              </p>
-              <span className="flex flex-wrap items-center gap-1.5">
-                {data.team.contractWorkspace ? <Pill className="border-white/15 text-zinc-300">Contract workspace</Pill> : null}
-                {data.team.visibility ? <Pill className="border-white/15 text-zinc-300">{data.team.visibility}</Pill> : null}
-                <StatusPill status={data.team.status} />
-                <CaseOpenLink path={`/teams/${data.team.id}`} label="Team page" />
-              </span>
-            </div>
-            <dl className="mt-3 grid gap-2 sm:grid-cols-4">
-              <Fact label="Owner" value={<PersonLink person={data.team.owner} />} />
-              <Fact
-                label="Members"
-                value={`${data.team.activeMembers ?? '—'} active${data.team.otherMembers ? ` · ${data.team.otherMembers} invited or suspended` : ''}`}
-              />
-              <Fact label="Created" value={caseDay(data.team.createdAt)} />
-              <Fact
-                label="Requester on this team"
-                value={
-                  <span className={data.team.requesterMembership?.status === 'Active' ? '' : 'text-amber-300'}>
-                    {membershipLine(data.team.requesterMembership)}
-                  </span>
-                }
-              />
-            </dl>
-          </Card>
-        </PanelSection>
-      ) : null}
-      {data.team?.affectedMember ? (
-        <PanelSection title="Member the ticket is about">
-          <Card>
-            <StaffStandingSummary account={data.team.affectedMember} />
-            <div className="mt-2.5 flex flex-wrap items-center justify-between gap-2">
-              <p className="text-xs text-zinc-300">On this team: {membershipLine(data.team.affectedMember.membership)}</p>
-              <CaseOpenLink path={profilePath(data.team.affectedMember)} label="Profile" />
-            </div>
-          </Card>
-        </PanelSection>
-      ) : null}
+      {data.team ? <TeamSections team={data.team} /> : null}
       {data.recentChanges ? (
         <PanelSection title="Recent sign-in and account changes" count={data.recentChanges.length}>
           <List
@@ -1728,6 +1763,70 @@ function SafetyCase({ data }: { data: NonNullable<TicketCaseContext['safety']> }
   );
 }
 
+/** Bug reports (every category): the member's description and other open reports of this bug type. */
+function BugCase({ data }: { data: CaseBug }) {
+  const otherAreas = data.similarTotal - data.sameAreaTotal;
+  return (
+    <>
+      <PanelSection title="Bug report">
+        {data.blocksMember ? (
+          <div className="mb-2">
+            <Card tone="bad">
+              <p className="flex items-start gap-2 text-xs text-red-100">
+                <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                The member cannot finish what they were doing, so this was filed as High priority.
+              </p>
+            </Card>
+          </div>
+        ) : null}
+        <dl className="grid gap-2 sm:grid-cols-3">
+          <Fact label="Where it happened" value={data.area || '—'} />
+          <Fact label="How often" value={data.frequency || '—'} />
+          <Fact label="Still usable?" value={data.blocking || '—'} />
+        </dl>
+        {data.pageLink || data.errorMessage ? (
+          <dl className="mt-2 grid gap-2">
+            {data.pageLink ? <Fact label="Page" value={data.pageLink} mono /> : null}
+            {data.errorMessage ? <Fact label="Error shown" value={data.errorMessage} mono /> : null}
+          </dl>
+        ) : null}
+        <p className="mt-2 text-[11px] text-zinc-500">
+          Steps, expected result and the member’s browser and device are in the Details tab.
+        </p>
+      </PanelSection>
+      <PanelSection title="Other open reports of this bug type" count={data.similarTotal}>
+        {data.similar.length ? (
+          <>
+            <p className="text-[11px] text-zinc-500">
+              Last 60 days. {data.sameAreaTotal} in the same area
+              {otherAreas > 0 ? `, ${otherAreas} elsewhere` : ''}. Several in one area often mean one bug.
+            </p>
+            <List
+              items={data.similar}
+              empty=""
+              render={(t) => (
+                <Row
+                  key={t.id}
+                  title={t.number}
+                  meta={[t.area || 'No area given', t.requester, caseWhen(t.createdAt)].filter(Boolean).join(' · ')}
+                  right={
+                    <>
+                      {t.sameArea ? <Pill className="border-sky-500/30 text-sky-200">Same area</Pill> : null}
+                      <StatusPill status={t.status} />
+                    </>
+                  }
+                />
+              )}
+            />
+          </>
+        ) : (
+          <EmptyNote>No other open reports of this bug type in the last 60 days.</EmptyNote>
+        )}
+      </PanelSection>
+    </>
+  );
+}
+
 /* ---------------------------------------------------------------- */
 /* Panel                                                             */
 /* ---------------------------------------------------------------- */
@@ -1741,6 +1840,7 @@ export const CASE_TAB_LABEL: Record<TicketCaseContext['kind'], string> = {
   account: 'Account',
   editor: 'Project',
   safety: 'Safety',
+  bug: 'Bug report',
   general: 'Member',
 };
 
@@ -1796,6 +1896,7 @@ export default function TicketCasePanel({
       {context.kind === 'account' && context.account ? <AccountCase data={context.account} /> : null}
       {context.kind === 'editor' && context.editor ? <EditorCase data={context.editor} /> : null}
       {context.kind === 'safety' && context.safety ? <SafetyCase data={context.safety} /> : null}
+      {context.kind === 'bug' && context.bug ? <BugCase data={context.bug} /> : null}
       {context.namedPeople?.map((person: CaseNamedPerson) => (
         <MemberSection
           key={person.key}

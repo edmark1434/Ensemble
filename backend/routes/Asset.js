@@ -36,16 +36,18 @@ const {
 } = require('../controllers/AssetControllers');
 
 const optionalAuth = require('../middleware/OptionalAuth');
+const optionalSession = require('../middleware/OptionalSession');
 const { getTemplatePreviewController, getTemplateUseController, useTemplateController } = require('../controllers/TemplateControllers');
 
 router.post('/internal/editor/:assetId/action', require('../middleware/RequireInternalSecret'), editorAssetActionController);
 
 router.get('/', optionalAuth, listAssetsController);
 router.get('/posting-eligibility', [checkSession, requireAuth], getAssetPostingEligibilityController);
-router.get('/:assetId', optionalAuth, getAssetController);
+// The session tells a staff viewer (platform view) apart: staff may read assets that are not live.
+router.get('/:assetId', [optionalSession, optionalAuth], getAssetController);
 router.get('/:assetId/template-preview', optionalAuth, getTemplatePreviewController);
-router.get('/:assetId/reviews', optionalAuth, listAssetReviewsController);
-router.get('/:assetId/comments', optionalAuth, listCommentsController);
+router.get('/:assetId/reviews', [optionalSession, optionalAuth], listAssetReviewsController);
+router.get('/:assetId/comments', [optionalSession, optionalAuth], listCommentsController);
 
 router.use(checkSession, requireAuth);
 

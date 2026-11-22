@@ -115,6 +115,71 @@ function identityPerson(userId, identities) {
   };
 }
 
+/**
+ * Staff names for the staff ids forum documents store (`removed_by_staff_id`,
+ * `archived_by_staff_id`). Best effort: a failed lookup shows "Staff" instead of failing the desk.
+ */
+async function resolveStaffActors(staffIds) {
+  const ids = [...new Set((staffIds || []).filter(Boolean).map(String))];
+  if (!ids.length) return new Map();
+  try {
+    const { getStaffIdentities } = require('./StaffRepositories');
+    return await getStaffIdentities(ids);
+  } catch (err) {
+    console.error('Could not resolve the staff behind forum moderation:', err.message);
+    return new Map();
+  }
+}
+
+/** `{ staffId, name, role }` for a stored staff id, or null when none was recorded. */
+function staffActor(staffId, staffActors) {
+  if (!staffId) return null;
+  return staffActors?.get(String(staffId)) || { staffId: String(staffId), name: 'Staff', role: null };
+}
+
+/** Who took a discussion or comment down: the staff member, or the member (author / group moderator). */
+function removalActors(doc, removed, identities, staffActors) {
+  if (!removed) return { removedByStaff: null, removedByMember: null };
+  return {
+    removedByStaff: doc?.removed_by === 'staff' ? staffActor(doc.removed_by_staff_id, staffActors) : null,
+    removedByMember:
+      doc?.removed_by !== 'staff' && doc?.removed_by_user_id != null
+        ? identityPerson(doc.removed_by_user_id, identities)
+        : null,
+  };
+}
+
+/**
+ * Staff moderation on one forum record (`account_activity`, newest first), with who did it.
+ * Best effort: the desk still loads without it.
+ */
+async function forumModerationHistory(referenceTable, referenceId) {
+  try {
+    const { listActivityForReference } = require('./AccountActivityRepositories');
+    const rows = await listActivityForReference(referenceTable, referenceId, { limit: 30 });
+    return rows.map((row) => ({
+      id: row.id,
+      action: row.action,
+      eventCode: row.eventCode,
+      reason: row.metadata?.reason || null,
+      // Member bans and comment removals name what they acted on.
+      memberId: row.metadata?.memberId != null ? String(row.metadata.memberId) : null,
+      commentId: row.metadata?.commentId != null ? String(row.metadata.commentId) : null,
+      by: row.actorName ? { name: row.actorName, role: row.actorRole || null } : null,
+      at: row.createdAt,
+    }));
+  } catch (err) {
+    console.error('Could not read forum moderation history:', err.message);
+    return [];
+  }
+}
+
+/** The staff member behind the newest event of `eventCode` in a history list. */
+function latestActor(history, eventCode) {
+  const entry = (history || []).find((row) => row.eventCode === eventCode);
+  return entry ? { name: entry.by?.name || 'Staff', role: entry.by?.role || null, at: entry.at } : null;
+}
+
 /** Image paths on a post or comment, in the order the member forum shows them. */
 function contentImages(doc) {
   const attachments = Array.isArray(doc?.attachments) ? doc.attachments : [];
@@ -357,9 +422,13 @@ async function getModeratorForumGroups({ search = '', status = 'all' } = {}) {
     (Array.isArray(group.members) ? group.members : []).find((member) => member.role === 'Admin')
   );
   const previews = groups.map((group) => previewMembers(group.members));
-  const identities = await resolveForumIdentities([
-    ...owners.map((owner) => owner?.userId),
-    ...previews.flat().map((member) => member.userId),
+  const [identities, staffActors] = await Promise.all([
+    resolveForumIdentities([
+      ...owners.map((owner) => owner?.userId),
+      ...previews.flat().map((member) => member.userId),
+      ...groups.map((group) => group.archived_by_user_id),
+    ]),
+    resolveStaffActors(groups.map((group) => group.archived_by_staff_id)),
   ]);
 
   return {
@@ -398,17 +467,24 @@ async function getModeratorForumGroups({ search = '', status = 'all' } = {}) {
         lastActivityAt: latestDate(groupStats.lastActivityAt, group.created_at),
         createdAt: group.created_at || null,
         deletedAt: group.deleted_at || null,
-        ...groupArchiveState(group),
+        ...groupArchiveState(group, identities, staffActors),
       };
     }),
   };
 }
 
-function groupArchiveState(group) {
+function groupArchiveState(group, identities = new Map(), staffActors = new Map()) {
   const archived = (group.status || 'active') !== 'active';
   const block = archived ? groupReactivateBlock(group) : null;
   return {
     archivedBy: archived ? group.archived_by || null : null,
+    // Staff desks only: the staff member, or the owner, who archived it.
+    archivedByStaff:
+      archived && group.archived_by === 'staff' ? staffActor(group.archived_by_staff_id, staffActors) : null,
+    archivedByMember:
+      archived && group.archived_by !== 'staff' && group.archived_by_user_id != null
+        ? identityPerson(group.archived_by_user_id, identities)
+        : null,
     archiveReason: archived ? group.archive_reason || null : null,
     canReactivate: archived && !block,
     reactivateBlockedReason: block,
@@ -427,7 +503,7 @@ async function getModeratorForumGroupDetail(groupId) {
   const groupFilter = { forum_group_id: { $in: [key, group._id] } };
   const members = Array.isArray(group.members) ? group.members : [];
 
-  const [discussionDocs, stats] = await Promise.all([
+  const [discussionDocs, stats, moderationHistory] = await Promise.all([
     db
       .collection('forum_discussions')
       .find(groupFilter)
@@ -435,14 +511,26 @@ async function getModeratorForumGroupDetail(groupId) {
       .limit(50)
       .toArray(),
     discussionStatsByGroup(db),
+    forumModerationHistory('forum_groups', key),
   ]);
 
-  const identities = await resolveForumIdentities([
-    ...members.map((member) => member.userId),
-    ...discussionDocs.map((doc) => doc.user_id),
+  const [identities, staffActors] = await Promise.all([
+    resolveForumIdentities([
+      ...members.map((member) => member.userId),
+      ...discussionDocs.map((doc) => doc.user_id),
+      ...discussionDocs.map((doc) => doc.removed_by_user_id),
+      group.archived_by_user_id,
+    ]),
+    resolveStaffActors([group.archived_by_staff_id, ...discussionDocs.map((doc) => doc.removed_by_staff_id)]),
   ]);
   const groupStats = stats.get(key) || EMPTY_GROUP_STATS;
-  const roster = mapGroupMembers(members, identities);
+  const roster = mapGroupMembers(members, identities).map((member) => {
+    if (!member.isBanned) return { ...member, bannedBy: null };
+    const ban = moderationHistory.find(
+      (row) => row.eventCode === 'FORUM_MEMBER_BANNED' && row.memberId === String(member.userId)
+    );
+    return { ...member, bannedBy: ban ? { name: ban.by?.name || 'Staff', role: ban.by?.role || null, at: ban.at } : null };
+  });
 
   return {
     id: key,
@@ -464,9 +552,11 @@ async function getModeratorForumGroupDetail(groupId) {
     lastActivityAt: latestDate(groupStats.lastActivityAt, group.created_at),
     createdAt: group.created_at || null,
     deletedAt: group.deleted_at || null,
-    ...groupArchiveState(group),
+    ...groupArchiveState(group, identities, staffActors),
     members: roster,
-    discussions: discussionDocs.map((doc) => mapDiscussionSummary(doc, identities, group)),
+    discussions: discussionDocs.map((doc) => mapDiscussionSummary(doc, identities, group, staffActors)),
+    // Staff actions on this group (archive, reactivate, member bans), with who took each one.
+    moderationHistory,
   };
 }
 
@@ -522,8 +612,11 @@ function commentStats(comments) {
   };
 }
 
-/** List row for a discussion. `group` is optional and fills in group context. */
-function mapDiscussionSummary(doc, identities, group = null) {
+/**
+ * List row for a discussion. `group` is optional and fills in group context; `staffActors`
+ * (from `resolveStaffActors`) names the staff member behind a removal.
+ */
+function mapDiscussionSummary(doc, identities, group = null, staffActors = new Map()) {
   const counts = commentStats(doc.comments);
   const removed = Boolean(doc.deleted_at) || doc.status === 'removed';
   const images = contentImages(doc);
@@ -552,6 +645,7 @@ function mapDiscussionSummary(doc, identities, group = null) {
     updatedAt: doc.updated_at || null,
     removedAt: doc.deleted_at || null,
     removedBy: removed ? doc.removed_by || null : null,
+    ...removalActors(doc, removed, identities, staffActors),
     removalReason: removed ? doc.removal_reason || null : null,
     canRestore: removed && !discussionRestoreBlock(doc),
     restoreBlockedReason: removed ? discussionRestoreBlock(doc) : null,
@@ -607,16 +701,17 @@ async function getModeratorForumDiscussions({ groupId, search, status = 'all' } 
     : [];
   const groupsById = new Map(groupDocs.map((group) => [String(group._id), group]));
 
-  const [identities, platformStats] = await Promise.all([
-    resolveForumIdentities(discussions.map((d) => d.user_id)),
+  const [identities, platformStats, staffActors] = await Promise.all([
+    resolveForumIdentities([...discussions.map((d) => d.user_id), ...discussions.map((d) => d.removed_by_user_id)]),
     getForumModerationStats(db),
+    resolveStaffActors(discussions.map((d) => d.removed_by_staff_id)),
   ]);
 
   return {
     available: true,
     stats: platformStats,
     discussions: discussions.map((doc) =>
-      mapDiscussionSummary(doc, identities, groupsById.get(String(doc.forum_group_id)) || null)
+      mapDiscussionSummary(doc, identities, groupsById.get(String(doc.forum_group_id)) || null, staffActors)
     ),
   };
 }
@@ -639,10 +734,16 @@ async function getModeratorForumDiscussionDetail(discussionId) {
   const revisionAuthors = comments.flatMap((c) =>
     (Array.isArray(c.revisions) ? c.revisions : []).map((revision) => revision?.by_user_id)
   ).filter((id) => id != null);
-  const identities = await resolveForumIdentities([
-    doc.user_id,
-    ...comments.map((c) => c.user_id),
-    ...revisionAuthors,
+  const [identities, staffActors, moderationHistory] = await Promise.all([
+    resolveForumIdentities([
+      doc.user_id,
+      doc.removed_by_user_id,
+      ...comments.map((c) => c.user_id),
+      ...comments.map((c) => c.removed_by_user_id),
+      ...revisionAuthors,
+    ]),
+    resolveStaffActors([doc.removed_by_staff_id, ...comments.map((c) => c.removed_by_staff_id)]),
+    forumModerationHistory('forum_discussions', String(doc._id)),
   ]);
   const replyCounts = new Map();
   for (const comment of comments) {
@@ -652,7 +753,12 @@ async function getModeratorForumDiscussionDetail(discussionId) {
   }
 
   return {
-    ...mapDiscussionSummary(doc, identities, group),
+    ...mapDiscussionSummary(doc, identities, group, staffActors),
+    // Who set the current lock and pin (newest matching staff action).
+    lockedBy: doc.is_locked ? latestActor(moderationHistory, 'FORUM_DISCUSSION_LOCKED') : null,
+    pinnedBy: doc.is_sticky ? latestActor(moderationHistory, 'FORUM_DISCUSSION_PINNED') : null,
+    // Staff actions on this discussion and its comments, newest first, with who took each one.
+    moderationHistory,
     // The post body as written (kept on removal), so staff evidence can quote it.
     content: typeof doc.content === 'string' ? doc.content : null,
     images: contentImages(doc),
@@ -674,6 +780,7 @@ async function getModeratorForumDiscussionDetail(discussionId) {
         isDeleted: Boolean(comment.deleted_at),
         deletedAt: comment.deleted_at || null,
         removedBy: comment.deleted_at ? comment.removed_by || null : null,
+        ...removalActors(comment, Boolean(comment.deleted_at), identities, staffActors),
         removalReason: comment.deleted_at ? comment.removal_reason || null : null,
         canRestore: Boolean(comment.deleted_at) && !commentRestoreBlock(comment),
         restoreBlockedReason: commentRestoreBlock(comment),

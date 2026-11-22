@@ -10,6 +10,7 @@ import api from "@/lib/axios";
 import useGlobalState from "@/lib/global_state";
 import { resolveAvatarPath } from "@/lib/accountAvatars";
 import type { Gig } from "../gig_datasets";
+import { StaffHoldNotice } from "@/components/postings/StaffHoldNotice";
 
 const GigFullPage: React.FC = () => {
   const { id } = useParams();
@@ -163,6 +164,11 @@ const GigFullPage: React.FC = () => {
       </div>
 
       <div className="max-w-[1200px] w-full mx-auto py-8 px-4">
+        {gig.staffHold && (
+          <div className="mb-6">
+            <StaffHoldNotice hold={gig.staffHold} noun="gig" />
+          </div>
+        )}
         <GigRichText
           gig={gig}
           isLoading={loading}

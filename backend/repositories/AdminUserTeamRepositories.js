@@ -656,7 +656,11 @@ async function fetchAllUsers() {
       avs.kyc_status,
       avs.expires_at AS verification_expires_at,
       COALESCE(avs.updated_at, v.updated_at) AS verification_updated_at,
-      NULL::text AS verified_by_name,
+      -- The staff member behind the last approve / decline / resubmit request, with their role.
+      CASE WHEN va.account_id IS NOT NULL THEN
+        COALESCE(va.display_name, va.handle, 'Staff')
+          || COALESCE(' (' || (SELECT vs.role::text FROM staff vs WHERE vs.account_id = va.account_id LIMIT 1) || ')', '')
+      END AS verified_by_name,
       w.balance_credits,
       w.frozen_balance_credits,
       EXISTS (
@@ -683,6 +687,7 @@ async function fetchAllUsers() {
     LEFT JOIN verifications v ON v.account_id = a.account_id
     LEFT JOIN verification_sessions avs
       ON avs.verification_session_id = v.verification_session_id
+    LEFT JOIN accounts va ON va.account_id = avs.verified_by_account_id
     LEFT JOIN LATERAL (
       SELECT w.balance_credits, w.frozen_balance_credits
       FROM account_wallets aw
@@ -1240,7 +1245,10 @@ async function fetchTeamsFromDatabase({ enrich = true, includeContractual = fals
       END AS verification_status,
       avs.expires_at AS verification_expires_at,
       COALESCE(avs.updated_at, v.updated_at) AS verification_updated_at,
-      va.display_name AS verified_by_name,
+      CASE WHEN va.account_id IS NOT NULL THEN
+        COALESCE(va.display_name, va.handle, 'Staff')
+          || COALESCE(' (' || (SELECT vs.role::text FROM staff vs WHERE vs.account_id = va.account_id LIMIT 1) || ')', '')
+      END AS verified_by_name,
       w.balance_credits,
       w.frozen_balance_credits,
       w.wallet_id,
@@ -2066,6 +2074,17 @@ async function updateAccountStatus(accountId, actionOrStatus, staffId = null, op
       });
     } else if (after === 'active' && RESTRICTED.has(before) && !(isTeam && before === 'suspended')) {
       await notifyLiveWorkCounterparties(accountId, 'Active');
+    }
+    // A banned or locked team leader pauses the teams they lead: those teams hear it (and that
+    // no ticket is needed), and hear again when it ends.
+    if (!isTeam) {
+      const LEADER_BLOCKING = new Set(['locked', 'banned']);
+      const { notifyTeamsOfLeaderStanding } = require('../services/TeamStandingServices');
+      if (LEADER_BLOCKING.has(after) && !LEADER_BLOCKING.has(before)) {
+        await notifyTeamsOfLeaderStanding(accountId, { restricted: true, status: savedStatus });
+      } else if (!LEADER_BLOCKING.has(after) && LEADER_BLOCKING.has(before)) {
+        await notifyTeamsOfLeaderStanding(accountId, { restricted: false });
+      }
     }
   }
 

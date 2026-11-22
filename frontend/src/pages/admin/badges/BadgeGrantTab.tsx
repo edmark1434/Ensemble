@@ -20,6 +20,9 @@ interface Holder extends Omit<Recipient, 'badge_status'> {
   created_at: string;
   claimed_at: string | null;
   grant_message: string | null;
+  /** The staff member who granted it (null when the grant did not record one). */
+  granted_by_name?: string | null;
+  granted_by_role?: string | null;
 }
 
 const MAX_MESSAGE = 500;
@@ -328,6 +331,12 @@ export default function BadgeGrantTab() {
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm text-white">{h.display_name || h.handle} <span className="text-zinc-500">@{h.handle}</span></p>
                       {h.grant_message && <p className="truncate text-[11px] text-zinc-500">“{h.grant_message}”</p>}
+                      <p className="truncate text-[11px] text-zinc-600">
+                        {h.granted_by_name
+                          ? `Granted by ${h.granted_by_name}${h.granted_by_role ? ` (${h.granted_by_role})` : ''}`
+                          : 'Granted by staff (name not recorded)'}
+                        {h.created_at ? ` · ${new Date(h.created_at).toLocaleDateString()}` : ''}
+                      </p>
                     </div>
                     <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${h.status === 'claimed' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-amber-500/10 text-amber-400'}`}>
                       {h.status === 'claimed' ? 'Claimed' : 'Pending'}

@@ -4,17 +4,22 @@ import { AlertTriangle, ArrowRight, Info, type LucideIcon } from 'lucide-react';
 import { useCountUp } from '@/pages/staff/consoleMotion';
 import type { AnalyticsAlert, Kpi } from './analyticsTypes';
 import { deltaOf, fmtInt, type Trend } from './analyticsFormat';
+import type { GlossaryId } from './analyticsGlossary';
+import { InfoButton } from './analyticsInfo';
 
 export function Panel({
   title,
   subtitle,
   action,
+  info,
   children,
   className = '',
 }: {
   title?: string;
   subtitle?: ReactNode;
   action?: ReactNode;
+  /** Definition shown from the ⓘ next to the title. */
+  info?: GlossaryId;
   children: ReactNode;
   className?: string;
 }) {
@@ -23,7 +28,12 @@ export function Panel({
       {(title || action) && (
         <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0">
-            {title && <h3 className="text-sm font-semibold tracking-tight text-white">{title}</h3>}
+            {title && (
+              <h3 className="flex items-center gap-1.5 text-sm font-semibold tracking-tight text-white">
+                {title}
+                {info && <InfoButton id={info} />}
+              </h3>
+            )}
             {subtitle && <p className="mt-0.5 text-xs text-zinc-500">{subtitle}</p>}
           </div>
           {action}
@@ -98,6 +108,7 @@ export function StatTile({
   href,
   animate,
   empty,
+  info,
 }: {
   label: string;
   value: number | null;
@@ -113,12 +124,17 @@ export function StatTile({
   animate?: boolean;
   /** Shown instead of the value when it is null. */
   empty?: string;
+  /** Definition shown from the ⓘ next to the label. */
+  info?: GlossaryId;
 }) {
   const whole = value != null && Number.isInteger(value);
   const body = (
     <>
       <div className="flex items-start justify-between gap-3">
-        <p className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500">{label}</p>
+        <p className="flex min-w-0 items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
+          <span className="truncate">{label}</span>
+          {info && <InfoButton id={info} />}
+        </p>
         {Icon && (
           <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-rose-500/10">
             <Icon className="h-3.5 w-3.5 text-rose-400" />
@@ -156,13 +172,18 @@ export function StatTile({
   return <div className={cls}>{body}</div>;
 }
 
-export function MetricRows({ rows }: { rows: [label: ReactNode, value: ReactNode, hint?: ReactNode][] }) {
+export function MetricRows({
+  rows,
+}: {
+  rows: [label: ReactNode, value: ReactNode, hint?: ReactNode, info?: GlossaryId][];
+}) {
   return (
     <dl className="divide-y divide-white/[0.05]">
-      {rows.map(([label, value, hint], i) => (
+      {rows.map(([label, value, hint, info], i) => (
         <div key={i} className="flex items-baseline justify-between gap-4 py-2 text-sm">
           <dt className="min-w-0 text-zinc-400">
             {label}
+            {info && <InfoButton id={info} className="ml-1.5 -translate-y-px" />}
             {hint && <span className="mt-0.5 block text-[11px] text-zinc-600">{hint}</span>}
           </dt>
           <dd className="shrink-0 text-right font-medium tabular-nums text-white">{value}</dd>

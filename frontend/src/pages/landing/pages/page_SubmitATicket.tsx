@@ -56,6 +56,8 @@ interface TicketField {
   /** `others`: the search leaves out what the member posted (reports). */
   pickerScope?: "others";
   when?: { key: string; equals?: string; oneOf?: string[] };
+  /** Short help shown under the question (bug report steps, where to file a dispute). */
+  hint?: string;
 }
 
 interface PickerOption {
@@ -911,7 +913,8 @@ const PageSubmitATicket: React.FC = () => {
           open: { ...(current?.open || {}), [fullCategory]: open },
         }));
       }
-      if (info.code === "TICKET_DUPLICATE" && info.data?.ticketId) {
+      // A double submit, or an open ticket already about the same record: offer that ticket.
+      if ((info.code === "TICKET_DUPLICATE" || info.code === "TICKET_RECORD_OPEN") && info.data?.ticketId) {
         setDuplicate({
           ticketId: String(info.data.ticketId),
           ticketNumber: info.data.ticketNumber ? String(info.data.ticketNumber) : null,
@@ -936,7 +939,11 @@ const PageSubmitATicket: React.FC = () => {
     const value = fieldValues[field.key] || "";
     const message = errors[field.key];
     const errorId = `${id}-error`;
-    const describedBy = message ? errorId : undefined;
+    const hintId = `${id}-hint`;
+    const describedBy = [field.hint ? hintId : null, message ? errorId : null].filter(Boolean).join(" ") || undefined;
+    const hint = field.hint ? (
+      <p id={hintId} className="mb-2 -mt-1 text-xs text-gray-500 dark:text-zinc-500">{field.hint}</p>
+    ) : null;
     const requiredMark = required
       ? <span className="text-red-500" aria-hidden="true"> *</span>
       : <span className="font-normal text-gray-400 dark:text-zinc-500"> (optional)</span>;
@@ -1117,6 +1124,7 @@ const PageSubmitATicket: React.FC = () => {
           {field.label}
           {requiredMark}
         </label>
+        {hint}
         {control}
         {pickerOptions.length > 0 && manual ? (
           <button

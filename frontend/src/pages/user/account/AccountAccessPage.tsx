@@ -13,6 +13,7 @@ import { isAppealLimitedMember } from '@/lib/appealAccess';
 import AppealForm from './appeal/AppealForm';
 import CaseInbox from './appeal/CaseInbox';
 import PenaltyAppealList from './appeal/PenaltyAppealList';
+import PlanRenewalCard from './appeal/PlanRenewalCard';
 import { useCaseLists } from './appeal/useCaseLists';
 import { useAppealOptions } from './appeal/useAppealOptions';
 import {
@@ -384,6 +385,9 @@ export default function AccountAccessPage() {
                 </ol>
               </Card>
             ) : null}
+
+            {/* Stopping charges is never blocked, whatever the standing. */}
+            {hasPenalty ? <PlanRenewalCard /> : null}
           </aside>
         </div>
 

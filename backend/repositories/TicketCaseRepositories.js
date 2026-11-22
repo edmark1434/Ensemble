@@ -15,6 +15,7 @@ const {
   JOBS_TYPES,
   normalizeTicketType,
 } = require('../lib/TicketEnums');
+const { BUG_BLOCKING_ANSWER, isBugReportType } = require('../lib/TicketBugReports');
 const { canViewTicketPayments } = require('./TicketHelpRepositories');
 
 const UUID_RE = /[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/i;
@@ -30,11 +31,13 @@ const BILLING_TYPES = new Set([
   'Credits and balance',
   'Payouts and withdrawals',
   'Charges and receipts',
+  'Team funds and distributions',
 ]);
 const ACCOUNT_TYPES = new Set([
   'Sign-in and password',
   'Account compromised',
   'Identity verification',
+  'Business verification',
   'Profile and settings',
   'Teams',
   'Delete account or export data',
@@ -68,6 +71,8 @@ const MEMBER_NAME_SQL = (accountAlias, userAlias) =>
 function caseKindForType(rawType) {
   const type = normalizeTicketType(rawType, rawType) || rawType;
   if (type === APPEAL_TICKET_TYPE || AREA_APPEALS[type]) return 'appeal';
+  // Every category has a bug report type; they share one layout whatever desk they go to.
+  if (isBugReportType(type)) return 'bug';
   if (MARKETPLACE_TYPES.includes(type)) return 'marketplace';
   if (JOBS_TYPES.includes(type)) return 'jobs';
   if (FORUM_TYPES.includes(type)) return 'forum';
@@ -1505,6 +1510,8 @@ async function forumGroupSummary(groupId, requesterAccountId = null) {
     discussionCount: num(detail.discussionCount),
     removedDiscussionCount: num(detail.removedDiscussionCount),
     archivedBy: detail.archivedBy || null,
+    // The staff member (or owner) who archived it; staff case file only.
+    archivedByName: detail.archivedByStaff?.name || detail.archivedByMember?.name || null,
     archiveReason: detail.archiveReason || null,
     createdAt: detail.createdAt || null,
     deletedAt: detail.deletedAt || null,
@@ -1560,7 +1567,10 @@ async function forumPost(postId) {
     createdAt: post.createdAt || null,
     removedAt: post.removedAt || null,
     removedBy: post.removedBy || null,
+    // The staff member (or member) who removed it; staff case file only.
+    removedByName: post.removedByStaff?.name || post.removedByMember?.name || null,
     removalReason: post.removalReason || null,
+    lockedByName: post.lockedBy?.name || null,
     reports,
   };
 }
@@ -1736,18 +1746,90 @@ async function referencedTransaction(reference, accountId) {
 async function billingContext(row, form, notes, role) {
   if (!canViewTicketPayments(role, row.type)) return { restricted: true };
   const reference = answerOf(form, 'transaction_id', 'reference_id', 'payout_reference').value;
-  const [money, transaction] = await Promise.all([
+  // "Team funds and distributions" names a team: show it, the requester's place on it and its wallet.
+  const teamAnswer = answerOf(form, 'team_name');
+  const affectedText = answerOf(form, 'affected_username').value;
+  const [money, transaction, team] = await Promise.all([
     section(notes, 'Wallet and plan', () => walletAndPlan(row.account_id)),
     reference ? section(notes, 'Quoted transaction', () => referencedTransaction(reference, row.account_id)) : Promise.resolve(null),
+    teamAnswer.id
+      ? section(notes, 'Team', async () => {
+          const found = await ticketTeam(teamAnswer.id, row.account_id, affectedText);
+          if (!found) return null;
+          const teamMoney = await walletAndPlan(found.accountId);
+          return { ...found, wallet: teamMoney?.wallet || null };
+        })
+      : Promise.resolve(null),
   ]);
   if (transaction && transaction.found && !transaction.belongsToRequester) {
     notes.push('The quoted transaction does not belong to the requester.');
   }
+  if (team && !team.requesterMembership) notes.push('The requester has never been on this team.');
+  if (team && affectedText && !team.affectedMember) notes.push(`No member matches "${affectedText.slice(0, 60)}".`);
   return {
     restricted: false,
     wallet: money?.wallet || null,
     subscription: money?.subscription || null,
     referencedTransaction: transaction,
+    team: team || null,
+  };
+}
+
+/**
+ * Bug reports: how the member described it, and the other open bug reports of the same type
+ * from the last 60 days (same area first), so staff can tell one bug reported several times.
+ */
+async function bugContext(row, form) {
+  const area = answerOf(form, 'bug_area').value || null;
+  const blocking = answerOf(form, 'blocking').value || null;
+  const result = await pool.query(
+    `
+    SELECT s.*,
+           COUNT(*) OVER () AS total,
+           COUNT(*) FILTER (WHERE s.bug_area IS NOT DISTINCT FROM $3::text) OVER () AS same_area_total
+    FROM (
+      SELECT t.ticket_id, t.ticket_number, t.type, t.status, t.created_at,
+             ${MEMBER_NAME_SQL('a', 'u')} AS requester_name, a.handle AS requester_handle,
+             (
+               SELECT answer->>'value' FROM jsonb_array_elements(t.form_answers) answer
+               WHERE answer->>'key' = 'bug_area'
+               LIMIT 1
+             ) AS bug_area
+      FROM tickets t
+      LEFT JOIN accounts a ON a.account_id = t.account_id
+      LEFT JOIN users u ON u.account_id = a.account_id
+      WHERE t.deleted_at IS NULL
+        AND t.type = $1
+        AND t.ticket_id <> $2::uuid
+        AND t.status NOT IN ('Closed', 'Resolved')
+        AND t.created_at > NOW() - INTERVAL '60 days'
+        AND jsonb_typeof(t.form_answers) = 'array'
+    ) s
+    ORDER BY (s.bug_area IS NOT DISTINCT FROM $3::text) DESC, s.created_at DESC
+    LIMIT 8
+    `,
+    [row.type, row.ticket_id, area]
+  );
+  const first = result.rows[0];
+  return {
+    area,
+    frequency: answerOf(form, 'frequency').value || null,
+    blocking,
+    blocksMember: blocking === BUG_BLOCKING_ANSWER,
+    pageLink: answerOf(form, 'page_link').value || null,
+    errorMessage: answerOf(form, 'error_message').value || null,
+    similarTotal: first ? num(first.total) : 0,
+    sameAreaTotal: first ? num(first.same_area_total) : 0,
+    similar: result.rows.map((t) => ({
+      id: t.ticket_id,
+      number: t.ticket_number,
+      type: t.type,
+      status: t.status,
+      requester: t.requester_handle ? `@${t.requester_handle}` : t.requester_name,
+      createdAt: t.created_at,
+      area: t.bug_area || null,
+      sameArea: Boolean(area) && t.bug_area === area,
+    })),
   };
 }
 
@@ -2118,6 +2200,7 @@ async function getTicketCaseContext(row, { role = null } = {}) {
     account: () => accountTypeContext(row, form, notes),
     editor: () => editorContext(row, form, notes),
     safety: () => safetyContext(row, form, notes),
+    bug: () => bugContext(row, form),
   };
   // Kind-specific people (reported member, seller, affected team member) load with their kind.
   const namedRows = form.filter((answer) => NAMED_PERSON_KEYS.has(answer.key) && String(answer.value || '').trim());

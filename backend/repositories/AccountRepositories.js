@@ -287,12 +287,19 @@ async function searchUserAccountsByHandle(handle, excludeAccountId, limit = 100,
 
     if (role) {
         query += ` AND EXISTS (
-               SELECT 1 FROM user_platform_purpose upp 
-               JOIN platform_purpose pp ON pp.plpu_id = upp.plpu_id 
+               SELECT 1 FROM user_platform_purpose upp
+               JOIN platform_purpose pp ON pp.plpu_id = upp.plpu_id
                WHERE upp.user_id = u.user_id AND pp.purpose_name = $${paramIndex}
            )`;
         values.push(role);
         paramIndex++;
+    }
+
+    // Discovery browse (no search, no single account) leaves out banned and locked members:
+    // they cannot be hired or messaged (docs/punishment-system.md §7 "discovery ranking").
+    // A direct search still finds them with their public chip; staff see everyone.
+    if (!search && !targetAccountId && !includeDeactivated) {
+        query += ` AND NOT ${require('../lib/OwnerAvailability').livePenaltySql('a', ['banned', 'locked'])}`;
     }
 
     if (search) {

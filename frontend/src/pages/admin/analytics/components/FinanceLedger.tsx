@@ -17,6 +17,7 @@ import type {
 } from '../analyticsTypes';
 import { fmtCredits, fmtDateTime, fmtDay, fmtInt, fmtPhp, titleCase } from '../analyticsFormat';
 import { StatusPill } from '../analyticsUi';
+import { InfoButton } from '../analyticsInfo';
 
 const BASE = '/api/admin/analytics/finance';
 const PAGE_SIZE = 25;
@@ -318,7 +319,10 @@ export default function FinanceLedger({
     <section className="overflow-hidden rounded-2xl border border-white/[0.07] bg-[#12131a]">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/[0.06] px-5 py-4">
         <div>
-          <h3 className="text-sm font-semibold text-white">Records</h3>
+          <h3 className="flex items-center gap-1.5 text-sm font-semibold text-white">
+            Records
+            <InfoButton id="records" />
+          </h3>
           <p className="text-xs text-zinc-500">Searched and paged on the server, so every record is reachable.</p>
         </div>
         <div role="tablist" aria-label="Record type" className="flex flex-wrap gap-1 rounded-xl bg-[#0c0d12] p-1">

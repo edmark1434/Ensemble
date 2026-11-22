@@ -28,16 +28,22 @@ export default function CommunityTab({ data }: { data: PlatformAnalytics }) {
   return (
     <div className="space-y-6">
       <div className="console-stagger grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <StatTile label="Discussions started" value={discussions.inPeriod} kpi={discussionKpi} sub={`${fmtInt(discussions.total)} in total`} />
-        <StatTile label="Comments" value={discussions.commentsInPeriod} sub={`${fmtInt(discussions.commentersInPeriod)} people commented`} />
-        <StatTile label="People posting" value={discussions.postersInPeriod} sub="Started at least one discussion" />
-        <StatTile label="New groups" value={groups.createdInPeriod} sub={`${fmtInt(groups.active)} active of ${fmtInt(groups.total)}`} />
+        <StatTile label="Discussions started" info="discussionsStarted" value={discussions.inPeriod} kpi={discussionKpi} sub={`${fmtInt(discussions.total)} in total`} />
+        <StatTile label="Comments" info="comments" value={discussions.commentsInPeriod} sub={`${fmtInt(discussions.commentersInPeriod)} people commented`} />
+        <StatTile label="People posting" info="peoplePosting" value={discussions.postersInPeriod} sub="Started at least one discussion" />
+        <StatTile label="New groups" info="newGroups" value={groups.createdInPeriod} sub={`${fmtInt(groups.active)} active of ${fmtInt(groups.total)}`} />
       </div>
 
       <div className="console-stagger grid gap-3 sm:grid-cols-3">
-        <StatTile label="Group memberships" value={groups.memberships} sub="Banned members excluded" />
-        <StatTile label="Average group size" value={groups.averageSize} format={(n) => n.toLocaleString('en-US', { maximumFractionDigits: 1 })} animate={false} />
-        <StatTile label="Inactive groups" value={groups.inactive} sub="Archived or not active" />
+        <StatTile label="Group memberships" info="memberships" value={groups.memberships} sub="Banned members excluded" />
+        <StatTile
+          label="Average group size"
+          info="averageGroupSize"
+          value={groups.averageSize}
+          format={(n) => n.toLocaleString('en-US', { maximumFractionDigits: 1 })}
+          animate={false}
+        />
+        <StatTile label="Inactive groups" info="inactiveGroups" value={groups.inactive} sub="Archived or not active" />
       </div>
 
       <div className="grid gap-5 xl:grid-cols-2">
@@ -50,7 +56,7 @@ export default function CommunityTab({ data }: { data: PlatformAnalytics }) {
       </div>
 
       <div className="grid gap-5 xl:grid-cols-2">
-        <Panel title="Most discussed in this period" subtitle="By comments, then likes">
+        <Panel title="Most discussed in this period" info="mostDiscussed" subtitle="By comments, then likes">
           <SimpleTable
             columns={[{ label: 'Discussion' }, { label: 'Author' }, { label: 'Comments', align: 'right' }, { label: 'Likes', align: 'right' }]}
             rows={discussions.top.map((d) => [
