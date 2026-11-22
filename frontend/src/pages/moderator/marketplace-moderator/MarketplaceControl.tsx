@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Archive,
+  Ban,
   CalendarClock,
   ChevronDown,
   Clock,
@@ -356,7 +357,7 @@ export default function MarketplaceControl({
     setSaving(true);
     try {
       const res = await api.patch(`${apiBase}/listings/${listing.id}`, listingDecisionPayload(action, input));
-      showSuccessToast(decisionSuccessMessage(action, input, res.data?.data?.publishAt));
+      showSuccessToast(decisionSuccessMessage(action, input, res.data?.data?.publishAt, listing.status));
       setPrompt(null);
       await refreshAll();
     } catch (err) {
@@ -372,12 +373,12 @@ export default function MarketplaceControl({
   const menuItems = (listing: MarketplaceListing): MenuItem[] => [
     { id: 'open', label: 'Open listing detail', icon: SquareArrowOutUpRight },
     { id: 'seller', label: 'Seller listing history', icon: History },
-    ...actionsForStatus(listing.status).map((action) => ({
+    ...actionsForStatus(listing.status, listing.permanentlyRejected).map((action) => ({
       id: action,
       label: actionLabel(action, listing.status),
       icon: LISTING_ACTIONS[action].icon,
       section: 'manage',
-      danger: action === 'reject',
+      danger: action === 'reject_permanent' || (action === 'reject' && listing.status !== 'rejected'),
       disabled: saving,
     })),
   ];
@@ -658,8 +659,18 @@ export default function MarketplaceControl({
                               </p>
                               {note && (
                                 <p className="mt-1 line-clamp-2 text-[11px] text-amber-200/80">
-                                  {l.status === 'rejected' ? 'Rejected: ' : 'Note: '}
+                                  {l.status === 'rejected'
+                                    ? l.permanentlyRejected
+                                      ? 'Permanently rejected: '
+                                      : 'Rejected: '
+                                    : 'Note: '}
                                   {note}
+                                </p>
+                              )}
+                              {l.permanentlyRejected && (
+                                <p className="mt-1 inline-flex items-center gap-1 rounded-full border border-rose-600/35 bg-rose-600/10 px-1.5 py-px text-[10px] font-medium text-rose-200">
+                                  <Ban className="h-3 w-3" />
+                                  Permanent · no resubmission
                                 </p>
                               )}
                               {l.status === 'scheduled' && (
@@ -700,7 +711,7 @@ export default function MarketplaceControl({
                             {l.priceCredits.toLocaleString()}
                           </span>
                         </td>
-                        <td className="px-4 py-3.5 align-top">{listingStatusPill(l.status)}</td>
+                        <td className="px-4 py-3.5 align-top">{listingStatusPill(l.status, l.permanentlyRejected)}</td>
                         <td className="px-4 py-3.5 align-top">
                           <span
                             className="flex items-center gap-1 text-xs text-zinc-500"

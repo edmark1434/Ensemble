@@ -4,7 +4,7 @@ const { pool } = require('../lib/Database');
  * Conversation between a seller and the marketplace staff on one listing
  * (`marketplace_listing_messages`, migration 1830400000000).
  *
- * Entries are decisions (`approved`, `scheduled`, `rejected`, `delisted`, `rereview`),
+ * Entries are decisions (`approved`, `scheduled`, `rejected`, `rejected_final`, `delisted`, `rereview`),
  * submissions (`submitted`, `resubmitted`), plain `reply` messages and the automatic
  * `published` go-live. The listing row keeps only the current state; the thread keeps history.
  */
@@ -17,6 +17,8 @@ const THREAD_KINDS = Object.freeze([
   'scheduled',
   'published',
   'rejected',
+  // Rejected for good: the seller cannot resubmit (migration 1830700000000).
+  'rejected_final',
   'delisted',
   'rereview',
 ]);
@@ -107,7 +109,7 @@ async function getLatestListingForAsset(db, marketAssetId, { lock = false } = {}
     `SELECT
        l.listing_id, l.listing_number, l.title, l.status, l.rejection_reason, l.moderation_note,
        l.publish_at, l.reviewed_at, l.created_at, l.updated_at, l.submitted_by_account_id,
-       l.market_asset_id,
+       l.market_asset_id, l.permanently_rejected_at,
        ma.status AS asset_status, ma.trashed_at, ma.deleted_at
      FROM marketplace_listings l
      JOIN market_assets ma ON ma.market_asset_id = l.market_asset_id
@@ -144,7 +146,7 @@ async function moveListingBackToReview(db, listingId, fromStatus) {
          reviewed_at = NULL,
          publish_at = NULL,
          updated_at = NOW()
-     WHERE listing_id = $1 AND status = $2`,
+     WHERE listing_id = $1 AND status = $2 AND permanently_rejected_at IS NULL`,
     [listingId, fromStatus]
   );
   return result.rowCount > 0;

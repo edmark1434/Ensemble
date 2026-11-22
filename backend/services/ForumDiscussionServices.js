@@ -382,6 +382,14 @@ function isStaffModerator(session = {}) {
         && ['Admin', 'Forum Moderator'].includes(session.role);
 }
 
+/** Members cannot comment on or reply in a locked discussion (HTTP 423, `DISCUSSION_LOCKED`). */
+function discussionLockedError() {
+    const error = new Error('Replies are locked on this discussion. No new comments or replies can be posted.');
+    error.statusCode = 423;
+    error.code = 'DISCUSSION_LOCKED';
+    return error;
+}
+
 function hasGroupManagementRole(group, actorId) {
     return group?.members?.some((member) =>
         String(member.userId) === String(actorId)
@@ -1132,12 +1140,11 @@ async function addForumDiscussionCommentServices(discussionId, payload = {}, ses
     const discussion = await getForumDiscussionByIdRepository(discussionId);
     if (!discussion) throw new Error('Discussion not found');
     await requireActiveGroupInteraction(discussion.forum_group_id, actorId);
-    if (discussion.is_locked) {
-        try {
-            await requireDiscussionManager(discussion, session);
-        } catch (_error) {
-            throw new Error('Discussion is locked');
-        }
+    // A locked discussion takes no new comments or replies from members, its author or
+    // group moderators included; only forum staff can still post (like a Reddit lock).
+    const canPostWhileLocked = isStaffModerator(session);
+    if (discussion.is_locked && !canPostWhileLocked) {
+        throw discussionLockedError();
     }
 
     if (typeof payload.comment !== 'string') {
@@ -1178,8 +1185,15 @@ async function addForumDiscussionCommentServices(discussionId, payload = {}, ses
         automod_flags: scan.flags,
     };
 
-    const created = await addForumDiscussionCommentRepository(discussionId, commentPayload);
-    if (!created) throw new Error('Discussion not found');
+    const created = await addForumDiscussionCommentRepository(discussionId, commentPayload, {
+        allowLocked: canPostWhileLocked,
+    });
+    if (!created) {
+        // Locked between the read above and this write.
+        const current = await getForumDiscussionByIdRepository(discussionId);
+        if (current?.is_locked && !canPostWhileLocked) throw discussionLockedError();
+        throw new Error('Discussion not found');
+    }
     await createForumCommentNotifications({
         actorId,
         discussion,

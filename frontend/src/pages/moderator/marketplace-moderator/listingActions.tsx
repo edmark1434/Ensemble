@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Archive, CheckCircle2, Loader2, RotateCcw, XCircle } from 'lucide-react';
+import { Archive, Ban, CheckCircle2, Loader2, RotateCcw, XCircle } from 'lucide-react';
 import type { ListingStatus } from './marketplaceTypes';
 
 /** Moderation actions a listing can receive, independent of where they are triggered from. */
-export type ListingAction = 'approve' | 'reject' | 'delist' | 'rereview';
+export type ListingAction = 'approve' | 'reject' | 'reject_permanent' | 'delist' | 'rereview';
 
 /** When an approval goes live (`publishMode` on the PATCH). */
 export type PublishMode = 'now' | '24h' | '7d' | 'date';
@@ -62,6 +62,20 @@ export const LISTING_ACTIONS: Record<ListingAction, ListingActionMeta> = {
     confirmLabel: 'Confirm reject',
     successMessage: 'Listing rejected',
   },
+  reject_permanent: {
+    status: 'rejected',
+    label: 'Reject permanently',
+    icon: Ban,
+    tone: 'border-rose-600/40 text-rose-300 hover:bg-rose-600/10',
+    wideTone: 'border-rose-600/40 bg-rose-600/15 text-rose-200 hover:bg-rose-600/25',
+    requiresReason: true,
+    dialogTitle: 'Reject listing permanently',
+    dialogHint:
+      'The asset returns to draft and can never be resubmitted: the seller can read this message but cannot resubmit from the asset page or by saving edits. Use it for content that will never be allowed. Approving or plain-rejecting later lifts the block.',
+    placeholder: 'Why this asset can never be published…',
+    confirmLabel: 'Reject permanently',
+    successMessage: 'Listing permanently rejected',
+  },
   delist: {
     status: 'delisted',
     label: 'Delist from catalog',
@@ -92,12 +106,16 @@ export const LISTING_ACTIONS: Record<ListingAction, ListingActionMeta> = {
   },
 };
 
-/** Actions offered for a listing in its current state, in the order they should appear. */
-export function actionsForStatus(status: ListingStatus): ListingAction[] {
-  if (status === 'pending') return ['approve', 'reject'];
-  if (status === 'scheduled') return ['approve', 'reject'];
-  if (status === 'approved') return ['rereview', 'delist', 'reject'];
-  if (status === 'delisted') return ['approve', 'rereview'];
+/**
+ * Actions offered for a listing in its current state, in the order they should appear.
+ * A permanently rejected listing can be approved, or plain-rejected to let the seller resubmit.
+ */
+export function actionsForStatus(status: ListingStatus, permanentlyRejected = false): ListingAction[] {
+  if (status === 'pending') return ['approve', 'reject', 'reject_permanent'];
+  if (status === 'scheduled') return ['approve', 'reject', 'reject_permanent'];
+  if (status === 'approved') return ['rereview', 'delist', 'reject', 'reject_permanent'];
+  if (status === 'delisted') return ['approve', 'rereview', 'reject_permanent'];
+  if (status === 'rejected') return permanentlyRejected ? ['approve', 'reject'] : ['approve', 'reject_permanent'];
   return ['approve'];
 }
 
@@ -105,6 +123,7 @@ export function actionsForStatus(status: ListingStatus): ListingAction[] {
 export function actionLabel(action: ListingAction, status: ListingStatus) {
   if (action === 'approve' && status === 'scheduled') return 'Publish now or reschedule';
   if (action === 'approve' && status === 'delisted') return 'Approve and relist';
+  if (action === 'reject' && status === 'rejected') return 'Allow resubmission';
   return LISTING_ACTIONS[action].label;
 }
 
@@ -119,8 +138,13 @@ export function listingDecisionPayload(action: ListingAction, input: ListingDeci
       message: input.reason || undefined,
     };
   }
-  if (action === 'reject') {
-    return { status: meta.status, rejectionReason: input.reason, reason: input.reason };
+  if (action === 'reject' || action === 'reject_permanent') {
+    return {
+      status: meta.status,
+      rejectionReason: input.reason,
+      reason: input.reason,
+      permanent: action === 'reject_permanent',
+    };
   }
   return { status: meta.status, moderationNote: input.reason, reason: input.reason };
 }
@@ -141,12 +165,14 @@ export function formatGoLive(value: string | Date | null | undefined) {
 export function decisionSuccessMessage(
   action: ListingAction,
   input: ListingDecisionInput,
-  savedPublishAt?: string | null
+  savedPublishAt?: string | null,
+  currentStatus?: ListingStatus
 ) {
   if (action === 'approve' && input.publishMode !== 'now') {
     return `Listing approved — goes live ${formatGoLive(savedPublishAt || input.publishAt || null)}`;
   }
   if (action === 'approve') return 'Listing approved and published';
+  if (action === 'reject' && currentStatus === 'rejected') return 'Seller can resubmit this listing again';
   return LISTING_ACTIONS[action].successMessage;
 }
 
@@ -264,12 +290,26 @@ export function ListingReasonDialog({
       >
         <div className="border-b border-white/[0.06] px-5 py-4">
           <h2 className="text-sm font-semibold text-white">
-            {isApprove && currentStatus === 'scheduled' ? 'Publish now or reschedule' : meta.dialogTitle}
+            {isApprove && currentStatus === 'scheduled'
+              ? 'Publish now or reschedule'
+              : action === 'reject' && currentStatus === 'rejected'
+                ? 'Lift the permanent rejection'
+                : meta.dialogTitle}
           </h2>
           <p className="mt-1 truncate text-xs text-zinc-500">{listingTitle}</p>
         </div>
         <div className="space-y-3 px-5 py-4">
-          <p className="text-xs leading-relaxed text-zinc-400">{meta.dialogHint}</p>
+          <p className="text-xs leading-relaxed text-zinc-400">
+            {action === 'reject' && currentStatus === 'rejected'
+              ? 'The listing stays rejected, but the seller can resubmit it again with a message. Tell them what has to change.'
+              : meta.dialogHint}
+          </p>
+          {action === 'reject_permanent' && (
+            <p className="flex items-start gap-2 rounded-lg border border-rose-600/30 bg-rose-600/[0.08] px-3 py-2 text-[11px] text-rose-100">
+              <Ban className="mt-px h-3.5 w-3.5 shrink-0 text-rose-300" />
+              The seller will not be able to resubmit this asset.
+            </p>
+          )}
 
           {isApprove && (
             <div className="space-y-2">

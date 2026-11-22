@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   AlertTriangle,
+  Ban,
   CalendarClock,
   CheckCircle2,
   Clock,
@@ -120,7 +121,16 @@ function statusDotClass(status: string) {
   }
 }
 
-export function listingStatusPill(status: string) {
+/** `permanent` marks a rejection the seller cannot resubmit. */
+export function listingStatusPill(status: string, permanent = false) {
+  if (status === 'rejected' && permanent) {
+    return (
+      <span className="inline-flex items-center gap-1.5 rounded-full border border-rose-600/40 bg-rose-600/15 px-2 py-0.5 text-[10px] font-medium text-rose-200">
+        <Ban className="h-3 w-3" />
+        Permanently rejected
+      </span>
+    );
+  }
   return (
     <span
       className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[10px] font-medium capitalize ${listingStatusClass(status)}`}
@@ -396,6 +406,8 @@ function threadEntryLabel(message: ListingThreadMessage) {
       return 'Went live (scheduled)';
     case 'rejected':
       return 'Rejected';
+    case 'rejected_final':
+      return 'Rejected permanently';
     case 'delisted':
       return 'Delisted';
     case 'rereview':
@@ -407,6 +419,7 @@ function threadEntryLabel(message: ListingThreadMessage) {
 
 function threadEntryTone(message: ListingThreadMessage) {
   if (message.kind === 'rejected') return 'text-red-300';
+  if (message.kind === 'rejected_final') return 'text-rose-300';
   if (message.kind === 'delisted' || message.kind === 'rereview') return 'text-amber-300';
   if (message.kind === 'approved' || message.kind === 'published') return 'text-emerald-300';
   if (message.kind === 'scheduled') return 'text-sky-300';
@@ -601,7 +614,7 @@ export default function ListingDetailModal({
     setSaving(true);
     try {
       const res = await api.patch(`${apiBase}/listings/${listingId}`, listingDecisionPayload(action, input));
-      showSuccessToast(decisionSuccessMessage(action, input, res.data?.data?.publishAt));
+      showSuccessToast(decisionSuccessMessage(action, input, res.data?.data?.publishAt, detail?.status));
       setPendingAction(null);
       if (res.data?.success && res.data.data) {
         setDetail(res.data.data);
@@ -657,7 +670,7 @@ export default function ListingDetailModal({
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
                 <span className="font-mono text-[11px] text-zinc-500">{listing?.number || '…'}</span>
-                {listing && listingStatusPill(listing.status)}
+                {listing && listingStatusPill(listing.status, listing.permanentlyRejected)}
                 {asset?.type && (
                   <span className="rounded-full border border-white/10 px-2 py-0.5 text-[10px] capitalize text-zinc-400">
                     {asset.type}
@@ -1171,7 +1184,7 @@ export default function ListingDetailModal({
               <span className="mr-1 text-[10px] font-semibold uppercase tracking-widest text-zinc-600">
                 Moderate
               </span>
-              {actionsForStatus(listing.status).map((action) => {
+              {actionsForStatus(listing.status, listing.permanentlyRejected).map((action) => {
                 const meta = LISTING_ACTIONS[action];
                 const Icon = meta.icon;
                 return (

@@ -102,6 +102,9 @@ async function addForumDiscussionCommentController(req, res) {
         );
         res.status(201).json(comment);
     } catch (error) {
+        if (error.code === 'DISCUSSION_LOCKED') {
+            return res.status(error.statusCode || 423).json({ error: error.message, code: error.code });
+        }
         res.status(400).json({ error: error.message });
     }
 }

@@ -68,6 +68,9 @@ function mapListingRow(row) {
     marketAssetId: row.market_asset_id || null,
     status: row.status,
     rejectionReason: row.rejection_reason,
+    // Rejected for good: the seller cannot resubmit (migration 1830700000000).
+    permanentlyRejected: row.status === 'rejected' && Boolean(row.permanently_rejected_at),
+    permanentlyRejectedAt: row.status === 'rejected' ? row.permanently_rejected_at || null : null,
     moderationNote: row.moderation_note || null,
     // Go-live time while `scheduled`; when it went live once `approved`.
     publishAt: row.publish_at || null,
@@ -811,10 +814,15 @@ async function getSellerMarketplaceListings(accountId) {
  * A rejection stores its reason in `rejection_reason`; delist and re-approval store theirs
  * in `moderation_note`, so the two trails never overwrite each other. Every decision is also
  * an entry in the listing thread (`marketplace_listing_messages`), which the seller reads.
+ *
+ * `rejected` with `permanent: true` rejects for good: `permanently_rejected_at` is set, the
+ * thread entry is `rejected_final`, and the seller can no longer resubmit. It also works on a
+ * listing that is already rejected; a plain reject of a permanently rejected listing lifts the
+ * block, and every other decision clears it.
  */
 async function reviewMarketplaceListing(
   listingId,
-  { status, rejectionReason, moderationNote, reason, publishMode, publishAt, message },
+  { status, rejectionReason, moderationNote, reason, publishMode, publishAt, message, permanent },
   staffSession,
   audit = {}
 ) {
@@ -836,6 +844,7 @@ async function reviewMarketplaceListing(
     return text || null;
   };
 
+  const permanentReject = status === 'rejected' && (permanent === true || permanent === 'true');
   const rejectReason = status === 'rejected' ? clip(rejectionReason || reason) : null;
   const note =
     status === 'delisted' || status === 'pending'
@@ -861,20 +870,24 @@ async function reviewMarketplaceListing(
     ? rawStaffId
     : null;
   const before = await pool.query(
-    `SELECT listing_id, listing_number, title, submitted_by_account_id, market_asset_id, status, publish_at
+    `SELECT listing_id, listing_number, title, submitted_by_account_id, market_asset_id, status, publish_at,
+            permanently_rejected_at
      FROM marketplace_listings WHERE listing_id = $1`,
     [listingId]
   );
   if (!before.rows.length) throw new Error('Listing not found');
   const row = before.rows[0];
   const previousStatus = String(row.status || '').toLowerCase();
+  const wasPermanent = previousStatus === 'rejected' && Boolean(row.permanently_rejected_at);
   if (previousStatus === 'approved' && status === 'approved') {
     throw clientError('This listing is already live.', 409);
   }
   // Re-applying the current status used to re-stamp the review and send the seller the same
   // notice again (a double click on Delist did both). Moving a scheduled listing to a new
   // time is the one repeat that is a real change.
-  if (previousStatus === nextStatus) {
+  // Rejected → rejected is a real change only when it turns the permanent block on or off.
+  const permanenceChange = nextStatus === 'rejected' && previousStatus === 'rejected' && permanentReject !== wasPermanent;
+  if (previousStatus === nextStatus && !permanenceChange) {
     const sameTime =
       nextStatus === 'scheduled' &&
       row.publish_at &&
@@ -883,7 +896,9 @@ async function reviewMarketplaceListing(
       throw clientError(
         nextStatus === 'scheduled'
           ? 'This listing is already scheduled for that time.'
-          : `This listing is already ${status === 'pending' ? 'waiting for review' : status}.`,
+          : `This listing is already ${
+              status === 'pending' ? 'waiting for review' : wasPermanent ? 'permanently rejected' : status
+            }.`,
         409
       );
     }
@@ -898,7 +913,9 @@ async function reviewMarketplaceListing(
         ? 'approved'
         : status === 'pending'
           ? 'rereview'
-          : status;
+          : permanentReject
+            ? 'rejected_final'
+            : status;
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -912,9 +929,11 @@ async function reviewMarketplaceListing(
            reviewed_by_staff_id = $4,
            reviewed_at = NOW(),
            publish_at = $7,
+           permanently_rejected_at = CASE WHEN $8::boolean THEN NOW() ELSE NULL END,
            updated_at = NOW()
-       WHERE listing_id = $5 AND status IS NOT DISTINCT FROM $6`,
-      [nextStatus, rejectReason, note, staffId, listingId, row.status, publishAtValue]
+       WHERE listing_id = $5 AND status IS NOT DISTINCT FROM $6
+         AND (permanently_rejected_at IS NULL) = $9::boolean`,
+      [nextStatus, rejectReason, note, staffId, listingId, row.status, publishAtValue, permanentReject, !wasPermanent]
     );
     if (!updated.rowCount) {
       throw clientError('This listing changed while you were reviewing it. Reload and try again.', 409);
@@ -963,6 +982,7 @@ async function reviewMarketplaceListing(
     moderationNote: note,
     publishAt: nextStatus === 'scheduled' ? schedule.publishAt : null,
     messageBody: approvalNote,
+    permanent: permanentReject,
   });
 
   const listingLabel = row.listing_number || row.title || listingId;
@@ -973,7 +993,9 @@ async function reviewMarketplaceListing(
         ? `Listing ${listingLabel} sent back for re-approval`
         : nextStatus === 'scheduled'
           ? `Listing ${listingLabel} approved, scheduled to go live`
-          : `Listing ${listingLabel} ${nextStatus}`,
+          : permanentReject
+            ? `Listing ${listingLabel} permanently rejected`
+            : `Listing ${listingLabel} ${nextStatus}`,
     eventCode: 'LISTING_REVIEWED',
     referenceTable: 'marketplace_listings',
     referencePrefix: 'LST',
@@ -982,6 +1004,8 @@ async function reviewMarketplaceListing(
     metadata: {
       status: nextStatus,
       previousStatus,
+      permanent: permanentReject || undefined,
+      liftedPermanentReject: wasPermanent && !permanentReject ? true : undefined,
       title: row.title,
       rejectionReason: rejectReason,
       moderationNote: note || approvalNote,

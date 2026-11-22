@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   AlertTriangle,
   Archive,
+  Ban,
   CalendarClock,
   CheckCircle2,
   ChevronDown,
@@ -37,7 +38,16 @@ type StatusCopy = {
   tone: string;
 };
 
-function statusCopy(status: AssetReviewStatus, publishAt: string | null): StatusCopy {
+function statusCopy(status: AssetReviewStatus, publishAt: string | null, permanent = false): StatusCopy {
+  if (status === "rejected" && permanent) {
+    return {
+      title: "Permanently rejected",
+      detail:
+        "The review team decided this asset cannot be published on the Marketplace, so it can no longer be resubmitted. Read the reason below. If you think this is a mistake, open a support ticket.",
+      icon: Ban,
+      tone: "border-rose-600/30 bg-rose-600/10 text-rose-700 dark:text-rose-300",
+    };
+  }
   switch (status) {
     case "pending":
       return {
@@ -99,6 +109,8 @@ function entryLabel(message: SubmissionMessage) {
       return "Went live on the Marketplace";
     case "rejected":
       return "Changes requested";
+    case "rejected_final":
+      return "Permanently rejected";
     case "delisted":
       return "Removed from the catalog";
     case "rereview":
@@ -109,7 +121,7 @@ function entryLabel(message: SubmissionMessage) {
 }
 
 function entryTone(message: SubmissionMessage) {
-  if (message.kind === "rejected") return "text-rose-600 dark:text-rose-300";
+  if (message.kind === "rejected" || message.kind === "rejected_final") return "text-rose-600 dark:text-rose-300";
   if (message.kind === "delisted" || message.kind === "rereview") return "text-amber-600 dark:text-amber-300";
   if (message.kind === "approved" || message.kind === "scheduled" || message.kind === "published") {
     return "text-emerald-600 dark:text-emerald-300";
@@ -240,7 +252,7 @@ export default function AssetSubmissionThread({
   }
   if (missing || !submission) return null;
 
-  const copy = statusCopy(submission.status, submission.publishAt);
+  const copy = statusCopy(submission.status, submission.publishAt, submission.permanentlyRejected);
   const StatusIcon = copy.icon;
   const text = draft.trim();
   const resubmitMode = submission.canResubmit;
@@ -312,6 +324,11 @@ export default function AssetSubmissionThread({
           {submission.trashed ? (
             <p className="border-t border-gray-100 px-5 py-4 text-xs text-gray-500 dark:border-white/5 dark:text-zinc-400">
               Restore this asset from Trash to resubmit it or message the review team.
+            </p>
+          ) : submission.permanentlyRejected ? (
+            <p className="flex items-center gap-2 border-t border-gray-100 px-5 py-4 text-xs text-gray-500 dark:border-white/5 dark:text-zinc-400">
+              <Ban className="h-3.5 w-3.5 shrink-0 text-rose-500" />
+              This conversation is closed. The asset was permanently rejected and cannot be resubmitted.
             </p>
           ) : (submission.canResubmit || submission.canReply) && (
             <div className="border-t border-gray-100 px-5 py-4 dark:border-white/5">

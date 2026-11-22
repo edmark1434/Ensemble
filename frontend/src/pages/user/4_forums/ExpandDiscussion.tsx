@@ -34,6 +34,12 @@ import { reconcileForumDiscussions, useForumRealtime } from "@/pages/user/4_foru
 import { identityFromDetails, loadCurrentForumAvatar } from "@/pages/user/4_forums/forumIdentity";
 import { useForumTimeout, isRestrictionErrorHandled } from "@/pages/user/4_forums/useForumTimeout";
 import { FORUM_LOCKED_CLASS, ForumTimeoutComposerLock, ForumTimeoutPill } from "@/pages/user/4_forums/ForumTimeoutLock";
+import {
+  DiscussionStateBadges,
+  LockedRepliesNotice,
+  isDiscussionLockedError,
+  showDiscussionLockedToast,
+} from "@/pages/user/4_forums/ForumThreadState";
 
 type UserId = string | number;
 
@@ -51,6 +57,10 @@ type Discussion = {
   comments: ForumComment[];
   created_at: string;
   updated_at: string;
+  /** Replies locked by moderators. */
+  is_locked?: boolean;
+  /** Pinned by moderators. */
+  is_sticky?: boolean;
 };
 
 type Group = {
@@ -197,7 +207,10 @@ const CommentNode = ({
   onLike,
   onReport,
   identities,
+  repliesLocked = false,
 }: {
+  /** The discussion is locked: no Reply button or reply box. */
+  repliesLocked?: boolean;
   comment: ForumComment;
   /** Only used to tag the comment for staff platform view (`data-moderation-subject`). */
   discussionId: string;
@@ -350,15 +363,17 @@ const CommentNode = ({
               <Heart className={isLiked ? "h-3.5 w-3.5 fill-current" : "h-3.5 w-3.5"} />
               {comment.likes?.length || 0}
             </button>
-            <button
-              onClick={() => setReplying((value) => !value)}
-              disabled={forumTimedOut}
-              title={lockedTitle}
-              className={`flex items-center gap-1 text-xs text-gray-500 dark:text-zinc-500 hover:text-gray-900 dark:text-white ${lockedClass}`}
-            >
-              <Reply className="h-3.5 w-3.5" />
-              Reply
-            </button>
+            {!repliesLocked && (
+              <button
+                onClick={() => setReplying((value) => !value)}
+                disabled={forumTimedOut}
+                title={lockedTitle}
+                className={`flex items-center gap-1 text-xs text-gray-500 dark:text-zinc-500 hover:text-gray-900 dark:text-white ${lockedClass}`}
+              >
+                <Reply className="h-3.5 w-3.5" />
+                Reply
+              </button>
+            )}
             {!isAuthor && (
               <button
                 type="button"
@@ -379,7 +394,7 @@ const CommentNode = ({
           </div>
         )}
 
-        {replying && (
+        {replying && !repliesLocked && (
           <div className="mt-3">
             <ReplyComposer
               placeholder="Write a nested reply..."
@@ -404,6 +419,7 @@ const CommentNode = ({
           onLike={onLike}
           onReport={onReport}
           identities={identities}
+          repliesLocked={repliesLocked}
         />
       ))}
     </div>
@@ -510,6 +526,12 @@ const ExpandDiscussion = () => {
       );
       showSuccessToast(parentId ? "Reply posted" : "Comment posted");
     } catch (error) {
+      if (isDiscussionLockedError(error)) {
+        // Locked after this page loaded: show the lock instead of a generic failure.
+        setDiscussion((current) => (current ? { ...current, is_locked: true } : current));
+        showDiscussionLockedToast();
+        throw error;
+      }
       console.error("Error posting comment:", error);
       // A timeout, suspension or low-merit refusal already got its own toast.
       if (!isRestrictionErrorHandled(error)) showErrorToast("Failed to post comment");
@@ -778,7 +800,8 @@ const ExpandDiscussion = () => {
               </button>
             )}
           </div>
-          <h1 className="mt-4 text-2xl font-bold text-gray-900 dark:text-white">{discussion.title}</h1>
+          <DiscussionStateBadges discussion={discussion} className="mt-4" />
+          <h1 className="mt-2 text-2xl font-bold text-gray-900 dark:text-white">{discussion.title}</h1>
           <div className="prose prose-invert mt-4 max-w-none text-gray-600 dark:text-zinc-300">
             <ReactMarkdown remarkPlugins={[remarkGfm]}>{discussion.content}</ReactMarkdown>
           </div>
@@ -818,10 +841,14 @@ const ExpandDiscussion = () => {
           <h2 className="mb-4 text-lg font-semibold text-gray-900 dark:text-white">
             Comments ({discussion.comments.length})
           </h2>
-          <ReplyComposer
-            placeholder="Write a comment..."
-            onSubmit={(comment, attachments) => addComment(null, comment, attachments)}
-          />
+          {discussion.is_locked ? (
+            <LockedRepliesNotice />
+          ) : (
+            <ReplyComposer
+              placeholder="Write a comment..."
+              onSubmit={(comment, attachments) => addComment(null, comment, attachments)}
+            />
+          )}
           <div className="mt-5">
             {commentTree.length === 0 ? (
               <p className="py-8 text-center text-sm text-gray-500 dark:text-zinc-500">No comments yet.</p>
@@ -840,6 +867,7 @@ const ExpandDiscussion = () => {
                   onLike={likeComment}
                   onReport={(target, authorName) => setReportingComment({ comment: target, authorName })}
                   identities={identities}
+                  repliesLocked={Boolean(discussion.is_locked)}
                 />
               ))
             )}

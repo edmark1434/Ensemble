@@ -1227,6 +1227,7 @@ async function updatePendingCase(caseId, body, session) {
            rejection_reason = $2,
            reviewed_by_staff_id = $3,
            reviewed_at = ${reviewedAtSql},
+           permanently_rejected_at = NULL,
            updated_at = NOW()
        WHERE listing_id = $4
        RETURNING listing_id`,

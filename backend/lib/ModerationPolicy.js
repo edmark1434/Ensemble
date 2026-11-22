@@ -93,13 +93,20 @@ async function resolveMarketplacePublishStatus({
     let existingListing = null;
     if (marketAssetId) {
       const existing = await pool.query(
-        `SELECT listing_id, listing_number, status
+        `SELECT listing_id, listing_number, status, permanently_rejected_at
          FROM marketplace_listings
          WHERE market_asset_id = $1
          ORDER BY created_at DESC LIMIT 1`,
         [marketAssetId]
       );
       existingListing = existing.rows[0] || null;
+    }
+
+    // Staff rejected this asset for good: saving it must not put it back in the queue.
+    if (existingListing?.status === 'rejected' && existingListing.permanently_rejected_at) {
+      const err = new Error('This asset was permanently rejected by the review team and cannot be resubmitted.');
+      err.code = 'LISTING_PERMANENTLY_REJECTED';
+      throw err;
     }
 
     if (existingListing) {
@@ -110,7 +117,7 @@ async function resolveMarketplacePublishStatus({
              thumbnail_url = COALESCE($5, thumbnail_url), status = 'pending',
              rejection_reason = NULL, reviewed_by_staff_id = NULL, reviewed_at = NULL,
              updated_at = NOW()
-         WHERE listing_id = $6`,
+         WHERE listing_id = $6 AND permanently_rejected_at IS NULL`,
         [
           String(title || 'Untitled').slice(0, 255),
           description || null,
@@ -160,6 +167,7 @@ async function resolveMarketplacePublishStatus({
       message: 'Listing submitted for moderator approval. It will be published once approved.',
     };
   } catch (err) {
+    if (err.code === 'LISTING_PERMANENTLY_REJECTED') throw err;
     // Fail closed: a listing that could not enter the queue stays a draft. Returning the
     // requested 'published' here used to put it in the catalog without any review.
     console.error('marketplaceListingReview queue failed:', err.message);
@@ -273,6 +281,7 @@ async function sendMarketplaceListingNotification({
   moderationNote = null,
   publishAt = null,
   messageBody = null,
+  permanent = false,
 }) {
   if (!accountId) return;
   const assetTitle = String(title || 'Untitled Asset').trim();
@@ -286,6 +295,8 @@ async function sendMarketplaceListingNotification({
     message = `Your asset "${assetTitle}" is now live on the Marketplace.`;
   } else if (status === 'scheduled') {
     message = `Your asset "${assetTitle}" was approved and goes live on the Marketplace on ${formatGoLive(publishAt)}.${short ? ` Note: ${short}` : ''}`;
+  } else if (status === 'rejected' && permanent) {
+    message = `Your asset "${assetTitle}" was permanently rejected and cannot be resubmitted to the Marketplace.${rejectionReason ? ` Reason: ${rejectionReason}` : ''}`;
   } else if (status === 'rejected') {
     message = `Your asset "${assetTitle}" was not approved.${rejectionReason ? ` Reason: ${rejectionReason}` : ''} Open the asset to read the feedback, then resubmit it with a message.`;
   } else if (status === 'delisted') {
@@ -319,6 +330,7 @@ async function sendMarketplaceListingNotification({
           marketAssetId,
           status,
           rejectionReason,
+          permanentlyRejected: status === 'rejected' && Boolean(permanent),
           moderationNote: note || null,
           publishAt: publishAt || null,
         });

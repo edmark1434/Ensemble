@@ -72,10 +72,15 @@ function emitMarketplaceChange() {
   }
 }
 
+/** Rejected for good by staff: the seller can read the thread but never resubmit. */
+function isPermanentlyRejected(listing) {
+  return listing.status === 'rejected' && Boolean(listing.permanently_rejected_at);
+}
+
 function sellerActions(listing) {
   const blocked = Boolean(listing.trashed_at || listing.deleted_at);
   return {
-    canResubmit: !blocked && SELLER_RESUBMIT_STATUSES.has(listing.status),
+    canResubmit: !blocked && !isPermanentlyRejected(listing) && SELLER_RESUBMIT_STATUSES.has(listing.status),
     canReply: !blocked && SELLER_REPLY_STATUSES.has(listing.status),
   };
 }
@@ -98,6 +103,7 @@ function shapeSellerThread(listing, messages) {
     // Go-live time for a scheduled listing, or when an approved one went live.
     publishAt: status === 'scheduled' || status === 'approved' ? listing.publish_at || null : null,
     rejectionReason: status === 'rejected' ? listing.rejection_reason || null : null,
+    permanentlyRejected: isPermanentlyRejected(listing),
     moderationNote: status === 'delisted' || status === 'pending' ? listing.moderation_note || null : null,
     reviewedAt: listing.reviewed_at || null,
     submittedAt: listing.created_at,
@@ -113,7 +119,10 @@ async function getSellerSubmissionThreadServices(assetId, accountId) {
   return shapeSellerThread(listing, messages);
 }
 
-function sellerStateConflict(status, wantsResubmit) {
+function sellerStateConflict(status, wantsResubmit, permanentlyRejected = false) {
+  if (permanentlyRejected) {
+    return 'This asset was permanently rejected by the review team and cannot be resubmitted.';
+  }
   if (wantsResubmit) {
     if (status === 'pending') return 'This asset is already waiting for review.';
     if (status === 'scheduled') return 'This asset is already approved and scheduled to go live.';
@@ -159,6 +168,13 @@ async function postSellerSubmissionMessageServices(assetId, accountId, payload =
       throw new ListingReviewError('Restore this asset from Trash first.', 409, 'ASSET_TRASHED');
     }
     if (wantsResubmit ? !actions.canResubmit : !actions.canReply) {
+      if (isPermanentlyRejected(listing)) {
+        throw new ListingReviewError(
+          sellerStateConflict(listing.status, wantsResubmit, true),
+          409,
+          'LISTING_PERMANENTLY_REJECTED'
+        );
+      }
       throw new ListingReviewError(sellerStateConflict(listing.status, wantsResubmit), 409, 'SUBMISSION_STATE_CONFLICT');
     }
     if (wantsResubmit) {

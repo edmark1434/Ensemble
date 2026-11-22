@@ -12,6 +12,7 @@ export type SubmissionMessageKind =
   | "scheduled"
   | "published"
   | "rejected"
+  | "rejected_final"
   | "delisted"
   | "rereview";
 
@@ -33,6 +34,8 @@ export interface AssetSubmission {
   status: AssetReviewStatus;
   publishAt: string | null;
   rejectionReason: string | null;
+  /** Rejected for good by the review team: no resubmission from the page or the editor. */
+  permanentlyRejected?: boolean;
   moderationNote: string | null;
   reviewedAt: string | null;
   submittedAt: string;
