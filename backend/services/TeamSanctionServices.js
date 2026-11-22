@@ -4,12 +4,13 @@
  * A team acts as one account, but a person leads it, so:
  *  - Warnings and forum timeouts go to the team's leader (active Owner). Teams have no Platform
  *    Merit and never post in the forums. The team's record lists them (`violations.team_account_id`).
- *  - Ban / suspend / lock change the team account. By default the leader gets the same penalty
- *    ("Also apply to the team leader"); staff can turn that off. A leader already at the same or a
- *    stricter standing is left alone, and a leader staff may not act on stops the whole action
- *    before anything changes.
- *  - Lifting the team's penalty also lifts the leader's when it was applied together with this
- *    team and is still the leader's current penalty.
+ *  - Ban / suspend / lock change the team account. `memberScope` says who else gets the same
+ *    penalty: `none` (team only), `leader` (default), `selected` (`memberAccountIds`, active
+ *    members of this team) or `all` active members. A member already at the same or a stricter
+ *    standing is left alone. A leader or chosen member staff may not act on stops the whole action
+ *    before anything changes; with `all` such members are skipped and named in the summary.
+ *  - Lifting the team's penalty also lifts the penalty of each member in scope when it was applied
+ *    together with this team and is still that member's current penalty.
  *  - Team Owners and Admins are told; the team page refreshes live.
  */
 const TeamsRepositories = require('../repositories/TeamsRepositories');
@@ -65,8 +66,104 @@ function leaderOf(team) {
   };
 }
 
-function wantsLeader(options) {
-  return options.includeLeader !== false && options.includeLeader !== 'false';
+const MEMBER_SCOPES = new Set(['none', 'leader', 'selected', 'all']);
+const MAX_CHOSEN_MEMBERS = 500;
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Who besides the team account the action reaches. `explicit` is false only for the old default
+ * (no `memberScope`, no `includeLeader`), which stays quiet about members it leaves alone.
+ * The older `includeLeader` flag maps to `leader` / `none`.
+ */
+function memberScopeOf(options) {
+  const raw = String(options.memberScope || '').trim().toLowerCase();
+  if (raw) {
+    if (!MEMBER_SCOPES.has(raw)) {
+      throw sanctionError('Pick who else this reaches: the team only, its leader, chosen members or all members.', 422, 'TEAM_MEMBER_SCOPE_INVALID');
+    }
+    return { scope: raw, explicit: true };
+  }
+  if (options.includeLeader === false || options.includeLeader === 'false') return { scope: 'none', explicit: true };
+  return { scope: 'leader', explicit: options.includeLeader === true || options.includeLeader === 'true' };
+}
+
+function chosenMemberIds(value) {
+  const list = Array.isArray(value) ? value : [];
+  const ids = [...new Set(list.map((id) => String(id || '').trim()).filter(Boolean))];
+  if (!ids.length) throw sanctionError('Pick at least one team member.', 422, 'TEAM_MEMBERS_REQUIRED');
+  if (ids.length > MAX_CHOSEN_MEMBERS) throw sanctionError(`Pick at most ${MAX_CHOSEN_MEMBERS} members.`, 422);
+  if (ids.some((id) => !UUID_RE.test(id))) throw sanctionError('One of the chosen members is not a valid account.', 422);
+  return ids;
+}
+
+/** The people in scope, each with their own standing. The leader is marked. */
+async function memberTargetsFor(team, leader, scope, memberAccountIds) {
+  if (scope === 'none') return [];
+  if (scope === 'leader') return leader ? [{ ...leader, isLeader: true }] : [];
+  const members = (await TeamsRepositories.listTeamMemberStandings(team.account_id)).map((row) => ({
+    accountId: String(row.account_id),
+    name: row.display_name || row.handle || 'a team member',
+    handle: row.handle || null,
+    status: String(row.status || 'Active').toLowerCase(),
+    isLeader: Boolean(leader && String(row.account_id) === leader.accountId),
+  }));
+  if (scope === 'all') return members;
+  const wanted = chosenMemberIds(memberAccountIds);
+  const byId = new Map(members.map((member) => [member.accountId, member]));
+  const missing = wanted.filter((id) => !byId.has(id));
+  if (missing.length) {
+    throw sanctionError(
+      `${missing.length === 1 ? 'One chosen account is' : `${missing.length} chosen accounts are`} no longer an active member of this team. Refresh and pick again.`,
+      422,
+      'TEAM_MEMBER_NOT_FOUND'
+    );
+  }
+  return wanted.map((id) => byId.get(id));
+}
+
+function labelOf(member) {
+  return member.isLeader ? `${member.name} (leader)` : member.name;
+}
+
+function nameList(rows, max = 5) {
+  const names = rows.map(labelOf);
+  return names.length > max ? `${names.slice(0, max).join(', ')} and ${names.length - max} more` : names.join(', ');
+}
+
+/** One line per outcome, so a 40-member ban still reads as a short summary. */
+function describeMemberResults(results, { scope, explicit, isLift, targetCount }) {
+  if (scope === 'all' && !targetCount) return ['The team has no active members.'];
+  const parts = [];
+  const applied = results.filter((row) => row.applied);
+  if (applied.length === 1 && applied[0].isLeader && scope === 'leader') {
+    parts.push(`Leader ${applied[0].name} set to ${applied[0].status}.`);
+  } else if (applied.length) {
+    parts.push(`${applied.length} member${applied.length === 1 ? '' : 's'} set to ${applied[0].status}: ${nameList(applied)}.`);
+  }
+  const group = (reason) => results.filter((row) => !row.applied && row.skipped === reason);
+  const one = (rows, singular, plural) => (rows.length === 1 ? singular : plural);
+  const noLeader = group('no_leader');
+  if (noLeader.length) parts.push(noLeader[0].message);
+  const strict = group('already_restricted');
+  if (strict.length) {
+    parts.push(`${nameList(strict)} ${one(strict, 'is', 'are')} already as strict or stricter and ${one(strict, 'was', 'were')} left as is.`);
+  }
+  const refused = group('not_allowed');
+  if (refused.length) {
+    parts.push(`Skipped ${nameList(refused)}: ${refused[0].message}`);
+  }
+  const unlinked = group('not_linked');
+  if (unlinked.length) {
+    parts.push(`${nameList(unlinked)}: own standing was not set together with this team, so it stays. Change it from the Users tab.`);
+  }
+  const failed = group('failed');
+  if (failed.length) {
+    parts.push(`Could not ${isLift ? 'lift' : 'update'} ${nameList(failed)}: ${failed[0].message}`);
+  }
+  if (isLift && explicit && !parts.length && targetCount && scope !== 'none') {
+    parts.push('No member in scope had a penalty set together with this team, so member accounts stay as they are.');
+  }
+  return parts;
 }
 
 async function loadTeam(teamAccountId) {
@@ -184,85 +281,103 @@ async function changeTeamStanding(teamAccount, key, staffId, options = {}) {
 
   const target = SANCTION_TARGET[key] || null;
   const isLift = Object.prototype.hasOwnProperty.call(LIFT_FROM, key);
-  let leaderPlan = null;
-
-  if (target && wantsLeader(options)) {
-    if (!leader) {
-      leaderPlan = { applied: false, skipped: 'no_leader', message: 'The team has no active leader.' };
-    } else if ((SEVERITY[leader.status] ?? 0) >= SEVERITY[target]) {
-      leaderPlan = {
-        ...leader,
-        applied: false,
-        skipped: 'already_restricted',
-        message: `${leader.name} is already ${leader.status}; their account was left as it is.`,
-      };
-    } else {
-      // Checked before the team changes, so a refused leader never leaves a half-applied action.
-      const { assertCanSanctionTarget } = require('../lib/SuspendGuards');
+  const { scope, explicit } = target || isLift ? memberScopeOf(options) : { scope: 'none', explicit: false };
+  const targets = target || isLift ? await memberTargetsFor(team, leader, scope, options.memberAccountIds) : [];
+  const { assertCanSanctionTarget } = require('../lib/SuspendGuards');
+  // Checked before the team changes, so a refused leader or chosen member never leaves a
+  // half-applied action. With `all`, members staff may not act on are skipped instead.
+  const guard = async (member, action) => {
+    try {
       await assertCanSanctionTarget({
         actorStaffId: staffId,
         actorAccountId: options.actorAccountId || null,
-        targetAccountId: leader.accountId,
-        action: GUARD_ACTION[target],
-      }).catch((err) => {
-        throw sanctionError(
-          `${err.message} (the team leader). Untick "Also apply to the team leader" to act on the team only.`,
-          err.statusCode || 403
-        );
+        targetAccountId: member.accountId,
+        action,
       });
-      leaderPlan = { ...leader, apply: true, key };
+      return null;
+    } catch (err) {
+      if (scope === 'all') return { ...member, applied: false, skipped: 'not_allowed', message: err.message };
+      throw sanctionError(
+        `${err.message} (${member.isLeader ? 'the team leader' : member.name}). Leave them out to act on the team${scope === 'selected' ? ' and the other members' : ' only'}.`,
+        err.statusCode || 403
+      );
     }
-  } else if (isLift && leader && wantsLeader(options)) {
-    const linked = await leaderPenaltyLinkedToTeam(leader.accountId, team.account_id);
+  };
+
+  /** Each entry is either a plan (`apply: true`) or a finished skip. */
+  const plans = [];
+  if (target && scope === 'leader' && !leader) {
+    plans.push({ applied: false, skipped: 'no_leader', message: 'The team has no active leader, so only the team was changed.' });
+  }
+  for (const member of targets) {
+    if (target) {
+      if ((SEVERITY[member.status] ?? 0) >= SEVERITY[target]) {
+        plans.push({
+          ...member,
+          applied: false,
+          skipped: 'already_restricted',
+          message: `${member.name} is already ${member.status}; their account was left as it is.`,
+        });
+        continue;
+      }
+      const refused = await guard(member, GUARD_ACTION[target]);
+      plans.push(refused || { ...member, apply: true, key });
+      continue;
+    }
+    const linked = await leaderPenaltyLinkedToTeam(member.accountId, team.account_id);
     const from = LIFT_FROM[key];
     if (linked && (!from || linked === from)) {
-      const { assertCanSanctionTarget } = require('../lib/SuspendGuards');
-      await assertCanSanctionTarget({
-        actorStaffId: staffId,
-        actorAccountId: options.actorAccountId || null,
-        targetAccountId: leader.accountId,
-        action: 'restore',
-      });
-      leaderPlan = { ...leader, apply: true, key: from ? key : 'restore' };
-    } else if (options.includeLeader === true) {
-      leaderPlan = {
-        ...leader,
-        applied: false,
-        skipped: 'not_linked',
-        message: `${leader.name}'s own standing was not set together with this team, so it was left as it is. Change it from the Users tab.`,
-      };
+      const refused = await guard(member, 'restore');
+      plans.push(refused || { ...member, apply: true, key: from ? key : 'restore' });
+    } else if (explicit && scope !== 'all' && member.status !== 'active') {
+      plans.push({ ...member, applied: false, skipped: 'not_linked', message: 'Not set together with this team.' });
     }
   }
 
   const teamResult = await updateAccountStatus(team.account_id, key, staffId, { ...options, teamDirect: true });
 
-  let leaderResult = leaderPlan && !leaderPlan.apply ? leaderPlan : null;
-  if (leaderPlan?.apply) {
+  const memberResults = [];
+  for (const plan of plans) {
+    if (!plan.apply) {
+      memberResults.push(plan);
+      continue;
+    }
+    const { apply: _apply, key: planKey, ...member } = plan;
     try {
-      const applied = await updateAccountStatus(leaderPlan.accountId, leaderPlan.key, staffId, {
+      const applied = await updateAccountStatus(member.accountId, planKey, staffId, {
         ...options,
         ...viaTeam,
         teamDirect: undefined,
+        memberScope: undefined,
+        memberAccountIds: undefined,
         reason: target
-          ? `${reason} (applied together with Team ${teamName}, which you lead)`
+          ? `${reason} (applied together with Team ${teamName}, ${member.isLeader ? 'which you lead' : 'which you are a member of'})`
           : `${reason} (lifted together with Team ${teamName})`,
       });
-      leaderResult = { ...leader, applied: true, status: applied.status };
+      memberResults.push({ ...member, applied: true, status: applied.status });
       await recordAccountActivity({
         accountId: team.account_id,
-        action: `Team leader ${leader.name} set to ${applied.status} with the team${reason ? `: ${reason}` : ''}`,
-        eventCode: 'TEAM_LEADER_STANDING_CHANGED',
+        action: `Team ${member.isLeader ? 'leader' : 'member'} ${member.name} set to ${applied.status} with the team${reason ? `: ${reason}` : ''}`,
+        eventCode: member.isLeader ? 'TEAM_LEADER_STANDING_CHANGED' : 'TEAM_MEMBER_STANDING_CHANGED',
         referenceTable: 'accounts',
         referencePrefix: 'ACC',
-        referenceId: leader.accountId,
+        referenceId: member.accountId,
         actorStaffId: staffId,
-        metadata: { leaderAccountId: leader.accountId, status: applied.status, action: leaderPlan.key, reason: reason || null },
+        metadata: {
+          ...(member.isLeader ? { leaderAccountId: member.accountId } : {}),
+          memberAccountId: member.accountId,
+          memberScope: scope,
+          status: applied.status,
+          action: planKey,
+          reason: reason || null,
+        },
       });
     } catch (err) {
-      console.warn('Team leader cascade failed:', err.message);
-      leaderResult = { ...leader, applied: false, skipped: 'failed', message: err.message };
+      console.warn('Team member cascade failed:', err.message);
+      memberResults.push({ ...member, applied: false, skipped: 'failed', message: err.message });
     }
   }
+  const leaderResult = memberResults.find((row) => row.isLeader || row.skipped === 'no_leader') || null;
 
   // Owners and Admins hear about the team (a team account has no inbox of its own).
   let refreshed = null;
@@ -286,9 +401,10 @@ async function changeTeamStanding(teamAccount, key, staffId, options = {}) {
     console.warn('Team standing notice skipped:', err.message);
   }
 
-  const parts = [`Team ${teamName} set to ${teamResult.status}.`];
-  if (leaderResult?.applied) parts.push(`Leader ${leaderResult.name} set to ${leaderResult.status}.`);
-  else if (leaderResult?.message) parts.push(leaderResult.message);
+  const parts = [
+    `Team ${teamName} set to ${teamResult.status}.`,
+    ...describeMemberResults(memberResults, { scope, explicit, isLift, targetCount: targets.length }),
+  ];
   if (teamResult.banCleanup) {
     try {
       const { describeSummary } = require('./BanCleanupServices');
@@ -305,6 +421,8 @@ async function changeTeamStanding(teamAccount, key, staffId, options = {}) {
     isTeam: true,
     team: { accountId: String(team.account_id), name: teamName, status: teamResult.status },
     leader: leaderResult,
+    memberScope: scope,
+    members: memberResults,
     summary: parts.join(' '),
   };
 }
@@ -420,13 +538,23 @@ async function transferTeamOwnership(teamAccountId, input = {}, staffId = null, 
 }
 
 /**
- * A team's name and current leader (first active Owner), for staff screens that need to say who
- * a team penalty also reaches. Null when the team does not exist.
+ * A team's name, current leader (first active Owner) and active members, for staff screens that
+ * need to say who a team penalty also reaches. Null when the team does not exist.
  */
 async function describeTeamLeader(teamAccountId) {
   const team = await TeamsRepositories.getTeamStanding(teamAccountId).catch(() => null);
   if (!team || String(team.account_id) !== String(teamAccountId)) return null;
-  return { teamName: teamNameOf(team), status: team.account_status || null, leader: leaderOf(team) };
+  const leader = leaderOf(team);
+  const rows = await TeamsRepositories.listTeamMemberStandings(team.account_id).catch(() => []);
+  const members = rows.map((row) => ({
+    accountId: String(row.account_id),
+    name: row.display_name || row.handle || 'Member',
+    handle: row.handle || null,
+    role: row.role || 'Member',
+    status: String(row.status || 'Active').toLowerCase(),
+    isLeader: Boolean(leader && String(row.account_id) === leader.accountId),
+  }));
+  return { teamName: teamNameOf(team), status: team.account_status || null, leader, members };
 }
 
 module.exports = {

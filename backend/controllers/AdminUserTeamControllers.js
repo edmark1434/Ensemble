@@ -89,6 +89,11 @@ async function patchAdminAccountStatus(req, res) {
       actorAccountId: req.session?.account_id || req.session?.accountId || null,
       // Team targets only: also apply the penalty to (or lift it from) the team leader.
       includeLeader: req.body?.includeLeader === undefined ? undefined : req.body.includeLeader === true,
+      // Team targets: who else gets it (none | leader | selected | all); the team service validates.
+      memberScope: req.body?.memberScope ? String(req.body.memberScope).slice(0, 20) : undefined,
+      memberAccountIds: Array.isArray(req.body?.memberAccountIds)
+        ? req.body.memberAccountIds.slice(0, 501).map(String)
+        : undefined,
     });
     const { describeSummary } = require('../services/BanCleanupServices');
     const message = data.isTeam && data.summary

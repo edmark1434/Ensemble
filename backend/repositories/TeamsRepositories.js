@@ -103,6 +103,17 @@ async function getActiveTeamMemberAccountIds(teamAccountId) {
     WHERE t.account_id=$1 AND tm.status='Active' AND tm.deleted_at IS NULL`,
     [teamAccountId])).rows.map((row) => row.account_id);
 }
+/** Active members with their own account standing: who a staff team penalty can also reach. */
+async function listTeamMemberStandings(teamAccountId) {
+  return (await pool.query(`SELECT u.account_id,a.display_name,a.handle,a.status,tm.role
+    FROM teams t
+    JOIN team_members tm ON tm.team_id=t.team_id
+    JOIN users u ON u.user_id=tm.user_id
+    JOIN accounts a ON a.account_id=u.account_id
+    WHERE t.account_id=$1 AND tm.status='Active' AND tm.deleted_at IS NULL AND a.deleted_at IS NULL
+    ORDER BY CASE tm.role WHEN 'Owner' THEN 0 WHEN 'Admin' THEN 1 ELSE 2 END, tm.joined_at ASC NULLS LAST`,
+    [teamAccountId])).rows;
+}
 async function getTeam(teamId, accountId) {
   return (await pool.query(`SELECT t.*,a.display_name,a.handle,a.tagline,a.description,a.status AS account_status,f.path AS avatar_path, a.banner_preset,
     a.suspension_ends_at AS account_suspension_ends_at,a.ban_ends_at AS account_ban_ends_at,a.lock_ends_at AS account_lock_ends_at,
@@ -1130,5 +1141,5 @@ async function deleteTeamVideoProject(teamId, projectId) {
   return { success: true };
 }
 
-module.exports={createTeam,getUserId,isAccountVerified,isActiveTeamOwner,getTeamOwnerVerificationEligibility,getActiveTeamOwnerAccountIds,getTeamStanding,getTeamManagerAccountIds,getActiveTeamMemberAccountIds,transferOwnershipByStaff,getTeam,listTeams,getMembership,listMembers,listJoinRequests,upsertMembership,updateMembership,updateTeam,softDeleteTeam,hasActiveAssignedContract,hasActiveTeamContract,findByCode,getTeamInvitePreview,transferOwnership,wallet,getTeamTransactions,distributeTeamFunds,addTeamFunds,listMarketplacePosts,reviews,addReview,addReport,getTeamInbox,createTeamInbox,syncTeamInboxMembers,getTeamCreationEligibility,getTeamMemberLimitEligibility,listTeamTasks,createTeamTask,updateTeamTask,deleteTeamTask,listTeamVideoProjects,createTeamVideoProject,ensureTeamMembersHaveProjectAccess,deleteTeamVideoProject};
+module.exports={createTeam,getUserId,isAccountVerified,isActiveTeamOwner,getTeamOwnerVerificationEligibility,getActiveTeamOwnerAccountIds,getTeamStanding,getTeamManagerAccountIds,getActiveTeamMemberAccountIds,listTeamMemberStandings,transferOwnershipByStaff,getTeam,listTeams,getMembership,listMembers,listJoinRequests,upsertMembership,updateMembership,updateTeam,softDeleteTeam,hasActiveAssignedContract,hasActiveTeamContract,findByCode,getTeamInvitePreview,transferOwnership,wallet,getTeamTransactions,distributeTeamFunds,addTeamFunds,listMarketplacePosts,reviews,addReview,addReport,getTeamInbox,createTeamInbox,syncTeamInboxMembers,getTeamCreationEligibility,getTeamMemberLimitEligibility,listTeamTasks,createTeamTask,updateTeamTask,deleteTeamTask,listTeamVideoProjects,createTeamVideoProject,ensureTeamMembersHaveProjectAccess,deleteTeamVideoProject};
 

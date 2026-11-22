@@ -39,6 +39,15 @@ export type ModerationAccount = {
       forumTimeout: boolean;
       forumTimeoutEndsAt: string | null;
     } | null;
+    /** Active members (leader included), for "who else gets it". */
+    members?: {
+      accountId: string;
+      name: string;
+      handle: string | null;
+      role: string;
+      status: string;
+      isLeader: boolean;
+    }[];
   } | null;
   actions: Record<AccountActionId, ActionRule>;
 };
@@ -127,6 +136,9 @@ export type AccountActionInput = {
   duration?: "temporary" | "permanent";
   endsAt?: string | null;
   includeLeader?: boolean;
+  /** Team targets: who else gets it (none | leader | selected | all). */
+  memberScope?: "none" | "leader" | "selected" | "all";
+  memberAccountIds?: string[];
 };
 
 export type ModerationActionInput = {

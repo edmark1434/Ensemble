@@ -9,8 +9,12 @@ type ActionOptions = {
   reason?: string;
   punishmentId?: string;
   customDuration?: boolean;
-  /** Team targets: also apply the penalty to (or lift it from) the team leader. */
+  /** Team targets (older flag): also apply the penalty to (or lift it from) the team leader. */
   includeLeader?: boolean;
+  /** Team targets: who else gets it, or has a team-linked penalty lifted. */
+  memberScope?: 'none' | 'leader' | 'selected' | 'all';
+  /** With `memberScope: 'selected'`: the chosen active members. */
+  memberAccountIds?: string[];
 };
 
 export async function setAccountStatus(accountId: string, action: string, options?: ActionOptions) {
@@ -23,6 +27,8 @@ export async function setAccountStatus(accountId: string, action: string, option
     punishmentId: options?.punishmentId,
     customDuration: options?.customDuration,
     includeLeader: options?.includeLeader,
+    memberScope: options?.memberScope,
+    memberAccountIds: options?.memberAccountIds,
   });
   if (!res.data?.success) throw new Error(res.data?.message || 'Status update failed');
   if (!options?.silent) {
@@ -247,7 +253,7 @@ export async function runBulkAccountAction(
   kind: 'status' | 'verification',
   action: string,
   reason?: string,
-  extra?: { includeLeader?: boolean }
+  extra?: { memberScope?: 'none' | 'leader' | 'all' }
 ) {
   let ok = 0;
   let failed = 0;
@@ -256,7 +262,7 @@ export async function runBulkAccountAction(
   for (const accountId of accountIds) {
     try {
       if (kind === 'status') {
-        await setAccountStatus(accountId, action, { silent: true, reason, includeLeader: extra?.includeLeader });
+        await setAccountStatus(accountId, action, { silent: true, reason, memberScope: extra?.memberScope });
       } else {
         await setAccountVerification(accountId, action, { silent: true });
       }

@@ -731,6 +731,7 @@ async function buildAccounts({ session, viewer, subject }) {
                     forumTimeoutEndsAt: leaderAccess?.forumTimeoutEndsAt || null,
                   }
                 : null,
+              members: team.members || [],
             }
           : null,
         actions: accountActionsFor({ session, viewer, row, summary, isTeam, team, leaderAccess, subject }),
@@ -908,6 +909,9 @@ function standingOptionsFrom(input = {}) {
     duration: custom || input.duration ? (input.duration === 'permanent' ? 'permanent' : 'temporary') : undefined,
     endsAt: input.endsAt ? String(input.endsAt) : undefined,
     includeLeader: input.includeLeader === undefined ? undefined : input.includeLeader === true,
+    // Team targets: who else gets it (none | leader | selected | all), checked by TeamSanctionServices.
+    memberScope: input.memberScope ? String(input.memberScope).slice(0, 20) : undefined,
+    memberAccountIds: Array.isArray(input.memberAccountIds) ? input.memberAccountIds.slice(0, 501).map(String) : undefined,
   };
 }
 
