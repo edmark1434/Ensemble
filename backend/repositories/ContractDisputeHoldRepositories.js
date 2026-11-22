@@ -10,6 +10,8 @@
  *   dispute closed, nothing waiting → open a continue-or-end question (`contract_dispute_decisions`),
  *                                   still on hold; a deleted case resumes straight away
  *   both continue / nobody ends it in time → resume: every clock moves forward by the hold time
+ *                                   (one side for continuing, the other silent → the silent side
+ *                                   first gets one extension, `autoContinueDecision`)
  *   either ends it                 → cancelled under the cancellation rules (services layer)
  *   case reopened / contract ended → a pending question is superseded
  *
@@ -35,6 +37,12 @@ const ENDED_SQL_LIST = ENDED_CONTRACT_STATUSES.map((s) => `'${s}'`).join(', ');
 const DECISION_WINDOW_HOURS = 72;
 /** A reminder goes to parties who have not chosen when this little time is left. */
 const DECISION_REMINDER_HOURS = 24;
+/**
+ * When the deadline passes with one side for continuing and the other silent, the silent side
+ * gets this much more time, once (`extended_at`), before the contract continues. Longer than
+ * DECISION_REMINDER_HOURS so the second reminder lands later, not right away.
+ */
+const DECISION_EXTENSION_HOURS = 48;
 
 const DECISION_SIDES = ['client', 'freelancer'];
 const DECISION_CHOICES = ['continue', 'end'];
@@ -440,7 +448,27 @@ async function applyDecisionChoice({ contractId, side, choice, actorAccountId, c
     });
 }
 
-/** Nobody ended the contract in time: it continues. Null if the question was already settled. */
+/**
+ * The side that has not answered while the other chose to continue, or null (both silent, or
+ * both answered). An `end` choice never stays pending, so only `continue` or null appear here.
+ */
+function silentSideAgainstContinue(decision) {
+    const client = decision.client_choice || null;
+    const freelancer = decision.freelancer_choice || null;
+    if (client === 'continue' && !freelancer) return 'freelancer';
+    if (freelancer === 'continue' && !client) return 'client';
+    return null;
+}
+
+/**
+ * The deadline passed without anyone ending the contract. Null if the question was already
+ * settled or is not due.
+ *   one side chose continue, the other is silent, not yet extended
+ *       → the silent side gets DECISION_EXTENSION_HOURS more, once (reminder re-armed)
+ *       → { outcome: 'extended', decision, silentSide }
+ *   otherwise (both silent, or the extension also ran out)
+ *       → it continues → { outcome: 'continued', decision, resumed }
+ */
 async function autoContinueDecision(decisionId, contractId) {
     return withTransaction(null, async (client) => {
         const contract = await lockContract(client, contractId);
@@ -452,8 +480,25 @@ async function autoContinueDecision(decisionId, contractId) {
             [pending.decision_id]
         );
         if (!due.rows[0]?.due) return null;
+
+        const silentSide = silentSideAgainstContinue(pending);
+        // No `extended_at` key: migration 1830300000000 has not run; continue as before.
+        const canExtend = Object.prototype.hasOwnProperty.call(pending, 'extended_at') && !pending.extended_at;
+        if (silentSide && canExtend) {
+            const extended = await client.query(
+                `UPDATE contract_dispute_decisions
+                 SET decide_by = LOCALTIMESTAMP + ($2 || ' hours')::interval,
+                     extended_at = LOCALTIMESTAMP,
+                     reminded_at = NULL
+                 WHERE decision_id = $1 AND status = 'pending'
+                 RETURNING *`,
+                [pending.decision_id, String(DECISION_EXTENSION_HOURS)]
+            );
+            if (extended.rows[0]) return { outcome: 'extended', decision: extended.rows[0], silentSide };
+        }
+
         const resumed = await resolveDecisionContinued(client, pending, 'auto_continued');
-        return { decision: pending, resumed };
+        return { outcome: 'continued', decision: pending, resumed };
     });
 }
 
@@ -701,6 +746,8 @@ async function decisionsForContracts(contracts, viewerAccountIds) {
             id: q.decision_id,
             decideBy: q.decide_by,
             createdAt: q.created_at,
+            // Set once the silent side was given extra time; the next deadline is final.
+            extendedAt: q.extended_at || null,
             viewerSide,
             viewerChoice: viewerSide ? q[`${viewerSide}_choice`] || null : null,
             otherChoice: viewerSide ? q[`${otherSide}_choice`] || null : null,
@@ -743,6 +790,7 @@ async function getContractAfterCase(disputeId) {
                 q.freelancer_choice,
                 q.freelancer_chosen_at,
                 q.decide_by,
+                q.extended_at,
                 q.resolution,
                 q.resolved_at,
                 q.created_at
@@ -773,6 +821,7 @@ async function getContractAfterCase(disputeId) {
                     freelancerChoice: row.freelancer_choice || null,
                     freelancerChosenAt: row.freelancer_chosen_at || null,
                     decideBy: row.decide_by,
+                    extendedAt: row.extended_at || null,
                     resolution: row.resolution || null,
                     resolvedAt: row.resolved_at || null,
                     createdAt: row.created_at,
@@ -787,6 +836,7 @@ async function getContractAfterCase(disputeId) {
 
 module.exports = {
     DECISION_WINDOW_HOURS,
+    DECISION_EXTENSION_HOURS,
     getContractAfterCase,
     syncContractDisputeHold,
     lockContract,

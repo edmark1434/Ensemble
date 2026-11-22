@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import api from '@/lib/axios';
+import { useStaffLive } from '@/lib/staffLive';
 import type { WarningDesk } from '@/lib/warningCatalog';
 import {
   groupedPunishments,
@@ -44,9 +45,20 @@ export function PunishmentPresetFields({
 }) {
   const [rows, setRows] = useState<PunishmentPreset[]>(() => punishmentsForDesk(desk, kind));
   const [live, setLive] = useState(false);
+  // Catalog edits by an admin reach open pickers. The parent hears about the chosen preset
+  // only when it really changed, so a custom duration is never reset by a refresh.
+  const [catalogToken, setCatalogToken] = useState(0);
+  const announced = useRef<string | null>(null);
+  useStaffLive(['policy'], () => setCatalogToken((t) => t + 1));
 
   useEffect(() => {
     let cancelled = false;
+    const announce = (preset: PunishmentPreset | null) => {
+      const key = preset ? JSON.stringify(preset) : '';
+      if (catalogToken > 0 && announced.current === key) return;
+      announced.current = key;
+      onPreset?.(preset);
+    };
     const load = async () => {
       try {
         const res = await api.get('/api/admin/punishment-catalog', { params: { desk, kind } }).catch((err) => {
@@ -61,14 +73,14 @@ export function PunishmentPresetFields({
         if (!cancelled) {
           setRows(next);
           setLive(true);
-          onPreset?.(next.find((row: PunishmentPreset) => row.id === punishmentId) || null);
+          announce(next.find((row: PunishmentPreset) => row.id === punishmentId) || null);
         }
       } catch {
         if (!cancelled) {
           const fallback = punishmentsForDesk(desk, kind);
           setRows(fallback);
           setLive(false);
-          onPreset?.(fallback.find((row) => row.id === punishmentId) || null);
+          announce(fallback.find((row) => row.id === punishmentId) || null);
         }
       }
     };
@@ -76,7 +88,9 @@ export function PunishmentPresetFields({
     return () => {
       cancelled = true;
     };
-  }, [desk, kind]);
+    // punishmentId is read at load time only; picking a row reports it through onPunishmentId.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [desk, kind, catalogToken]);
 
   const groups = useMemo(
     () => (live ? groupsFor(rows, kind, desk) : groupsFor(punishmentsForDesk(desk, kind), kind, desk)),
@@ -92,8 +106,10 @@ export function PunishmentPresetFields({
           value={punishmentId}
           onChange={(event) => {
             const nextId = event.target.value;
+            const nextPreset = rows.find((row) => row.id === nextId) || null;
+            announced.current = nextPreset ? JSON.stringify(nextPreset) : '';
             onPunishmentId(nextId);
-            onPreset?.(rows.find((row) => row.id === nextId) || null);
+            onPreset?.(nextPreset);
           }}
           className={fieldClass}
           required

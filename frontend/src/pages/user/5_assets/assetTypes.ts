@@ -1,7 +1,46 @@
 export type AssetType = "image" | "video" | "audio" | "template";
 export type AssetStatus = "draft" | "published";
 export type AssetProcessingStatus = "processing" | "ready" | "failed";
-export type AssetReviewStatus = "pending" | "approved" | "rejected" | "delisted";
+export type AssetReviewStatus = "pending" | "scheduled" | "approved" | "rejected" | "delisted" | "draft";
+
+/** One entry in the seller ↔ review team conversation on a submission. */
+export type SubmissionMessageKind =
+  | "submitted"
+  | "resubmitted"
+  | "reply"
+  | "approved"
+  | "scheduled"
+  | "published"
+  | "rejected"
+  | "delisted"
+  | "rereview";
+
+export interface SubmissionMessage {
+  id: string;
+  kind: SubmissionMessageKind;
+  authorType: "seller" | "staff" | "system";
+  authorName: string;
+  authorRole: string | null;
+  body: string | null;
+  publishAt: string | null;
+  createdAt: string;
+}
+
+/** `GET /api/assets/:id/submission` (owner only). */
+export interface AssetSubmission {
+  listingId: string;
+  number: string;
+  status: AssetReviewStatus;
+  publishAt: string | null;
+  rejectionReason: string | null;
+  moderationNote: string | null;
+  reviewedAt: string | null;
+  submittedAt: string;
+  trashed: boolean;
+  canResubmit: boolean;
+  canReply: boolean;
+  messages: SubmissionMessage[];
+}
 
 export interface AssetThumbnail {
   media_asset_id: string;
@@ -37,6 +76,10 @@ export interface AssetRecord {
   status: AssetStatus;
   review_status?: AssetReviewStatus | null;
   rejection_reason?: string | null;
+  /** Owner only: delist / re-review reason on the latest listing. */
+  review_note?: string | null;
+  /** Owner only: go-live time of a scheduled listing (or when it went live). */
+  review_publish_at?: string | null;
   trashed_at?: string | null;
   created_at: string;
   updated_at: string;

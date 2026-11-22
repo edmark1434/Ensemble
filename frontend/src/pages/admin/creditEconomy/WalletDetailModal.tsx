@@ -14,6 +14,7 @@ import {
   X,
 } from 'lucide-react';
 import { peekStaffGet, staffGet } from '@/lib/staffCache';
+import { useStaffLive } from '@/lib/staffLive';
 import { TeamOverviewModal, UserOverviewModal } from '../userTeam/components/AccountModals';
 import type { PlatformTeam, PlatformUserAccount } from '../userTeam/userTeamTypes';
 import { AdjustCreditsDialog, HoldCreditsDialog, ReleaseHoldDialog } from './CreditActionDialogs';
@@ -93,18 +94,23 @@ export default function WalletDetailModal({
   const [profileUser, setProfileUser] = useState<PlatformUserAccount | null>(null);
   const [profileTeam, setProfileTeam] = useState<PlatformTeam | null>(null);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError('');
+  const load = useCallback(async (silent = false) => {
+    if (!silent) {
+      setLoading(true);
+      setError('');
+    }
     try {
       const res = await staffGet(url);
-      if (res.data?.success) setDetail(res.data.data);
-      else setError(res.data?.message || 'Could not load this wallet.');
+      if (res.data?.success) {
+        setDetail(res.data.data);
+        setError('');
+      } else if (!silent) setError(res.data?.message || 'Could not load this wallet.');
     } catch (err) {
+      if (silent) return;
       const message = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
       setError(message || 'Could not load this wallet.');
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, [url]);
 
@@ -116,6 +122,10 @@ export default function WalletDetailModal({
     setProfileError('');
     void load();
   }, [load]);
+
+  // Live: balance, holds, adjustments and cashouts update while the wallet is open (the
+  // transactions list follows on its own). Open dialogs keep what was typed.
+  useStaffLive(['economy', 'accounts', 'teams', 'disputes', 'jobs'], () => load(true), { delayMs: 1000 });
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {

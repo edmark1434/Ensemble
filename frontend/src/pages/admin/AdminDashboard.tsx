@@ -20,9 +20,10 @@ import {
 import { Link } from 'react-router-dom';
 import useGlobalState from '@/lib/global_state';
 import { peekStaffGet, staffGet } from '@/lib/staffCache';
+import { useStaffLive } from '@/lib/staffLive';
 import ConsolePageSkeleton from '@/pages/staff/ConsolePageSkeleton';
 import { useCountUp } from '@/pages/staff/consoleMotion';
-import type { AdminDashboardData, PlatformAlert } from './adminDashboardTypes';
+import type { AdminDashboardData, MemberHealth, PlatformAlert } from './adminDashboardTypes';
 
 const DASHBOARD_URL = '/api/admin/dashboard-overview';
 /** Background refresh while the tab is visible. */
@@ -117,11 +118,15 @@ export default function AdminDashboard() {
 
   useEffect(() => {
     void loadData();
-    const timer = window.setInterval(() => {
-      if (!document.hidden) void loadData();
-    }, AUTO_REFRESH_MS);
-    return () => window.clearInterval(timer);
   }, [loadData]);
+
+  // Live: re-read on any change it summarizes. "Team on duty" moves with staff heartbeats,
+  // which send no event, so a slow poll stays.
+  useStaffLive(
+    ['accounts', 'teams', 'economy', 'marketplace', 'jobs', 'forum', 'moderation', 'staff', 'tickets', 'disputes', 'reports'],
+    () => loadData(),
+    { pollMs: AUTO_REFRESH_MS },
+  );
 
   if (loading && !data) return <ConsolePageSkeleton tiles={6} tabs={false} />;
 
@@ -552,20 +557,310 @@ function BreakdownCard({ title, rows, barTone }: { title: string; rows: { label:
   );
 }
 
+/** Share of `total` as a label: never "0%" for a real count, never over 100. */
+function shareLabel(count: number, total: number) {
+  if (!total || !count) return '0%';
+  const pct = (count / total) * 100;
+  return pct < 1 ? '<1%' : `${Math.min(100, Math.round(pct))}%`;
+}
+
+const STANDING_ROWS: { key: keyof MemberHealth['status']; label: string; dot: string; bar: string }[] = [
+  { key: 'active', label: 'Active', dot: 'bg-emerald-400', bar: 'bg-emerald-400/70' },
+  { key: 'suspended', label: 'Suspended', dot: 'bg-amber-400', bar: 'bg-amber-400/80' },
+  { key: 'locked', label: 'Locked', dot: 'bg-zinc-300', bar: 'bg-zinc-300/80' },
+  { key: 'banned', label: 'Banned', dot: 'bg-rose-400', bar: 'bg-rose-400/80' },
+  { key: 'deactivated', label: 'Deactivated', dot: 'bg-zinc-500', bar: 'bg-zinc-500/80' },
+];
+
+function SectionLabel({ children }: { children: ReactNode }) {
+  return (
+    <p className="mb-2.5 mt-5 border-t border-white/[0.06] pt-4 text-[10px] font-semibold uppercase tracking-wide text-zinc-600">
+      {children}
+    </p>
+  );
+}
+
+function Meter({ label, hint, value, total, tone }: { label: string; hint?: string; value: number; total: number; tone: string }) {
+  const pct = total ? Math.min(100, (value / total) * 100) : 0;
+  return (
+    <div>
+      <div className="flex items-baseline justify-between gap-2 text-sm">
+        <span className="text-zinc-400">
+          {label}
+          {hint ? <span className="ml-1.5 text-[11px] text-zinc-600">{hint}</span> : null}
+        </span>
+        <span className="shrink-0 tabular-nums">
+          <span className="font-semibold text-white">{value.toLocaleString()}</span>
+          <span className="text-[11px] text-zinc-600"> / {total.toLocaleString()}</span>
+        </span>
+      </div>
+      <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-white/[0.04]">
+        <div className={`console-bar h-full rounded-full ${tone}`} style={{ width: `${pct}%` }} />
+      </div>
+    </div>
+  );
+}
+
+function PulseTile({
+  label,
+  value,
+  detail,
+  detailTone = 'text-zinc-600',
+  valueTone = 'text-white',
+  to,
+}: {
+  label: string;
+  value: string;
+  detail: string;
+  detailTone?: string;
+  valueTone?: string;
+  to?: string;
+}) {
+  const body = (
+    <>
+      <p className="text-[11px] text-zinc-500">{label}</p>
+      <p className={`mt-0.5 text-lg font-bold tabular-nums ${valueTone}`}>{value}</p>
+      <p className={`truncate text-[11px] ${detailTone}`}>{detail}</p>
+    </>
+  );
+  const box = 'block rounded-xl border border-white/[0.04] bg-white/[0.02] px-3 py-2.5';
+  return to ? (
+    <Link to={to} className={`${box} transition-colors hover:border-white/[0.1] hover:bg-white/[0.04]`}>
+      {body}
+    </Link>
+  ) : (
+    <div className={box}>{body}</div>
+  );
+}
+
+/**
+ * Members at a glance: every standing (zeros included, each opening the filtered Users list),
+ * identity and profile coverage, and this week's signups, activity and enforcement.
+ */
+function MembersCard({ health }: { health: MemberHealth }) {
+  const { total, status, verification, profile, pulse } = health;
+  const rows = [
+    ...STANDING_ROWS.map((row) => ({ ...row, count: status[row.key] })),
+    ...(status.other ? [{ key: 'other' as const, label: 'Other', dot: 'bg-sky-400', bar: 'bg-sky-400/70', count: status.other }] : []),
+  ];
+  const restricted = status.suspended + status.locked + status.banned;
+  const newDelta = pulse ? pulse.newThisWeek - pulse.newLastWeek : 0;
+
+  return (
+    <Panel
+      title="Members"
+      icon={Users}
+      iconTone="text-sky-400"
+      subtitle={`${total.toLocaleString()} members · ${
+        restricted ? `${restricted.toLocaleString()} restricted` : 'everyone in good standing'
+      }`}
+      action={<PanelLink to="/admin/user-team?tab=users">Users</PanelLink>}
+    >
+      <div
+        className="mt-4 flex h-2 gap-0.5 overflow-hidden rounded-full bg-white/[0.04]"
+        role="img"
+        aria-label={rows.map((row) => `${row.label} ${row.count}`).join(', ')}
+      >
+        {rows
+          .filter((row) => row.count > 0)
+          .map((row) => (
+            <div
+              key={row.key}
+              className={`console-bar h-full first:rounded-l-full last:rounded-r-full ${row.bar}`}
+              style={{ width: `${total ? (row.count / total) * 100 : 0}%`, minWidth: '4px' }}
+              title={`${row.label}: ${row.count.toLocaleString()}`}
+            />
+          ))}
+      </div>
+
+      <ul className="mt-3 space-y-0.5">
+        {rows.map((row) => {
+          const content = (
+            <>
+              <span className={`h-2 w-2 shrink-0 rounded-full ${row.count ? row.dot : 'bg-white/10'}`} />
+              <span className={`flex-1 ${row.count ? 'text-zinc-300' : 'text-zinc-600'}`}>{row.label}</span>
+              <span className={`font-semibold tabular-nums ${row.count ? 'text-white' : 'text-zinc-700'}`}>
+                {row.count.toLocaleString()}
+              </span>
+              <span className="w-9 text-right text-[11px] tabular-nums text-zinc-600">{shareLabel(row.count, total)}</span>
+            </>
+          );
+          const rowClass = 'flex items-center gap-2.5 rounded-lg px-2 py-1.5 text-sm';
+          return (
+            <li key={row.key}>
+              {row.key === 'other' || !row.count ? (
+                <div className={rowClass}>{content}</div>
+              ) : (
+                <Link
+                  to={`/admin/user-team?tab=users&status=${row.key}`}
+                  className={`${rowClass} transition-colors hover:bg-white/[0.03]`}
+                  title={`Show ${row.label.toLowerCase()} members`}
+                >
+                  {content}
+                </Link>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+
+      <SectionLabel>Trust & profiles</SectionLabel>
+      <div className="space-y-3">
+        <Meter label="ID verified" value={verification.verified} total={total} tone="bg-emerald-400/70" />
+        <Meter label="Complete profiles" hint="photo + tagline" value={profile.complete} total={total} tone="bg-sky-400/70" />
+      </div>
+      {verification.pending ? (
+        <Link
+          to="/admin/moderation?tab=cases&queue=identity"
+          className="group mt-3 flex items-center gap-2 rounded-lg border border-amber-500/20 bg-amber-500/[0.06] px-3 py-2 text-xs text-amber-100 transition-colors hover:bg-amber-500/10"
+        >
+          <BadgeCheck className="h-3.5 w-3.5 shrink-0 text-amber-300" />
+          <span className="flex-1">
+            {verification.pending.toLocaleString()} waiting for ID review
+          </span>
+          <ArrowRight className="h-3 w-3 transition-transform duration-200 group-hover:translate-x-0.5" />
+        </Link>
+      ) : null}
+
+      {pulse ? (
+        <>
+          <SectionLabel>Last 7 days</SectionLabel>
+          <div className="grid grid-cols-2 gap-2">
+            <PulseTile
+              label="New members"
+              value={`+${pulse.newThisWeek.toLocaleString()}`}
+              detail={
+                !pulse.newThisWeek && !pulse.newLastWeek
+                  ? 'None the week before either'
+                  : newDelta === 0
+                    ? 'Same as the week before'
+                    : `${newDelta > 0 ? '+' : ''}${newDelta.toLocaleString()} vs the week before`
+              }
+              detailTone={newDelta > 0 ? 'text-emerald-300/80' : newDelta < 0 ? 'text-amber-300/80' : 'text-zinc-600'}
+              to="/admin/user-team?tab=users"
+            />
+            <PulseTile
+              label="Active members"
+              value={pulse.activeThisWeek.toLocaleString()}
+              detail={`${shareLabel(pulse.activeThisWeek, total)} of all members`}
+              to="/admin/analytics?tab=members"
+            />
+            <PulseTile
+              label="With active warnings"
+              value={pulse.withActiveWarnings.toLocaleString()}
+              valueTone={pulse.withActiveWarnings ? 'text-amber-200' : 'text-white'}
+              detail={pulse.withActiveWarnings ? 'Carrying warning points' : 'No running warnings'}
+              to="/admin/user-team?tab=restrictions"
+            />
+            <PulseTile
+              label="Forum timeouts"
+              value={pulse.forumTimeouts.toLocaleString()}
+              valueTone={pulse.forumTimeouts ? 'text-amber-200' : 'text-white'}
+              detail={pulse.forumTimeouts ? 'Running now' : 'Nobody timed out'}
+              to="/admin/user-team?tab=restrictions"
+            />
+          </div>
+        </>
+      ) : null}
+    </Panel>
+  );
+}
+
+/** Staff per role with who is online now, and which desks have nobody on. */
+function StaffCoverageCard({ data }: { data: AdminDashboardData }) {
+  const roles = data.breakdowns.staffByRole;
+  const total = roles.reduce((sum, row) => sum + row.count, 0);
+  const onlineByRole = new Map<string, number>();
+  for (const member of data.staffRoster) {
+    if (member.isOnline) onlineByRole.set(member.role, (onlineByRole.get(member.role) || 0) + 1);
+  }
+  const online = [...onlineByRole.values()].reduce((sum, n) => sum + n, 0);
+  const uncovered = roles.filter((row) => !onlineByRole.get(row.role));
+
+  return (
+    <Panel
+      title="Staff by role"
+      icon={UserCog}
+      iconTone="text-rose-400"
+      subtitle={`${total.toLocaleString()} staff · ${online.toLocaleString()} online now`}
+      action={<PanelLink to="/admin/moderation?tab=management&section=moderators">Manage</PanelLink>}
+    >
+      <ul className="mt-4 space-y-3">
+        {roles.map((row) => {
+          const on = onlineByRole.get(row.role) || 0;
+          return (
+            <li key={row.role}>
+              <div className="flex items-center gap-2 text-sm">
+                <span className={`rounded-full border px-2 py-0.5 text-[10px] ${rolePill(row.role)}`}>{row.label}</span>
+                <span className="flex-1" />
+                <span
+                  className={`flex items-center gap-1.5 text-[11px] ${on ? 'text-emerald-300' : 'text-zinc-600'}`}
+                  title={on ? `${on} online now` : 'Nobody online'}
+                >
+                  <span className={`h-1.5 w-1.5 rounded-full ${on ? 'bg-emerald-400' : 'bg-zinc-700'}`} />
+                  {on ? `${on} online` : 'offline'}
+                </span>
+                <span className="w-6 text-right font-semibold tabular-nums text-white">{row.count.toLocaleString()}</span>
+              </div>
+              <div className="mt-1.5 flex h-1.5 overflow-hidden rounded-full bg-white/[0.04]">
+                <div
+                  className="console-bar h-full bg-emerald-400/60"
+                  style={{ width: `${total ? (on / total) * 100 : 0}%` }}
+                />
+                <div
+                  className="console-bar h-full bg-rose-400/40"
+                  style={{ width: `${total ? ((row.count - on) / total) * 100 : 0}%` }}
+                />
+              </div>
+            </li>
+          );
+        })}
+        {roles.length === 0 && <li className="py-4 text-center text-sm text-zinc-500">No staff accounts.</li>}
+      </ul>
+      {roles.length ? (
+        <p
+          className={`mt-5 flex items-start gap-2 rounded-lg border px-3 py-2 text-xs ${
+            uncovered.length
+              ? 'border-amber-500/20 bg-amber-500/[0.06] text-amber-100'
+              : 'border-emerald-500/20 bg-emerald-500/[0.06] text-emerald-100'
+          }`}
+        >
+          {uncovered.length ? (
+            <AlertTriangle className="mt-px h-3.5 w-3.5 shrink-0 text-amber-300" />
+          ) : (
+            <CheckCircle2 className="mt-px h-3.5 w-3.5 shrink-0 text-emerald-300" />
+          )}
+          {uncovered.length
+            ? `Nobody online for ${uncovered.map((row) => row.label).join(', ')}.`
+            : 'Every role has someone online.'}
+        </p>
+      ) : null}
+      <p className="mt-2 flex items-center gap-3 text-[11px] text-zinc-600">
+        <span className="flex items-center gap-1.5">
+          <span className="h-1.5 w-3 rounded-full bg-emerald-400/60" /> Online
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="h-1.5 w-3 rounded-full bg-rose-400/40" /> Offline
+        </span>
+      </p>
+    </Panel>
+  );
+}
+
 function BreakdownGrid({ data }: { data: AdminDashboardData }) {
   const { kpis, breakdowns } = data;
   return (
     <div className="grid gap-6 lg:grid-cols-3">
-      <BreakdownCard
-        title="Members by status"
-        barTone="bg-sky-400/60"
-        rows={breakdowns.usersByStatus.map((r) => ({ label: r.status, count: r.count }))}
-      />
-      <BreakdownCard
-        title="Staff by role"
-        barTone="bg-rose-400/60"
-        rows={breakdowns.staffByRole.map((r) => ({ label: r.label, count: r.count }))}
-      />
+      {data.memberHealth ? (
+        <MembersCard health={data.memberHealth} />
+      ) : (
+        <BreakdownCard
+          title="Members by status"
+          barTone="bg-sky-400/60"
+          rows={breakdowns.usersByStatus.map((r) => ({ label: r.status, count: r.count }))}
+        />
+      )}
+      <StaffCoverageCard data={data} />
       <Panel title="Latest signups" icon={UserPlus} iconTone="text-sky-400" action={<PanelLink to="/admin/user-team?tab=users">Users</PanelLink>}>
         <ul className="mt-4 space-y-1.5 text-sm">
           {data.recentSignups.slice(0, 8).map((s) => (

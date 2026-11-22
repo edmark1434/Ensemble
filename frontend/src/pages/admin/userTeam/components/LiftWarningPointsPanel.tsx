@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ArrowUpCircle, ChevronDown, Loader2 } from 'lucide-react';
+import { useStaffLive } from '@/lib/staffLive';
 import {
   getWarningLiftPreview,
   handleAccountActionError,
@@ -41,15 +42,17 @@ export function LiftWarningPointsPanel({
   const [reason, setReason] = useState('');
   const [saving, setSaving] = useState(false);
 
-  const load = async () => {
-    setLoading(true);
+  const load = async (silent = false) => {
+    if (!silent) setLoading(true);
     try {
       setPreview(await getWarningLiftPreview(accountId));
     } catch (err) {
+      // A failed live refresh keeps the open form as it is.
+      if (silent) return;
       handleAccountActionError(err);
       setOpen(false);
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
 
@@ -57,6 +60,9 @@ export function LiftWarningPointsPanel({
     if (open) void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, accountId]);
+
+  // Live: points that expire or are lifted elsewhere update the limits; typed values stay.
+  useStaffLive(['accounts', 'moderation'], () => load(true), { enabled: open, delayMs: 1000 });
 
   const scoped = activeWarnings.find((w) => w.violationId === scope) || null;
   const available = scoped ? scoped.points : preview?.points ?? 0;

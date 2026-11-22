@@ -96,7 +96,7 @@ async function updateJobController(req, res) {
         res.status(200).json({ success: true, data: updated, message: 'Job updated.' });
     } catch (err) {
         console.error('Error in updateJobController:', err);
-        res.status(400).json({ success: false, message: err.message || 'Internal Server Error' });
+        res.status(err.statusCode === 403 ? 403 : 400).json({ success: false, message: err.message || 'Internal Server Error', code: err.code });
     }
 }
 

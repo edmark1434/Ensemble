@@ -85,7 +85,7 @@ The engine never auto-bans, never seizes the wallet, never cancels live work.
 |---|---|---|
 | Guest | No | Browse only. |
 | User account (enthusiast / freelancer / client — same account) | Yes | One point total covers every role. |
-| Team account | No user ring | The **acting user** is checked. A Restricted member cannot post a team job. A team can still be suspended/locked/banned as an account. A warning staff aim at a team is issued to its **leader** (active Owner) and listed on the team's record ([punishment-system.md](punishment-system.md) §8.10). |
+| Team account | No user ring | The **acting user** is checked. A Restricted member cannot post a team job. A team can still be suspended/locked/banned as an account. A warning staff aim at a team is issued to the people staff pick (the **leader** by default, specific members or all members) and listed on the team's record ([punishment-system.md](punishment-system.md) §8.10). |
 | Staff | No | Staff `performanceScore` is workload, not this system. |
 
 New users start with **0 active points** and full access. Being new is not a crime.
@@ -98,7 +98,7 @@ New users start with **0 active points** and full access. Being new is not a cri
 2. They pick a **named warning**. The picker loads `/api/admin/warning-catalog` or `/api/moderator/warning-catalog`.
 3. Points and duration are locked to that row.
 4. They write **case notes** (required). That is what happened on this case, not a custom score.
-5. Backend resolves the row from `warning_defs` (fallback: hardcoded seed). Client-sent points and duration are ignored. The row must be on the issuer's desk (`desks`), checked on the server, not just in the picker: Admin and Support may issue every row; a specialist moderator gets 403 for rows outside their desk. Teams and staff have no Platform Merit. A warning on a team account is issued to the team's leader instead (`violations.team_account_id` names the team; 409 `TEAM_NO_LEADER` when it has none); staff accounts are refused (400 `WARNING_MEMBER_ONLY`).
+5. Backend resolves the row from `warning_defs` (fallback: hardcoded seed). Client-sent points and duration are ignored. The row must be on the issuer's desk (`desks`), checked on the server, not just in the picker: Admin and Support may issue every row; a specialist moderator gets 403 for rows outside their desk. Teams and staff have no Platform Merit. A warning on a team account is issued to each person in `memberScope` instead (leader by default; `violations.team_account_id` names the team; 422 `TEAM_NO_LEADER` when the leader is picked and there is none); staff accounts are refused (400 `WARNING_MEMBER_ONLY`).
 6. A `violations` row is inserted: `status = active`, `points` copied, `expires_at` set from the catalog duration.
 7. Activity log `ACCOUNT_WARNED`. User is notified (`account:warning`).
 8. Active points pick the §8 threshold. Auto-suspend rows fire once per crossing.

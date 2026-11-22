@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { ChevronLeft, ChevronRight, Download, Loader2, Search } from 'lucide-react';
 import api from '@/lib/axios';
 import { staffGet } from '@/lib/staffCache';
+import { useStaffLive } from '@/lib/staffLive';
 import { showErrorToast, showSuccessToast } from '@/components/utility/toast.ts';
 import type {
   AnalyticsRange,
@@ -250,21 +251,30 @@ export default function FinanceLedger({
   const requestParams = useMemo(() => ({ ...filterParams, page: String(page), limit: String(PAGE_SIZE) }), [filterParams, page]);
   const requestKey = `${kind}?${new URLSearchParams(requestParams).toString()}`;
 
+  // Live: new top-ups, invoices, subscriptions and cashouts appear on the page shown. A failed
+  // live re-read keeps the rows already on screen.
+  const [liveToken, setLiveToken] = useState(0);
+  const shownKey = useRef<string | null>(null);
+  useStaffLive(['economy'], () => setLiveToken((n) => n + 1), { delayMs: 1500 });
+
   useEffect(() => {
     let cancelled = false;
+    const keepShown = shownKey.current === requestKey;
     staffGet(`${BASE}/${kind}`, requestParams)
       .then((res) => {
         if (cancelled) return;
-        if (res.data?.success) setResult({ key: requestKey, data: res.data.data });
-        else setFailure({ key: requestKey, message: res.data?.message || 'Could not load records.' });
+        if (res.data?.success) {
+          shownKey.current = requestKey;
+          setResult({ key: requestKey, data: res.data.data });
+        } else if (!keepShown) setFailure({ key: requestKey, message: res.data?.message || 'Could not load records.' });
       })
       .catch((err) => {
-        if (!cancelled) setFailure({ key: requestKey, message: err?.response?.data?.message || 'Could not load records.' });
+        if (!cancelled && !keepShown) setFailure({ key: requestKey, message: err?.response?.data?.message || 'Could not load records.' });
       });
     return () => {
       cancelled = true;
     };
-  }, [kind, requestKey, requestParams]);
+  }, [kind, requestKey, requestParams, liveToken]);
 
   const current = result?.data;
   const loading = result?.key !== requestKey && failure?.key !== requestKey;

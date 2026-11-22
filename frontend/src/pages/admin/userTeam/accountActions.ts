@@ -9,8 +9,10 @@ type ActionOptions = {
   reason?: string;
   punishmentId?: string;
   customDuration?: boolean;
-  /** Team targets: also apply the penalty to (or lift it from) the team leader. */
-  includeLeader?: boolean;
+  /** Team targets: who else gets it, or has a team-linked penalty lifted (never the team alone). */
+  memberScope?: 'leader' | 'selected' | 'all';
+  /** With `memberScope: 'selected'`: the chosen active members. */
+  memberAccountIds?: string[];
 };
 
 export async function setAccountStatus(accountId: string, action: string, options?: ActionOptions) {
@@ -22,7 +24,8 @@ export async function setAccountStatus(accountId: string, action: string, option
     reason: options?.reason,
     punishmentId: options?.punishmentId,
     customDuration: options?.customDuration,
-    includeLeader: options?.includeLeader,
+    memberScope: options?.memberScope,
+    memberAccountIds: options?.memberAccountIds,
   });
   if (!res.data?.success) throw new Error(res.data?.message || 'Status update failed');
   if (!options?.silent) {
@@ -98,7 +101,19 @@ export async function freezeAccountCredits(
 
 export async function warnAccount(
   accountId: string,
-  payload: { warningId?: string; type?: string; reason?: string; points?: number; expiresAt?: string; endsAt?: string | null; duration?: 'temporary' | 'permanent'; days?: number | null },
+  payload: {
+    warningId?: string;
+    type?: string;
+    reason?: string;
+    points?: number;
+    expiresAt?: string;
+    endsAt?: string | null;
+    duration?: 'temporary' | 'permanent';
+    days?: number | null;
+    /** Team targets: who gets the warning (teams have no merit, so it always lands on people). */
+    memberScope?: 'leader' | 'selected' | 'all';
+    memberAccountIds?: string[];
+  },
   options?: ActionOptions
 ) {
   const res = await api.post(`/api/admin/accounts/${accountId}/warn`, payload);
@@ -247,7 +262,7 @@ export async function runBulkAccountAction(
   kind: 'status' | 'verification',
   action: string,
   reason?: string,
-  extra?: { includeLeader?: boolean }
+  extra?: { memberScope?: 'leader' | 'all' }
 ) {
   let ok = 0;
   let failed = 0;
@@ -256,7 +271,7 @@ export async function runBulkAccountAction(
   for (const accountId of accountIds) {
     try {
       if (kind === 'status') {
-        await setAccountStatus(accountId, action, { silent: true, reason, includeLeader: extra?.includeLeader });
+        await setAccountStatus(accountId, action, { silent: true, reason, memberScope: extra?.memberScope });
       } else {
         await setAccountVerification(accountId, action, { silent: true });
       }

@@ -1,5 +1,5 @@
 import React from "react";
-import { Heart, Star, Pencil, Trash2, CheckCircle2, BadgeCheck, Bookmark, Clock, Image, Clapperboard, AudioLines, LayoutTemplate, ShoppingCart, AlertTriangle, PackageOpen, RotateCcw } from "lucide-react";
+import { Heart, Star, Pencil, Trash2, CheckCircle2, BadgeCheck, Bookmark, Clock, Image, Clapperboard, AudioLines, LayoutTemplate, ShoppingCart, AlertTriangle, PackageOpen, RotateCcw, CalendarClock, Archive } from "lucide-react";
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { CreditIcon } from "@/components/ui/credit-icon";
@@ -100,9 +100,17 @@ export const AssetCard: React.FC<AssetCardProps> = ({
                 <span className="flex items-center gap-1.5 px-2 py-1 rounded-md text-[10px] font-semibold uppercase text-white shadow-sm border bg-sky-600 border-sky-500">
                   <Clock className="h-3 w-3" /> Under Review
                 </span>
+              ) : asset.review_status === "scheduled" ? (
+                <span className="flex items-center gap-1.5 px-2 py-1 rounded-md text-[10px] font-semibold uppercase text-white shadow-sm border bg-emerald-700 border-emerald-600">
+                  <CalendarClock className="h-3 w-3" /> Scheduled
+                </span>
               ) : asset.review_status === "rejected" ? (
                 <span className="flex items-center gap-1.5 px-2 py-1 rounded-md text-[10px] font-semibold uppercase text-white shadow-sm border bg-rose-600 border-rose-500">
                   <AlertTriangle className="h-3 w-3" /> Rejected
+                </span>
+              ) : asset.review_status === "delisted" ? (
+                <span className="flex items-center gap-1.5 px-2 py-1 rounded-md text-[10px] font-semibold uppercase text-white shadow-sm border bg-zinc-600 border-zinc-500">
+                  <Archive className="h-3 w-3" /> Delisted
                 </span>
               ) : (
                 <span className="flex items-center gap-1.5 px-2 py-1 rounded-md text-[10px] font-semibold uppercase text-white shadow-sm border bg-amber-600 border-amber-500">
@@ -194,8 +202,34 @@ export const AssetCard: React.FC<AssetCardProps> = ({
               <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-rose-400 mt-0.5" />
               <div className="min-w-0">
                 <span className="font-semibold text-rose-200">Rejection note:</span>{" "}
-                <span className="line-clamp-2">{asset.rejection_reason || "Moderator rejected this submission. Click edit to revise and resubmit."}</span>
+                <span className="line-clamp-2">{asset.rejection_reason || "Moderator rejected this submission. Open it to read the feedback and resubmit."}</span>
               </div>
+            </div>
+          </div>
+        )}
+
+        {view === "mine" && asset.is_owner && asset.review_status === "delisted" && (
+          <div className="rounded-lg border border-zinc-500/25 bg-zinc-500/10 p-2 text-[11px] text-zinc-600 dark:text-zinc-300">
+            <div className="flex items-start gap-1.5">
+              <Archive className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+              <div className="min-w-0">
+                <span className="font-semibold">Delisted:</span>{" "}
+                <span className="line-clamp-2">{asset.review_note || "Removed from the catalog. Open it to read why and resubmit."}</span>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {view === "mine" && asset.is_owner && asset.review_status === "scheduled" && (
+          <div className="rounded-lg border border-emerald-500/25 bg-emerald-500/10 p-2 text-[11px] text-emerald-700 dark:text-emerald-300">
+            <div className="flex items-start gap-1.5">
+              <CalendarClock className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+              <span className="line-clamp-1">
+                Approved — goes live{" "}
+                {asset.review_publish_at
+                  ? new Date(asset.review_publish_at).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })
+                  : "soon"}
+              </span>
             </div>
           </div>
         )}

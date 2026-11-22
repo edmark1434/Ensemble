@@ -209,6 +209,8 @@ export function ReportCaseDetailModal({
   const [sanctionReason, setSanctionReason] = useState('');
   const [sanctionDays, setSanctionDays] = useState('7');
   const [sanctionWarningId, setSanctionWarningId] = useState(DEFAULT_REPORT_WARNING);
+  // Job and gig reports: a sanction also pauses (default) or archives the reported posting.
+  const [postingAction, setPostingAction] = useState<'pause' | 'archive'>('pause');
   const viewer = useGlobalState((state) => state.user);
   // The reported account lives on the subject, not on the report row.
   const reported = detail?.subject?.reportedAccount;
@@ -341,6 +343,11 @@ export function ReportCaseDetailModal({
           ? 'Account sanctioned. The reporter has been notified.'
           : 'Report denied'
       );
+      const postingOutcome = res.data?.data?.postingOutcome as { result?: string; message?: string } | undefined;
+      if (postingOutcome?.message) {
+        if (postingOutcome.result === 'failed') showErrorToast(postingOutcome.message);
+        else showSuccessToast(postingOutcome.message);
+      }
       setSanctionOpen(false);
       await load();
       onUpdated();
@@ -373,6 +380,9 @@ export function ReportCaseDetailModal({
   };
 
   const report = detail?.report;
+  const reportedPostingType = ['job', 'gig'].includes(toApiToken(report?.targetType || ''))
+    ? (toApiToken(report?.targetType || '') as 'job' | 'gig')
+    : null;
   const perms = detail?.permissions;
   const myStaffId = perms?.staffId != null ? String(perms.staffId) : '';
   const reportAssigneeId = report?.assignee?.staffId != null ? String(report.assignee.staffId) : '';
@@ -788,6 +798,35 @@ export function ReportCaseDetailModal({
                         />
                       </label>
                     )}
+                    {reportedPostingType && (
+                      <div className="space-y-1.5">
+                        <p className="text-xs text-zinc-500">Reported {reportedPostingType}</p>
+                        <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label={`What happens to the reported ${reportedPostingType}`}>
+                          {(['pause', 'archive'] as const).map((option) => (
+                            <button
+                              key={option}
+                              type="button"
+                              role="radio"
+                              aria-checked={postingAction === option}
+                              onClick={() => setPostingAction(option)}
+                              className={`rounded-lg border px-3 py-2 text-left text-sm transition ${
+                                postingAction === option
+                                  ? 'border-rose-500/40 bg-rose-500/10 text-rose-100'
+                                  : 'border-white/10 bg-[#14151c] text-zinc-300 hover:bg-white/[0.04]'
+                              }`}
+                            >
+                              <span className="block font-medium">{option === 'pause' ? 'Pause' : 'Archive'}</span>
+                              <span className="mt-0.5 block text-[11px] text-zinc-500">
+                                {option === 'pause' ? 'Hidden from the board; staff can reopen it.' : 'Removed from Ensemble.'}
+                              </span>
+                            </button>
+                          ))}
+                        </div>
+                        <p className="text-[11px] text-zinc-500">
+                          The owner cannot reopen it themselves. They are notified with the reason above and told they can open a support ticket.
+                        </p>
+                      </div>
+                    )}
                   </div>
                 )}
                 <div className="flex flex-wrap gap-2">
@@ -820,6 +859,7 @@ export function ReportCaseDetailModal({
                           reason: sanctionReason.trim(),
                           warningId: selectedSanction === 'warning' ? sanctionWarningId : undefined,
                           days: sanctionNeedsDays || (selectedSanction === 'lock' && hasDays) ? days : undefined,
+                          postingAction: reportedPostingType ? postingAction : undefined,
                         });
                       }}
                       className="inline-flex items-center gap-1.5 rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-2 text-sm font-medium text-rose-200 hover:bg-rose-500/20 disabled:opacity-50"

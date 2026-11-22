@@ -132,6 +132,53 @@ async function section(notes, label, load) {
 /* Accounts                                                            */
 /* ------------------------------------------------------------------ */
 
+/**
+ * A team's members at a glance: their merit as a share of the total, plus the warnings and
+ * disputes of every active member. Teams have none of their own.
+ */
+async function teamMemberTotals(teamAccountId) {
+  const { platformMeritSql } = require('./WarningBandRepositories');
+  const { memberMeritSummary } = require('../lib/TeamMerit');
+  const { rows: members } = await pool.query(
+    `
+    SELECT u.account_id, COALESCE(a.display_name, a.handle, 'Member') AS name,
+      ${platformMeritSql('a.account_id')}::int AS merit
+    FROM teams t
+    JOIN team_members tm ON tm.team_id = t.team_id
+    JOIN users u ON u.user_id = tm.user_id
+    JOIN accounts a ON a.account_id = u.account_id
+    WHERE t.account_id = $1 AND tm.status = 'Active' AND tm.deleted_at IS NULL AND a.deleted_at IS NULL
+    `,
+    [teamAccountId]
+  );
+  const ids = members.map((member) => member.account_id);
+  const { rows } = await pool.query(
+    `
+    SELECT
+      (SELECT COUNT(*)::int FROM violations v
+        WHERE v.deleted_at IS NULL AND v.account_id = ANY($1::uuid[])) AS total_warnings,
+      (SELECT COUNT(*)::int FROM violations v
+        WHERE v.account_id = ANY($1::uuid[]) AND ${ACTIVE_WARNING_SQL}) AS active_warnings,
+      (SELECT COALESCE(SUM(LEAST(GREATEST(COALESCE(v.points, 1), 1), 10)), 0)::int FROM violations v
+        WHERE v.account_id = ANY($1::uuid[]) AND ${ACTIVE_WARNING_SQL}) AS active_points,
+      (SELECT COUNT(DISTINCT d.dispute_id)::int FROM disputes d
+        WHERE d.deleted_at IS NULL AND (d.by_account_id = ANY($1::uuid[]) OR d.for_account_id = ANY($1::uuid[]))) AS total_disputes,
+      (SELECT COUNT(DISTINCT d.dispute_id)::int FROM disputes d
+        WHERE d.deleted_at IS NULL AND d.for_account_id = ANY($1::uuid[]) AND d.status <> 'closed') AS open_disputes_against
+    `,
+    [ids]
+  );
+  const totals = rows[0] || {};
+  return {
+    memberMerit: memberMeritSummary(members.map((member) => ({ accountId: member.account_id, name: member.name, merit: member.merit }))),
+    activeWarnings: num(totals.active_warnings),
+    activeWarningPoints: num(totals.active_points),
+    totalWarnings: num(totals.total_warnings),
+    totalDisputes: num(totals.total_disputes),
+    openDisputesAgainst: num(totals.open_disputes_against),
+  };
+}
+
 /** One member at a glance: identity, live standing, and history counts. */
 async function accountSummary(accountId) {
   if (!accountId || !UUID_RE.test(String(accountId))) return null;
@@ -168,6 +215,9 @@ async function accountSummary(accountId) {
   ]);
   const row = result.rows[0];
   if (!row) return null;
+  // Teams have no Platform Merit and never break rules on their own: read them through their
+  // active members (merit added up, members' warnings and disputes).
+  const team = String(row.type || '').toLowerCase() === 'team' ? await teamMemberTotals(row.account_id).catch(() => null) : null;
   const statusEndsAt = access.banned
     ? access.banEndsAt
     : access.locked
@@ -183,8 +233,9 @@ async function accountSummary(accountId) {
     joinedAt: row.created_at || null,
     status: access.status || 'Active',
     statusEndsAt: statusEndsAt || null,
-    merit: access.merit ?? null,
-    warningPoints: num(access.warningPoints),
+    merit: team ? null : access.merit ?? null,
+    memberMerit: team ? team.memberMerit : null,
+    warningPoints: team ? team.activeWarningPoints : num(access.warningPoints),
     warningBandLabel: access.warningBandLabel || null,
     warningBandEndsAt: access.warningBandEndsAt || null,
     // Running automatic merit punishments, each on its own clock (timed-merit punishments).
@@ -201,10 +252,10 @@ async function accountSummary(accountId) {
     identityVerified: Boolean(row.is_verified),
     identityVerifiedAt: row.verified_at || null,
     counts: {
-      activeWarnings: num(row.active_warnings),
-      totalWarnings: num(row.total_warnings),
-      totalDisputes: num(row.total_disputes),
-      openDisputesAgainst: num(row.open_disputes_against),
+      activeWarnings: team ? team.activeWarnings : num(row.active_warnings),
+      totalWarnings: team ? team.totalWarnings : num(row.total_warnings),
+      totalDisputes: team ? team.totalDisputes : num(row.total_disputes),
+      openDisputesAgainst: team ? team.openDisputesAgainst : num(row.open_disputes_against),
       reportsAgainst: num(row.reports_against),
       totalTickets: num(row.total_tickets),
     },

@@ -1,6 +1,7 @@
 const pool = require('../lib/Database').pool;
 const { getAffiliatedAccountIds } = require('./MarketplaceActorRepositories');
 const { assertNoOpenContractDispute } = require('../lib/DisputeEscrow');
+const { releaseCountsSql, netReleaseCreditsSql } = require('../lib/TeamContractReserve');
 
 async function getContractPermissions(contractId, personalAccountId, dbClient = pool) {
     const participantsResult = await dbClient.query(
@@ -1310,12 +1311,12 @@ async function buyRevision({
             const contractReservedResult = await client.query(
                 `WITH contract_releases AS (
                      SELECT ct.reference_id AS contract_id,
-                            COALESCE(SUM(ct.amount_credits), 0)::int AS released_credits
+                            COALESCE(SUM(${netReleaseCreditsSql('ct')}), 0)::int AS released_credits
                      FROM credit_transactions ct
                      WHERE ct.destination_wallet_id = $1
                        AND ct.reference_table = 'contracts'
                        AND ct.type = 'Escrow Release'
-                       AND LOWER(ct.status::text) = 'completed'
+                       AND ${releaseCountsSql('ct')}
                      GROUP BY ct.reference_id
                  ),
                  contract_dists AS (

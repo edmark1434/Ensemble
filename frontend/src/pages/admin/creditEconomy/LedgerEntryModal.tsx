@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { AlertTriangle, ArrowLeft, ArrowRight, Filter, Loader2, X } from 'lucide-react';
 import { peekStaffGet, staffGet } from '@/lib/staffCache';
+import { useStaffLive } from '@/lib/staffLive';
 import {
   BalanceChange,
   CopyId,
@@ -66,26 +67,34 @@ export default function LedgerEntryModal({
   const [error, setError] = useState('');
   const [trail, setTrail] = useState<string[]>([]);
 
-  const load = useCallback(async () => {
-    const hit = peekStaffGet(url)?.data;
-    setData(hit?.success ? hit.data : null);
-    setLoading(true);
-    setError('');
+  const load = useCallback(async (silent = false) => {
+    if (!silent) {
+      const hit = peekStaffGet(url)?.data;
+      setData(hit?.success ? hit.data : null);
+      setLoading(true);
+      setError('');
+    }
     try {
       const res = await staffGet(url);
-      if (res.data?.success) setData(res.data.data);
-      else setError(res.data?.message || 'Could not load this entry.');
+      if (res.data?.success) {
+        setData(res.data.data);
+        setError('');
+      } else if (!silent) setError(res.data?.message || 'Could not load this entry.');
     } catch (err) {
+      if (silent) return;
       const message = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
       setError(message || 'Could not load this entry.');
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, [url]);
 
   useEffect(() => {
     void load();
   }, [load]);
+
+  // Live: a reversal, fee or payout linked to this entry shows up in its trail at once.
+  useStaffLive(['economy', 'disputes', 'jobs'], () => load(true), { delayMs: 1000 });
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {

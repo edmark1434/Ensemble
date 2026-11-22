@@ -28,6 +28,10 @@ const {
   updateAssetReviewServices,
   deleteAssetReviewServices,
 } = require('../services/AssetServices');
+const {
+  getSellerSubmissionThreadServices,
+  postSellerSubmissionMessageServices,
+} = require('../services/MarketplaceListingReviewServices');
 
 function handleAssetError(res, error) {
   const status = Number.isInteger(error.statusCode) ? error.statusCode : 500;
@@ -312,8 +316,26 @@ async function getSellerAssetMetricsController(req, res) {
   } catch (error) { return handleAssetError(res, error); }
 }
 
+/** The owner's review conversation for this asset's listing. */
+async function getAssetSubmissionController(req, res) {
+  try {
+    const submission = await getSellerSubmissionThreadServices(req.params.assetId, req.user.account_id);
+    return res.json({ success: true, submission });
+  } catch (error) { return handleAssetError(res, error); }
+}
+
+/** Owner reply, or `resubmit: true` to send a rejected / delisted asset back for review. */
+async function postAssetSubmissionMessageController(req, res) {
+  try {
+    const submission = await postSellerSubmissionMessageServices(req.params.assetId, req.user.account_id, req.body);
+    return res.status(201).json({ success: true, submission });
+  } catch (error) { return handleAssetError(res, error); }
+}
+
 module.exports = {
   getSellerAssetMetricsController,
+  getAssetSubmissionController,
+  postAssetSubmissionMessageController,
   listAssetLicensesController,
   assignAssetLicenseController,
   reportAssetController,

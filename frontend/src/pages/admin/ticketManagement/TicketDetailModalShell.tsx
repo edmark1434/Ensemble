@@ -10,6 +10,7 @@ import useGlobalState from '@/lib/global_state';
 import { uploadFileWithIntent } from '@/lib/uploadFile';
 import { chatAttachmentUrl } from '@/components/ui/inbox/inbox_functions/inbox_upload_image';
 import socket from '@/lib/socket';
+import { useStaffLive } from '@/lib/staffLive';
 import { showErrorToast, showSuccessToast } from '@/components/utility/toast.ts';
 import type { TicketDetail, TicketMessage } from './ticketTypes';
 import {
@@ -685,10 +686,13 @@ export default function TicketDetailModalShell({
     }
   };
 
-  /** Re-read only the case file (after a decision, a category change, or a retry). */
-  const loadCase = async () => {
+  /**
+   * Re-read only the case file (after a decision, a category change, or a retry). `silent`
+   * (live refresh) keeps the shown case file instead of showing the loader.
+   */
+  const loadCase = async (silent = false) => {
     const requestId = ++caseRequestRef.current;
-    setCaseLoading(true);
+    if (!silent) setCaseLoading(true);
     try {
       const res = await api.get(`${endpointBase}/${ticketId}`, { params: { include: 'case' } });
       if (res.data?.success) takeCase(res.data.data as TicketDetail, requestId);
@@ -761,6 +765,14 @@ export default function TicketDetailModalShell({
     void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ticketId, endpointBase]);
+
+  // Live: the case file (standing, penalties, listing, contract, escrow, posts...) follows
+  // changes made anywhere while the ticket is open. The thread has its own room listeners.
+  useStaffLive(
+    ['accounts', 'teams', 'moderation', 'marketplace', 'jobs', 'forum', 'economy', 'disputes', 'reports', 'policy'],
+    () => (caseContext === undefined ? undefined : loadCase(true)),
+    { enabled: Boolean(detail), delayMs: 1500 },
+  );
 
   // A category change (or a move to another desk) changes which records the case file shows.
   const loadedType = detail ? ticketTypeOf(detail.ticket) : null;
@@ -913,10 +925,15 @@ export default function TicketDetailModalShell({
     const joinTicketRoom = () => {
       socket.emit('joinRoom', { conversation_id: String(chatId) });
     };
+    // Messages sent while the socket was down never arrive as events: read the thread back.
+    const onReconnect = () => {
+      joinTicketRoom();
+      scheduleRefresh();
+    };
 
     if (!socket.connected) socket.connect();
     joinTicketRoom();
-    socket.on('connect', joinTicketRoom);
+    socket.on('connect', onReconnect);
     socket.on('newMessage', appendLiveMessage);
     socket.on('messageReplied', appendLiveMessage);
     socket.on('ticketInternalMessage', appendLiveMessage);
@@ -928,7 +945,7 @@ export default function TicketDetailModalShell({
 
     return () => {
       window.clearTimeout(refreshTimer);
-      socket.off('connect', joinTicketRoom);
+      socket.off('connect', onReconnect);
       socket.off('newMessage', appendLiveMessage);
       socket.off('messageReplied', appendLiveMessage);
       socket.off('ticketInternalMessage', appendLiveMessage);

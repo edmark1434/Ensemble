@@ -1,7 +1,8 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useRef } from 'react';
 import { Search } from 'lucide-react';
 import api from '@/lib/axios';
 import { peekStaffGet, staffGet } from '@/lib/staffCache';
+import { useStaffLive } from '@/lib/staffLive';
 import { UserOverviewModal } from './components/AccountModals';
 import type { PlatformUserAccount } from './userTeamTypes';
 
@@ -41,17 +42,23 @@ export default function SurveyResponsesTab({ refreshToken }: { refreshToken: num
   const [usersCache, setUsersCache] = useState<PlatformUserAccount[] | null>(null);
   const [loadingUser, setLoadingUser] = useState(false);
 
+  // Live: new onboarding answers appear without pressing Refresh.
+  const [liveToken, setLiveToken] = useState(0);
+  const hasResponses = useRef(Boolean(cachedResponses()));
+  useStaffLive(['feedback', 'accounts'], () => setLiveToken((t) => t + 1), { delayMs: 1500 });
+
   useEffect(() => {
     let mounted = true;
     const fetchResponses = async () => {
-      if (!peekStaffGet(SURVEY_URL)) setLoading(true);
+      if (!hasResponses.current && !peekStaffGet(SURVEY_URL)) setLoading(true);
       setError('');
       try {
         const res = await staffGet(SURVEY_URL);
         if (mounted && res.data.success) {
           const data = res.data.data;
           setResponses(data);
-          
+          hasResponses.current = true;
+
           const uniqueQs = Array.from(new Set(data.map((r: SurveyResponse) => r.question_text)));
           if (uniqueQs.length > 0 && !selectedQuestion) {
             setSelectedQuestion(uniqueQs[0] as string);
@@ -69,7 +76,7 @@ export default function SurveyResponsesTab({ refreshToken }: { refreshToken: num
     return () => {
       mounted = false;
     };
-  }, [refreshToken]);
+  }, [refreshToken, liveToken]);
 
   // Derived data
   const uniqueQuestions = useMemo(() => {
@@ -129,6 +136,23 @@ export default function SurveyResponsesTab({ refreshToken }: { refreshToken: num
       setLoadingUser(false);
     }
   };
+
+  // Live: the open profile follows standing, verification and wallet changes; the stored user
+  // list is dropped so the next row click reads it fresh.
+  useStaffLive(
+    ['accounts', 'teams', 'economy', 'moderation'],
+    async () => {
+      setUsersCache(null);
+      if (!selectedUser) return;
+      const res = await api.get('/api/admin/users-management');
+      const users: PlatformUserAccount[] = Array.isArray(res.data?.data?.users) ? res.data.data.users : [];
+      setUsersCache(users);
+      setSelectedUser((current) =>
+        current ? users.find((u) => u.accountId === current.accountId) || current : current
+      );
+    },
+    { delayMs: 1500 },
+  );
 
   if (loading) {
     return <p className="py-12 text-center text-sm text-zinc-500">Loading survey responses…</p>;

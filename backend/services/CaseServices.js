@@ -161,6 +161,9 @@ function buildDisputeAccess(dispute, { accountId, standing, messages = null }) {
     closed,
     visibility,
     viewerRole: dispute.viewerRole || null,
+    // Named with the disputee's team, or acting for a team party the member manages.
+    namedMember: Boolean(dispute.namedMember),
+    viaTeam: Boolean(dispute.viaTeam),
     limited,
     canReply,
     readOnlyReason,
@@ -442,18 +445,19 @@ async function announceTicketCase(ticketId, { reason = 'status' } = {}) {
   }
 }
 
-/** The parties a dispute message reaches, from its audience. */
-function disputeAudienceParties(row, audience, senderId) {
-  const by = row.by_account_id ? String(row.by_account_id) : null;
-  const forId = row.for_account_id ? String(row.for_account_id) : null;
+/**
+ * The people a dispute message reaches, from its audience. Team parties are their active Owners
+ * and Admins; the disputee side includes the people named with its team once the case is public.
+ * A private reply reaches only its author (a community author has no case and is skipped later).
+ */
+async function disputeAudienceParties(row, audience, senderId) {
+  const { disputeSideRecipients } = require('./DisputeMemberServices');
   const value = String(audience || '').toLowerCase();
   if (value === 'staff') return [];
-  if (value === 'author_and_staff') {
-    return senderId && [by, forId].includes(String(senderId)) ? [String(senderId)] : [];
-  }
-  if (value === 'disputer') return [by].filter(Boolean);
-  if (value === 'disputee') return [forId].filter(Boolean);
-  return [by, forId].filter(Boolean);
+  if (value === 'author_and_staff') return senderId ? [String(senderId)] : [];
+  if (value === 'disputer') return disputeSideRecipients(row, 'disputer');
+  if (value === 'disputee') return disputeSideRecipients(row, 'disputee');
+  return disputeSideRecipients(row, 'both');
 }
 
 /**
@@ -470,16 +474,16 @@ async function announceDisputeCase(disputeId, { reason = 'status', audience = nu
     const { pool } = require('../lib/Database');
     const { loadAccountStatuses } = require('../repositories/CaseRepositories');
     const result = await pool.query(
-      `SELECT dispute_id, dispute_number, by_account_id, for_account_id
+      `SELECT dispute_id, dispute_number, by_account_id, for_account_id, visibility
        FROM disputes WHERE dispute_id = $1 AND deleted_at IS NULL`,
       [disputeId]
     );
     const row = result.rows[0];
     if (!row) return;
     const recipients = audience
-      ? disputeAudienceParties(row, audience, senderId)
-      : [row.by_account_id, row.for_account_id].filter(Boolean).map(String);
-    const unique = [...new Set(recipients)];
+      ? await disputeAudienceParties(row, audience, senderId)
+      : await require('./DisputeMemberServices').disputeSideRecipients(row, 'both');
+    const unique = [...new Set(recipients.map(String))];
     const statuses = await loadAccountStatuses(unique);
     for (const accountId of unique) {
       const standing = caseStandingFromStatus(statuses.get(accountId));

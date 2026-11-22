@@ -74,6 +74,9 @@ export function StaffStandingSummary({
   }
   const status = String(account.status || 'Active');
   const restricted = /ban|lock|suspend/i.test(status);
+  // Teams have no merit of their own: show the members' total as a percentage instead.
+  const isTeam = String(account.type || '').toLowerCase() === 'team';
+  const teamMerit = isTeam ? account.memberMerit ?? null : null;
   const flags: ReactNode[] = [];
   if (restricted) {
     flags.push(
@@ -138,13 +141,23 @@ export function StaffStandingSummary({
 
       <div className={`grid gap-2 ${compact ? 'grid-cols-3' : 'grid-cols-3 sm:grid-cols-6'}`}>
         {[
-          { label: 'Merit', value: account.merit ?? '—', tone: meritTone(account.merit) },
-          { label: 'Active warnings', value: account.counts.activeWarnings, tone: account.counts.activeWarnings ? 'text-amber-300' : 'text-zinc-200' },
-          { label: 'All warnings', value: account.counts.totalWarnings, tone: 'text-zinc-200' },
+          isTeam
+            ? {
+                label: 'Team merit',
+                value: teamMerit?.members && teamMerit.percent != null ? `${teamMerit.percent}%` : '—',
+                tone: meritTone(teamMerit?.percent ?? null),
+              }
+            : { label: 'Merit', value: account.merit ?? '—', tone: meritTone(account.merit) },
+          {
+            label: isTeam ? "Members' active warnings" : 'Active warnings',
+            value: account.counts.activeWarnings,
+            tone: account.counts.activeWarnings ? 'text-amber-300' : 'text-zinc-200',
+          },
+          { label: isTeam ? "Members' warnings" : 'All warnings', value: account.counts.totalWarnings, tone: 'text-zinc-200' },
           ...(compact
             ? []
             : [
-                { label: 'Disputes', value: account.counts.totalDisputes, tone: 'text-zinc-200' },
+                { label: isTeam ? "Members' disputes" : 'Disputes', value: account.counts.totalDisputes, tone: 'text-zinc-200' },
                 { label: 'Reports against', value: account.counts.reportsAgainst, tone: account.counts.reportsAgainst ? 'text-amber-300' : 'text-zinc-200' },
                 { label: 'Tickets', value: account.counts.totalTickets, tone: 'text-zinc-200' },
               ]),
@@ -156,6 +169,13 @@ export function StaffStandingSummary({
         ))}
       </div>
 
+      {teamMerit?.members ? (
+        <p className="text-[11px] text-zinc-500">
+          Team merit is the members’ merit added up: {teamMerit.total}/{teamMerit.max} across {teamMerit.members} member
+          {teamMerit.members === 1 ? '' : 's'}
+          {teamMerit.lowest && teamMerit.lowest.merit < 100 ? ` · lowest ${teamMerit.lowest.name} (${teamMerit.lowest.merit})` : ''}.
+        </p>
+      ) : null}
       {flags.length ? <div className="flex flex-wrap gap-1.5">{flags}</div> : null}
       {account.creditsFrozen && account.creditsFrozenReason ? (
         <p className="text-[11px] text-zinc-500">Hold reason: {account.creditsFrozenReason}</p>
@@ -167,7 +187,9 @@ export function StaffStandingSummary({
           </span>
           <span>{account.identityVerified ? `ID verified ${caseDay(account.identityVerifiedAt)}` : 'ID not verified'}</span>
           {account.counts.openDisputesAgainst ? (
-            <span className="text-amber-300">{account.counts.openDisputesAgainst} open dispute(s) against them</span>
+            <span className="text-amber-300">
+              {account.counts.openDisputesAgainst} open dispute(s) against {isTeam ? 'members' : 'them'}
+            </span>
           ) : null}
           {account.deactivated ? <span>Deactivated by the member</span> : null}
         </p>

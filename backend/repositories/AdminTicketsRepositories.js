@@ -3976,6 +3976,17 @@ async function updateDispute(disputeId, patch, staffSession) {
       await notifyDisputeAccount(refreshed.for_account_id, disputeId, {
         message: `You are named in dispute ${number}. Staff made it public, so please give your side in Cases.`,
       });
+      // People the filer named with the disputee's team can open the case now too.
+      const memberServices = require('../services/DisputeMemberServices');
+      const { listNamedMemberAccountIds } = require('./DisputeMemberRepositories');
+      const alreadyTold = new Set(await memberServices.expandPartyAccounts([refreshed.for_account_id]));
+      const team = refreshed.respondent_name || refreshed.respondent_handle || 'the other side';
+      for (const accountId of await listNamedMemberAccountIds(disputeId)) {
+        if (alreadyTold.has(accountId) || String(accountId) === String(refreshed.by_account_id)) continue;
+        await notifyDisputeAccount(accountId, disputeId, {
+          message: `You are named in dispute ${number} with ${team}. Staff made it public, so please give your side in Cases.`,
+        });
+      }
     } catch (err) {
       console.warn('Dispute public notice skipped:', err.message);
     }
@@ -4181,6 +4192,28 @@ async function updateDispute(disputeId, patch, staffSession) {
 
   if (action === 'swap_parties') {
     return swapDisputeParties(disputeId, refreshed, staff, staffSession, actPerms, patch);
+  }
+
+  // Change who is named with the disputee's team: { memberScope, memberAccountIds }.
+  if (action === 'set_members') {
+    if (!actPerms.canAct) {
+      throw disputeDecisionError('Assign yourself to this dispute before changing who is named.');
+    }
+    const memberServices = require('../services/DisputeMemberServices');
+    const result = await memberServices.setDisputeMembersByStaff(refreshed, memberServices.banScopeInput(patch), staff);
+    if (result.changed) await emitDisputeState(disputeId, { reason: 'members_changed' });
+    const detail = await getDisputeDetail(disputeId, staffSession);
+    return detail
+      ? {
+          ...detail,
+          membersResult: {
+            changed: result.changed,
+            scope: result.scope,
+            added: result.added.map(memberServices.labelOf),
+            removed: result.removed.map(memberServices.labelOf),
+          },
+        }
+      : detail;
   }
 
   // Generic field updates
@@ -4774,6 +4807,15 @@ async function getDisputeDetail(disputeId, staffSession = null) {
     console.error('Error loading contract state after dispute:', err.message);
   }
 
+  // Who stands behind the disputee: the team and contract roster, who was named (and taken off),
+  // each named person's standing, the team wallet, and who a ban reaches by default.
+  let respondentGroup = null;
+  try {
+    respondentGroup = await require('../services/DisputeMemberServices').getDisputeRespondentGroup(row);
+  } catch (err) {
+    console.error('Error loading the dispute respondent group:', err.message);
+  }
+
   // The exact text the server posts, so the console preview never drifts from it.
   const names = {
     disputer: row.initiator_handle ? `@${row.initiator_handle}` : row.initiator_name || 'The disputer',
@@ -4830,6 +4872,7 @@ async function getDisputeDetail(disputeId, staffSession = null) {
     },
     escrowPending,
     contractAfterCase,
+    respondentGroup,
     // Drive the Resolve / Reopen prompts, so the console never hardcodes these lists.
     resolutionOptions: withPreview(
       listDisputeResolutionOptions(),
@@ -5139,8 +5182,12 @@ function assertEscrowDecided(frozen, patch, resolution) {
   }
 }
 
-/** Checks a dispute ban before anything changes, so a money ruling never lands without it. */
-async function assertDisputeBanAllowed(row, staff) {
+/**
+ * Checks a dispute ban before anything changes, so a money ruling never lands without it, and
+ * works out who else it reaches on the disputee side (`memberScope` / `memberAccountIds`; by
+ * default the people named on the case, else the team leader). Returns that plan.
+ */
+async function assertDisputeBanAllowed(row, staff, scopeInput = {}) {
   if (!row?.for_account_id) {
     throw disputeDecisionError('Invalid ban: this dispute has no respondent to sanction.');
   }
@@ -5153,32 +5200,30 @@ async function assertDisputeBanAllowed(row, staff) {
     targetAccountId: row.for_account_id,
     action: 'ban',
   });
+  return require('../services/DisputeMemberServices').planDisputeBan(row, scopeInput, staff);
 }
 
 /**
- * Permanently ban a dispute's respondent and record it on the case: the case becomes public,
- * `sanction_type = 'ban'`, and the ban ruling is posted in the discussion.
+ * Permanently ban a dispute's respondent (and the people `plan` reaches) and record it on the
+ * case: the case becomes public, `sanction_type = 'ban'`, and the ban ruling is posted in the
+ * discussion, naming who was banned with the disputee.
  * `closeCase` also closes the case with the reason as its notes (the plain ban decision).
  * After a money ruling the case is already closed and keeps the ruling's notes.
- * Call `assertDisputeBanAllowed` first. Does not broadcast; the caller does.
+ * Call `assertDisputeBanAllowed` first and pass its plan. Does not broadcast; the caller does.
+ * @returns {Promise<{ summary: string, banned: object[], skipped: object[], failed: object[] }>}
  */
-async function banDisputeRespondent(row, { reason, staff, staffSession, closeCase = false }) {
+async function banDisputeRespondent(row, { reason, staff, staffSession, closeCase = false, plan = null }) {
   const disputeId = row.dispute_id;
   const accountId = row.for_account_id;
   const name = row.respondent_name || 'The respondent';
+  const memberServices = require('../services/DisputeMemberServices');
+  const banPlan = plan || (await memberServices.planDisputeBan(row, {}, staff));
+  const outcome = await memberServices.executeDisputeBan(row, banPlan, { reason, staff });
   const message = buildDisputeSanctionMessage({
     disputee: row.respondent_handle ? `@${row.respondent_handle}` : name,
     reason,
     disputeNumber: row.dispute_number || null,
-  });
-
-  const { updateAccountStatus } = require('./AdminUserTeamRepositories');
-  await updateAccountStatus(accountId, 'ban', staff.staff_id, {
-    reason,
-    duration: 'permanent',
-    punishmentId: 'ban_dispute_conviction',
-    disputeId,
-    disputeNumber: row.dispute_number || null,
+    alsoBanned: outcome.banned.length ? memberServices.describePeople(outcome.banned) : null,
   });
 
   if (closeCase) {
@@ -5204,17 +5249,28 @@ async function banDisputeRespondent(row, { reason, staff, staffSession, closeCas
 
   await recordAccountActivity({
     accountId,
-    action: `Dispute ${row.dispute_number || disputeId} closed with a permanent ban`,
+    action: `Dispute ${row.dispute_number || disputeId} closed with a permanent ban${
+      outcome.banned.length ? ` (also banned: ${memberServices.describePeople(outcome.banned)})` : ''
+    }`,
     eventCode: 'DISPUTE_SANCTIONED',
     referenceTable: 'disputes',
     referencePrefix: 'DIS',
     referenceId: disputeId,
     actorStaffId: staff.staff_id,
-    metadata: { status: 'closed', sanctionType: 'ban', reason },
+    metadata: {
+      status: 'closed',
+      sanctionType: 'ban',
+      reason,
+      memberScope: banPlan.scope || null,
+      alsoBanned: outcome.banned.map((person) => person.accountId),
+      skipped: outcome.skipped.map((person) => ({ accountId: person.accountId, why: person.skipped })),
+      failed: outcome.failed.map((person) => person.accountId),
+    },
   });
 
   try {
-    await postDisputeDecisionMessage(row, staffSession, message, { asSystem: true });
+    // The ban made the case public, so the people named on it hear about the ruling too.
+    await postDisputeDecisionMessage({ ...row, visibility: true }, staffSession, message, { asSystem: true });
   } catch (err) {
     const wrapped = new Error(
       `${err.message || 'Could not post the discussion message.'} The account was still banned and the dispute was closed.`
@@ -5222,6 +5278,7 @@ async function banDisputeRespondent(row, { reason, staff, staffSession, closeCas
     wrapped.statusCode = /MongoDB/i.test(err.message || '') ? 503 : 500;
     throw wrapped;
   }
+  return outcome;
 }
 
 async function postDisputeDecisionMessage(
@@ -5283,15 +5340,18 @@ async function convictDispute(disputeId, row, patch, staff, staffSession, perms)
       `Settle the escrow before banning: ${creditCount(frozen)} are still frozen. Use Resolve → Disputee did not cooperate to return them to the disputer and ban in one step.`
     );
   }
-  await assertDisputeBanAllowed(row, staff);
+  const { banScopeInput } = require('../services/DisputeMemberServices');
+  const plan = await assertDisputeBanAllowed(row, staff, banScopeInput(patch));
 
+  let outcome = null;
   try {
-    await banDisputeRespondent(row, { reason, staff, staffSession, closeCase: true });
+    outcome = await banDisputeRespondent(row, { reason, staff, staffSession, closeCase: true, plan });
   } finally {
     // The ban and the closed case are saved even if the ruling message could not be posted.
     await emitDisputeState(disputeId);
   }
-  return getDisputeDetail(disputeId, staffSession);
+  const detail = await getDisputeDetail(disputeId, staffSession);
+  return detail && outcome ? { ...detail, banSummary: outcome.summary || null } : detail;
 }
 
 async function reopenDispute(disputeId, row, staff, staffSession, perms, patch = {}) {
@@ -5416,6 +5476,9 @@ async function swapDisputeParties(disputeId, row, staff, staffSession, perms, pa
 
   const client = await pool.connect();
   let labelsSwapped = false;
+  // People named with the old disputee's team belong to that side, not to whoever is the
+  // disputee after the swap, so they come off the case (kept as removed rows for the record).
+  let clearedMembers = [];
   try {
     await client.query('BEGIN');
     const locked = await client.query(
@@ -5448,6 +5511,14 @@ async function swapDisputeParties(disputeId, row, staff, staffSession, perms, pa
        WHERE dispute_id = $1`,
       [disputeId]
     );
+    const memberRepo = require('./DisputeMemberRepositories');
+    if (await memberRepo.disputeMembersReady(client)) {
+      clearedMembers = await memberRepo.removeDisputeMembers(client, disputeId, null, {
+        staffId: staff.staff_id,
+        reason: 'parties_swapped',
+      });
+      await memberRepo.setRespondentMemberScope(client, disputeId, null);
+    }
     if (chatId) {
       await swapDisputePartyLabels(chatId);
       labelsSwapped = true;
@@ -5485,11 +5556,32 @@ async function swapDisputeParties(disputeId, row, staff, staffSession, perms, pa
         disputee,
         notes,
         disputeNumber: swapped.dispute_number || null,
+        membersCleared: clearedMembers.length,
       }),
       { audience: swapped.visibility ? 'public' : 'disputer', notify: false, asSystem: true }
     );
   } catch (err) {
     console.error('Dispute parties swapped without a discussion message:', err.message);
+  }
+  // Named people who could open the case lose it from Cases (they are no longer on it).
+  if (clearedMembers.length) {
+    try {
+      const io = require('../lib/WebSocket').getIo();
+      const { accountsActedForBy } = require('./DisputeMemberRepositories');
+      for (const accountId of clearedMembers) {
+        // Someone who still manages one of the team parties keeps the case.
+        const stillParty = await accountsActedForBy(accountId, [swapped.by_account_id, swapped.for_account_id]);
+        if (stillParty.size) continue;
+        io?.to(String(accountId)).emit('caseUpdated', {
+          kind: 'dispute',
+          id: String(disputeId),
+          reason: 'parties_swapped',
+          removed: true,
+        });
+      }
+    } catch (err) {
+      console.warn('Named-member swap notice skipped:', err.message);
+    }
   }
 
   for (const accountId of [swapped.by_account_id, swapped.for_account_id]) {
@@ -5700,6 +5792,13 @@ async function decideReport(reportId, action, patch, staffSession) {
     );
   }
 
+  // A sanctioned job or gig report also pauses (default) or archives the reported posting.
+  const postingModeration = require('../services/PostingModerationServices');
+  const postingType = action === 'sanction' ? postingModeration.reportPostingType(row) : null;
+  const postingAction = postingType
+    ? postingModeration.normalizeReportPostingAction(patch?.postingAction ?? patch?.posting_action)
+    : null;
+
   const nextStatus = action === 'sanction' ? 'sanctioned' : 'denied';
   // Claim the decision first, so a double click or a second staff member cannot apply the
   // sanction twice. If the sanction then fails, the report goes back to where it was.
@@ -5734,6 +5833,15 @@ async function decideReport(reportId, action, patch, staffSession) {
     }
   }
 
+  // After the sanction is saved; a failure here is reported to staff and never undoes it.
+  const postingOutcome = postingType
+    ? await postingModeration.applyReportPostingAction(
+        row,
+        { action: postingAction, reason: String(patch?.reason || '').trim() },
+        staffSession
+      )
+    : null;
+
   await recordAccountActivity({
     accountId: row.for_account_id || row.by_account_id,
     action: `Report ${row.report_number || reportId} ${nextStatus}`,
@@ -5748,6 +5856,14 @@ async function decideReport(reportId, action, patch, staffSession) {
       status: nextStatus,
       sanctionType:
         action === 'sanction' ? reportSanctionKey(patch?.sanctionType || patch?.sanction_type) : null,
+      ...(postingOutcome
+        ? {
+            postingType,
+            postingAction,
+            postingResult: postingOutcome.result,
+            postingStatus: postingOutcome.postingStatus || null,
+          }
+        : {}),
     },
   });
 
@@ -5759,7 +5875,8 @@ async function decideReport(reportId, action, patch, staffSession) {
     );
   }
 
-  return getReportDetail(reportId, staffSession);
+  const detail = await getReportDetail(reportId, staffSession);
+  return detail && postingOutcome ? { ...detail, postingOutcome } : detail;
 }
 
 /**

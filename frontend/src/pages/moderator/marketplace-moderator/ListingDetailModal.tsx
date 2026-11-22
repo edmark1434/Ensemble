@@ -1,6 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   AlertTriangle,
+  CalendarClock,
+  CheckCircle2,
   Clock,
   Coins,
   Copy,
@@ -8,6 +10,7 @@ import {
   History,
   LayoutTemplate,
   Loader2,
+  Send,
   ShieldCheck,
   ShoppingBag,
   Tag,
@@ -15,6 +18,7 @@ import {
   X,
 } from 'lucide-react';
 import api from '@/lib/axios';
+import { useStaffLive } from '@/lib/staffLive';
 import { showErrorToast, showSuccessToast } from '@/components/utility/toast.ts';
 import { mediaUrl, readableSize } from '@/pages/user/5_assets/assetTypes';
 import ListingFileInspector, {
@@ -27,11 +31,17 @@ import { StaffPunishmentChips } from '@/components/account/MeritStatus';
 import {
   LISTING_ACTIONS,
   ListingReasonDialog,
+  actionLabel,
   actionsForStatus,
+  decisionSuccessMessage,
+  formatGoLive,
+  listingDecisionPayload,
   type ListingAction,
+  type ListingDecisionInput,
 } from './listingActions';
 import type {
   ListingReviewEvent,
+  ListingThreadMessage,
   MarketplaceListing,
   SellerListingsHistory,
 } from './marketplaceTypes';
@@ -80,6 +90,8 @@ function initials(name: string) {
 
 function listingStatusClass(status: string) {
   switch (status) {
+    case 'scheduled':
+      return 'border-sky-500/25 bg-sky-500/10 text-sky-300';
     case 'approved':
       return 'border-emerald-500/25 bg-emerald-500/10 text-emerald-300';
     case 'rejected':
@@ -94,6 +106,8 @@ function listingStatusClass(status: string) {
 
 function statusDotClass(status: string) {
   switch (status) {
+    case 'scheduled':
+      return 'bg-sky-400';
     case 'approved':
       return 'bg-emerald-400';
     case 'rejected':
@@ -176,6 +190,16 @@ export function SellerListingsModal({
       active = false;
     };
   }, [accountId, apiBase]);
+
+  // Live: the seller's other listings follow new uploads and decisions.
+  useStaffLive(['marketplace', 'moderation'], () =>
+    api
+      .get(`${apiBase}/users/${accountId}/listings`)
+      .then((res) => {
+        if (res.data?.success) setHistory(res.data.data);
+      })
+      .catch(() => undefined),
+  );
 
   return (
     <div
@@ -351,10 +375,106 @@ function historyTone(event: ListingReviewEvent) {
     return 'bg-zinc-500';
   }
   if (event.status === 'approved') return 'bg-emerald-400';
+  if (event.status === 'scheduled') return 'bg-sky-400';
   if (event.status === 'rejected') return 'bg-red-400';
   if (event.status === 'delisted') return 'bg-zinc-300';
   return 'bg-amber-400';
 }
+
+/** Heading for a thread entry; plain replies have none. */
+function threadEntryLabel(message: ListingThreadMessage) {
+  switch (message.kind) {
+    case 'submitted':
+      return 'Submitted for review';
+    case 'resubmitted':
+      return 'Resubmitted for review';
+    case 'approved':
+      return 'Approved — published now';
+    case 'scheduled':
+      return `Approved — goes live ${formatGoLive(message.publishAt)}`;
+    case 'published':
+      return 'Went live (scheduled)';
+    case 'rejected':
+      return 'Rejected';
+    case 'delisted':
+      return 'Delisted';
+    case 'rereview':
+      return 'Sent back for re-approval';
+    default:
+      return null;
+  }
+}
+
+function threadEntryTone(message: ListingThreadMessage) {
+  if (message.kind === 'rejected') return 'text-red-300';
+  if (message.kind === 'delisted' || message.kind === 'rereview') return 'text-amber-300';
+  if (message.kind === 'approved' || message.kind === 'published') return 'text-emerald-300';
+  if (message.kind === 'scheduled') return 'text-sky-300';
+  return 'text-zinc-400';
+}
+
+/** The listing's conversation with the seller, as staff see it (staff names shown). */
+function ListingThread({ messages }: { messages: ListingThreadMessage[] }) {
+  const listRef = useRef<HTMLOListElement>(null);
+  useEffect(() => {
+    if (listRef.current) listRef.current.scrollTop = listRef.current.scrollHeight;
+  }, [messages.length]);
+
+  if (messages.length === 0) {
+    return (
+      <p className="rounded-xl border border-white/10 bg-white/[0.02] px-4 py-6 text-center text-xs text-zinc-500">
+        No messages yet. Decisions and replies appear here, and the seller sees them on their asset page.
+      </p>
+    );
+  }
+  return (
+    <ol
+      ref={listRef}
+      className="max-h-[26rem] space-y-2.5 overflow-y-auto rounded-xl border border-white/10 bg-white/[0.02] p-3"
+    >
+      {messages.map((message) => {
+        const label = threadEntryLabel(message);
+        if (message.authorType === 'system') {
+          return (
+            <li key={message.id} className="flex justify-center">
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/25 bg-emerald-500/10 px-3 py-1 text-[11px] text-emerald-200">
+                <CheckCircle2 className="h-3 w-3" /> {label} · {formatDateTime(message.createdAt)}
+              </span>
+            </li>
+          );
+        }
+        const fromStaff = message.authorType === 'staff';
+        return (
+          <li key={message.id} className={`flex ${fromStaff ? 'justify-end' : 'justify-start'}`}>
+            <div
+              className={`max-w-[85%] rounded-xl border px-3.5 py-2.5 ${
+                fromStaff ? 'border-amber-500/20 bg-amber-500/[0.06]' : 'border-white/10 bg-[#14151c]'
+              }`}
+            >
+              <p className="text-[10px] text-zinc-500">
+                <span className="font-semibold text-zinc-300">{message.authorName}</span>
+                {fromStaff ? (message.authorRole ? ` · ${message.authorRole}` : ' · Staff') : ' · Seller'}
+                {' · '}
+                {formatDateTime(message.createdAt)}
+              </p>
+              {label && <p className={`mt-0.5 text-xs font-semibold ${threadEntryTone(message)}`}>{label}</p>}
+              {message.body ? (
+                <p className="mt-1 whitespace-pre-wrap break-words text-sm leading-relaxed text-zinc-100">{message.body}</p>
+              ) : (
+                message.kind === 'resubmitted' && (
+                  <p className="mt-1 text-[11px] italic text-zinc-500">Saved changes without a message.</p>
+                )
+              )}
+            </div>
+          </li>
+        );
+      })}
+    </ol>
+  );
+}
+
+/** Statuses where staff can post a plain reply (decisions use the footer actions). */
+const STAFF_REPLY_STATUSES = new Set(['pending', 'scheduled', 'rejected', 'delisted']);
 
 export default function ListingDetailModal({
   listingId,
@@ -380,10 +500,37 @@ export default function ListingDetailModal({
   const [saving, setSaving] = useState(false);
   const [pendingAction, setPendingAction] = useState<ListingAction | null>(null);
   const [target, setTarget] = useState<InspectorTarget | null>(null);
+  const [replyDraft, setReplyDraft] = useState('');
+  const [replying, setReplying] = useState(false);
+
+  /** Plain staff reply on the seller conversation; the listing state does not change. */
+  const sendReply = async () => {
+    const body = replyDraft.trim();
+    if (!body || replying) return;
+    setReplying(true);
+    try {
+      const res = await api.post(`${apiBase}/listings/${listingId}/messages`, { body });
+      const messages = res.data?.data?.messages as ListingThreadMessage[] | undefined;
+      if (messages) {
+        setDetail((current) =>
+          current && String(current.id) === String(listingId) ? { ...current, thread: messages } : current
+        );
+      }
+      setReplyDraft('');
+      showSuccessToast('Reply sent to the seller');
+    } catch (err) {
+      showErrorToast(
+        (err as { response?: { data?: { message?: string } } })?.response?.data?.message || 'Failed to send the reply'
+      );
+    } finally {
+      setReplying(false);
+    }
+  };
 
   useEffect(() => {
     let active = true;
     setTarget(null);
+    setReplyDraft('');
     // Switching listings (for example from a duplicate match) must not show the old one meanwhile.
     setDetail((current) =>
       current && String(current.id) === String(listingId)
@@ -410,6 +557,21 @@ export default function ListingDetailModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [listingId, apiBase]);
 
+  // Live: file processing, new reports, buyer activity and other reviewers' decisions update
+  // the open listing; the file being inspected and any typed reason stay.
+  useStaffLive(
+    ['marketplace', 'reports', 'accounts', 'moderation'],
+    () =>
+      api
+        .get(`${apiBase}/listings/${listingId}`)
+        .then((res) => {
+          if (!res.data?.success) return;
+          setDetail((current) => (!current || String(current.id) === String(listingId) ? res.data.data : current));
+        })
+        .catch(() => undefined),
+    { enabled: !saving, delayMs: 1000 },
+  );
+
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.key === 'Escape' && !pendingAction) onClose();
@@ -430,21 +592,16 @@ export default function ListingDetailModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [asset]);
 
-  const review = async (action: ListingAction, reason?: string) => {
-    const meta = LISTING_ACTIONS[action];
-    if (meta.requiresReason && !reason) {
+  /** Every action opens the decision dialog first; approve asks when the asset goes live. */
+  const review = async (action: ListingAction, input?: ListingDecisionInput) => {
+    if (!input) {
       setPendingAction(action);
       return;
     }
     setSaving(true);
     try {
-      const res = await api.patch(`${apiBase}/listings/${listingId}`, {
-        status: meta.status,
-        rejectionReason: action === 'reject' ? reason : undefined,
-        moderationNote: action === 'reject' ? undefined : reason,
-        reason,
-      });
-      showSuccessToast(meta.successMessage);
+      const res = await api.patch(`${apiBase}/listings/${listingId}`, listingDecisionPayload(action, input));
+      showSuccessToast(decisionSuccessMessage(action, input, res.data?.data?.publishAt));
       setPendingAction(null);
       if (res.data?.success && res.data.data) {
         setDetail(res.data.data);
@@ -533,6 +690,13 @@ export default function ListingDetailModal({
           ) : (
             <div className="grid gap-6 px-6 py-5 lg:grid-cols-[minmax(0,1fr)_320px]">
               <div className="min-w-0 space-y-6">
+                {listing.status === 'scheduled' && (
+                  <p className="flex items-start gap-2 rounded-lg border border-sky-500/25 bg-sky-500/[0.07] px-3 py-2 text-xs text-sky-100">
+                    <CalendarClock className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                    Approved — goes live {formatGoLive(listing.publishAt)}. It stays out of the catalog
+                    until then. Publish it early, move the time, or reject it from the actions below.
+                  </p>
+                )}
                 {(crossSellerFileMatches > 0 || (reports?.open || 0) > 0 || failedCount > 0) && (
                   <div className="space-y-2">
                     {crossSellerFileMatches > 0 && (
@@ -737,7 +901,8 @@ export default function ListingDetailModal({
                   )}
                 </Section>
 
-                {(listing.rejectionReason || listing.moderationNote) && (
+                {/* Listings from before the conversation existed only have the stored reason. */}
+                {(listing.thread || []).length === 0 && (listing.rejectionReason || listing.moderationNote) && (
                   <div className="space-y-2">
                     {listing.rejectionReason && (
                       <div className="rounded-xl border border-red-500/20 bg-red-500/5 px-4 py-3 text-sm text-red-200">
@@ -751,6 +916,47 @@ export default function ListingDetailModal({
                     )}
                   </div>
                 )}
+
+                <Section
+                  title="Conversation with the seller"
+                  hint="Every decision, resubmission and reply. The seller reads this on their asset page; staff names show to them as the review team."
+                >
+                  <ListingThread messages={listing.thread || []} />
+                  {STAFF_REPLY_STATUSES.has(listing.status) ? (
+                    <div className="space-y-2">
+                      <textarea
+                        value={replyDraft}
+                        onChange={(event) => setReplyDraft(event.target.value)}
+                        rows={3}
+                        maxLength={2000}
+                        placeholder="Ask the seller a question or explain a decision. To approve or reject, use the actions below."
+                        className="w-full resize-y rounded-lg border border-white/10 bg-[#14151c] px-3 py-2 text-sm text-white outline-none transition placeholder:text-zinc-600 focus:border-amber-500/40"
+                      />
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-[11px] text-zinc-600">
+                          {listing.status === 'rejected' || listing.status === 'delisted'
+                            ? 'The seller answers by resubmitting with a message.'
+                            : 'The seller is notified and can reply here.'}
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => void sendReply()}
+                          disabled={replying || !replyDraft.trim()}
+                          className="flex items-center gap-1.5 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3.5 py-2 text-xs font-medium text-amber-200 transition hover:bg-amber-500/20 disabled:opacity-50"
+                        >
+                          {replying ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
+                          Send reply
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-[11px] text-zinc-600">
+                      {listing.status === 'approved'
+                        ? 'Replies close while the listing is live. Delist it or require re-approval to reopen the conversation.'
+                        : 'Replies open once the listing is submitted for review.'}
+                    </p>
+                  )}
+                </Section>
               </div>
 
               <aside className="space-y-3">
@@ -917,6 +1123,12 @@ export default function ListingDetailModal({
                   <DetailRow label="Updated" value={relativeTime(listing.updatedAt)} />
                   <DetailRow label="Reviewed by" value={listing.reviewedBy?.name || '—'} />
                   <DetailRow label="Reviewed at" value={formatDateTime(listing.reviewedAt)} />
+                  {(listing.status === 'scheduled' || listing.status === 'approved') && listing.publishAt && (
+                    <DetailRow
+                      label={listing.status === 'scheduled' ? 'Goes live' : 'Went live'}
+                      value={formatDateTime(listing.publishAt)}
+                    />
+                  )}
                   {listing.marketAssetId && (
                     <DetailRow
                       label="Asset id"
@@ -970,7 +1182,7 @@ export default function ListingDetailModal({
                     onClick={() => void review(action)}
                     className={`flex items-center gap-1.5 rounded-lg border px-3.5 py-2 text-xs font-medium transition disabled:opacity-50 ${meta.wideTone}`}
                   >
-                    <Icon className="h-3.5 w-3.5" /> {meta.label}
+                    <Icon className="h-3.5 w-3.5" /> {actionLabel(action, listing.status)}
                   </button>
                 );
               })}
@@ -983,9 +1195,11 @@ export default function ListingDetailModal({
         <ListingReasonDialog
           action={pendingAction}
           listingTitle={`${listing.number} · ${listing.title}`}
+          currentStatus={listing.status}
+          currentPublishAt={listing.status === 'scheduled' ? listing.publishAt : null}
           saving={saving}
           onCancel={() => setPendingAction(null)}
-          onConfirm={(reason) => void review(pendingAction, reason)}
+          onConfirm={(input) => void review(pendingAction, input)}
         />
       )}
     </div>

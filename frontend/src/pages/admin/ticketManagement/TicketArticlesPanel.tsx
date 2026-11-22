@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import api from '@/lib/axios';
 import { peekStaffGet, staffGet } from '@/lib/staffCache';
+import { useStaffLive } from '@/lib/staffLive';
 import { showErrorToast, showSuccessToast } from '@/components/utility/toast.ts';
 import { TICKET_TYPE_GROUPS } from './ticketTypes';
 import type { TicketArticle } from './ticketTypes';
@@ -24,6 +25,9 @@ export default function TicketArticlesPanel() {
   useEffect(() => {
     void load().catch(() => undefined);
   }, []);
+
+  // Reply guides saved by another admin appear without a reload.
+  useStaffLive(['settings'], () => load().catch(() => undefined));
 
   const save = async () => {
     try {

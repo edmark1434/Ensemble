@@ -79,6 +79,22 @@ export type EconomyEvent = {
   heldCredits: number;
 };
 
+/** Live member accounts (no staff, teams or deleted accounts), for the Members card. */
+export type MemberHealth = {
+  total: number;
+  status: { active: number; suspended: number; banned: number; locked: number; deactivated: number; other: number };
+  verification: { verified: number; pending: number; unverified: number };
+  profile: { withAvatar: number; withTagline: number; complete: number };
+  /** Null when this week's figures could not be read. */
+  pulse: {
+    newThisWeek: number;
+    newLastWeek: number;
+    activeThisWeek: number;
+    withActiveWarnings: number;
+    forumTimeouts: number;
+  } | null;
+};
+
 export type AdminDashboardData = {
   lastUpdated: string;
   kpis: PlatformKpis;
@@ -89,6 +105,8 @@ export type AdminDashboardData = {
   recentSignups: { id: number; name: string; email: string; username: string; status: string; joinedAt: string | null }[];
   recentActivity: ActivityEvent[];
   economyFeed: EconomyEvent[];
+  /** Null when the member summary could not be read; the card falls back to `usersByStatus`. */
+  memberHealth?: MemberHealth | null;
   breakdowns: {
     staffByRole: { role: string; count: number; label: string }[];
     usersByStatus: { status: string; count: number }[];

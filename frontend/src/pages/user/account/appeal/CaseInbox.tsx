@@ -962,7 +962,12 @@ export default function CaseInbox({
                 </div>
                 {isDispute && thread.details ? (
                   <div className="mt-3">
-                    <DisputeParties details={thread.details} viewerRole={viewerRole} />
+                    <DisputeParties
+                      details={thread.details}
+                      viewerRole={viewerRole}
+                      viewerAccountId={accountId}
+                      namedMember={Boolean(access?.namedMember)}
+                    />
                   </div>
                 ) : !isDispute && thread.ticket ? (
                   <div className="mt-3">

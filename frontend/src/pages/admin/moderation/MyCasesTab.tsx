@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { Hand, Loader2, Search, Trash2, UserCog } from 'lucide-react';
 import api from '@/lib/axios';
 import { useStaffCaseEvents } from '@/lib/staffCaseEvents';
+import { useStaffLive } from '@/lib/staffLive';
 import { showErrorToast, showSuccessToast } from '@/components/utility/toast.ts';
 import ModeratorDisputeDetailModal from '@/pages/moderator/shared/ModeratorDisputeDetailModal';
 import { VerificationModal } from '../userTeam/components/AccountModals';
@@ -138,6 +139,17 @@ export default function MyCasesTab({
     setSelected(null);
     setIdentityUser(null);
   };
+
+  // Live: an open identity case follows a resubmission, a Didit result or another decision.
+  useStaffLive(
+    ['accounts', 'teams'],
+    async () => {
+      if (!selected || selected.source !== 'identity') return;
+      const next = await loadVerificationSubject(selected).catch(() => null);
+      if (next) setIdentityUser((current) => (current && current.accountId === next.accountId ? next : current));
+    },
+    { enabled: Boolean(identityUser && selected?.source === 'identity'), delayMs: 1200 },
+  );
 
   const openCase = async (c: ModerationCase) => {
     if (c.source === 'identity') {

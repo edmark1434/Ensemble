@@ -11,6 +11,7 @@ import {
   X,
 } from 'lucide-react';
 import { peekStaffGet, staffGet } from '@/lib/staffCache';
+import { useStaffLive } from '@/lib/staffLive';
 import { showErrorToast } from '@/components/utility/toast.ts';
 import TableFilterBar from '../userTeam/components/TableFilterBar';
 import type {
@@ -193,6 +194,16 @@ export default function ActivityLogTab({
   useEffect(() => {
     void load(query);
   }, [load, query, refreshToken]);
+
+  // Live: new entries (staff actions, automatic bands, reversals) arrive on the page shown,
+  // with its filters, search and paging kept.
+  const queryRef = useRef(query);
+  queryRef.current = query;
+  useStaffLive(
+    ['moderation', 'accounts', 'teams', 'marketplace', 'jobs', 'forum', 'economy', 'reports', 'disputes', 'tickets'],
+    () => load(queryRef.current),
+    { delayMs: 1500 },
+  );
 
   const update = (patch: Partial<Query>) =>
     setQuery((prev) => ({ ...prev, offset: 0, ...patch }));

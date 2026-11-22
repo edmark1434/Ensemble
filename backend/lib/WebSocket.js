@@ -8,7 +8,10 @@ const { createCorsOriginValidator, getAllowedOrigins } = require('./CorsOrigins'
 dotenv.config();
 
 let io;
-/** Every connected staff socket. Gets `staffCaseChanged` (ids only; desks re-read over HTTP). */
+/**
+ * Every connected staff socket. Gets `staffCaseChanged` and `staffDataChanged` (ids or area
+ * names only; desks re-read over HTTP).
+ */
 const STAFF_CASES_ROOM = 'staff:cases';
 const onlineAccounts = new Map();
 const callExpiryTimers = new Map();
@@ -925,6 +928,64 @@ function emitStaffCaseChange({ kind, id, reason = null } = {}) {
   }
 }
 
+/** Areas a staff console page can follow live (`staffDataChanged`). */
+const STAFF_DATA_TOPICS = Object.freeze([
+  'accounts',
+  'teams',
+  'economy',
+  'marketplace',
+  'jobs',
+  'forum',
+  'moderation',
+  'policy',
+  'settings',
+  'badges',
+  'feedback',
+  'videos',
+  'staff',
+  'tickets',
+  'disputes',
+  'reports',
+]);
+const STAFF_DATA_TOPIC_SET = new Set(STAFF_DATA_TOPICS);
+/** Changes within this window go out as one event, so a burst of writes is one re-read per desk. */
+const STAFF_DATA_FLUSH_MS = 300;
+const pendingStaffTopics = new Set();
+let staffDataTimer = null;
+
+function flushStaffDataChange() {
+  staffDataTimer = null;
+  if (!io || !pendingStaffTopics.size) {
+    pendingStaffTopics.clear();
+    return;
+  }
+  const topics = [...pendingStaffTopics];
+  pendingStaffTopics.clear();
+  try {
+    io.to(STAFF_CASES_ROOM).emit('staffDataChanged', { topics, at: new Date().toISOString() });
+  } catch (error) {
+    console.warn('Staff data change not delivered:', error.message);
+  }
+}
+
+/**
+ * Tell every open staff console which areas changed, after the change is saved. The payload
+ * names areas only (`STAFF_DATA_TOPICS`), never their content: each page re-reads over HTTP,
+ * which applies its desk's access rules. Changes are batched for `STAFF_DATA_FLUSH_MS`.
+ * Never throws.
+ * @param {string[]|'all'} topics
+ */
+function emitStaffDataChange(topics) {
+  if (!io) return;
+  const list = topics === 'all' ? STAFF_DATA_TOPICS : (topics || []);
+  for (const topic of list) {
+    if (STAFF_DATA_TOPIC_SET.has(topic)) pendingStaffTopics.add(topic);
+  }
+  if (!pendingStaffTopics.size || staffDataTimer) return;
+  staffDataTimer = setTimeout(flushStaffDataChange, STAFF_DATA_FLUSH_MS);
+  if (typeof staffDataTimer.unref === 'function') staffDataTimer.unref();
+}
+
 /**
  * Tell members their wallet or credit history changed (a dispute payout paid, scheduled,
  * moved or withdrawn), so open wallet views reload. Call after the change is committed.
@@ -952,6 +1013,8 @@ module.exports = {
   getIo,
   emitForumEvent,
   emitStaffCaseChange,
+  emitStaffDataChange,
+  STAFF_DATA_TOPICS,
   emitWalletChanged,
   emitConversationMessage,
   refreshSocketStanding,

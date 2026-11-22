@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import useGlobalState from '@/lib/global_state';
 import { peekStaffGet, staffGet } from '@/lib/staffCache';
+import { useStaffLive } from '@/lib/staffLive';
 import { ChartCard, DonutChart, LineChart } from '@/pages/admin/analytics/components/AnalyticsCharts';
 import { ReportCaseDetailModal } from '@/pages/admin/moderation/CaseDetailModals';
 import ModeratorTicketDetailModal from '../shared/ModeratorTicketDetailModal';
@@ -392,6 +393,13 @@ export default function MarketplaceModeratorDashboard() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  // Live: queues, SLAs, alerts, team load and sellers to watch follow every marketplace case.
+  useStaffLive(
+    ['marketplace', 'tickets', 'reports', 'disputes', 'moderation', 'accounts', 'staff'],
+    () => load(true),
+    { delayMs: 1000 },
+  );
 
   const myStaffId = String(user?.staffId ?? user?.staff_id ?? '').toLowerCase();
 

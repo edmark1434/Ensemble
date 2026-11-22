@@ -88,6 +88,13 @@ async function updateJobServices(jobId, accountIds, jobData) {
         const actorId = Array.isArray(accountIds) ? accountIds[0] : accountIds;
         await assertWarningAllows(actorId, 'create_urgent_job');
     }
+    // A job staff paused, closed or archived keeps its status until staff reopen it.
+    if (jobData.status !== undefined && jobData.status !== null) {
+        const hold = await JobRepositories.getJobStaffHoldRepositories(jobId);
+        if (hold?.staff_hold_at && String(jobData.status).toLowerCase() !== String(hold.status || '').toLowerCase()) {
+            throw require('./PostingModerationServices').postingHeldError('job');
+        }
+    }
     const updated = await JobRepositories.updateJobRepositories(jobId, accountIds, jobData);
     if (!updated) {
         throw new Error('Job not found or you do not have permission to edit it.');

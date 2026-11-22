@@ -8,6 +8,7 @@ const {
   getMarketplaceReports,
 } = require('../repositories/MarketplaceModeratorRepositories');
 const { getListingOriginalAccess } = require('../services/MarketplaceListingFileServices');
+const { postStaffListingMessageServices } = require('../services/MarketplaceListingReviewServices');
 const {
   getTicketDetail,
   updateTicket,
@@ -170,6 +171,22 @@ async function patchListing(req, res) {
     res
       .status(status)
       .json({ success: false, message: status < 500 ? message : 'Failed to update listing' });
+  }
+}
+
+/** Staff reply on the listing's conversation with the seller. */
+async function postListingMessage(req, res) {
+  try {
+    const data = await postStaffListingMessageServices(req.params.id, req.session, req.body);
+    res.status(201).json({ success: true, data });
+  } catch (err) {
+    const status = Number.isInteger(err?.statusCode) ? err.statusCode : 500;
+    if (status >= 500) console.error('Error posting listing message:', err);
+    res.status(status).json({
+      success: false,
+      message: status < 500 ? err.message : 'Failed to send the message',
+      code: status < 500 ? err.code : undefined,
+    });
   }
 }
 
@@ -384,6 +401,7 @@ module.exports = {
   getListingDetail,
   getSellerListings,
   patchListing,
+  postListingMessage,
   getListingFileOriginal,
   getTickets,
   getTicket,

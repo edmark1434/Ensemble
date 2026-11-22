@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Loader2, Pencil, Plus, Trash2, X } from 'lucide-react';
 import api from '@/lib/axios';
 import { peekStaffGet, staffGet } from '@/lib/staffCache';
+import { useStaffLive } from '@/lib/staffLive';
 import { showErrorToast, showSuccessToast } from '@/components/utility/toast';
 
 const fieldClass =
@@ -125,6 +126,9 @@ export default function AdminWarningThresholdsPanel() {
       .catch((err) => showErrorToast(errorMessage(err, 'Unable to load thresholds')))
       .finally(() => setLoading(false));
   }, []);
+
+  // Another admin's band edits show up at once; an open editor keeps its own draft.
+  useStaffLive(['policy'], () => load().catch(() => {}));
 
   const openCreate = () => {
     setForm(emptyForm());

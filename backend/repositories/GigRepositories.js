@@ -3861,13 +3861,19 @@ async function toggleGigStatusRepository(gigId, accountIds, targetStatus = null)
     try {
         await client.query('BEGIN');
         const currentRes = await client.query(
-            `SELECT gig_id, status FROM gigs WHERE gig_id = $1 AND freelancer_account_id = ANY($2::uuid[])`,
+            `SELECT gig_id, status, staff_hold_at FROM gigs
+             WHERE gig_id = $1 AND freelancer_account_id = ANY($2::uuid[])
+             FOR UPDATE`,
             [gigId, accountIds]
         );
         if (currentRes.rows.length === 0) {
             const err = new Error('Gig not found or unauthorized');
             err.statusCode = 404;
             throw err;
+        }
+        // Staff paused, closed or archived this gig: only staff (or a support ticket) reopen it.
+        if (currentRes.rows[0].staff_hold_at) {
+            throw require('../services/PostingModerationServices').postingHeldError('gig');
         }
 
         const currentStatus = (currentRes.rows[0].status || 'active').toLowerCase();

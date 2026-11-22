@@ -31,6 +31,7 @@ import { createPortal } from 'react-dom';
 import api from '@/lib/axios';
 import useGlobalState from '@/lib/global_state';
 import { peekStaffGet, staffGet } from '@/lib/staffCache';
+import { useStaffLive } from '@/lib/staffLive';
 import { showErrorToast, showSuccessToast } from '@/components/utility/toast.ts';
 import { prefetchStaffTab } from '@/lib/staffPrefetch';
 import TableFilterBar, { uniqueOptions } from '../userTeam/components/TableFilterBar';
@@ -204,6 +205,14 @@ export default function ModerationPage() {
   useEffect(() => {
     void load();
   }, []);
+
+  // Live: the overview feeds My cases, Reports, Disputes, Identity & business verification and
+  // Listing approvals, so new submissions, listings and enforcement show up without a reload.
+  useStaffLive(
+    ['accounts', 'teams', 'marketplace', 'jobs', 'forum', 'moderation', 'reports', 'disputes', 'videos'],
+    () => load(true),
+    { delayMs: 1000 },
+  );
 
   useEffect(() => {
     if (rawTab === 'disputes' || rawTab === 'reports') {

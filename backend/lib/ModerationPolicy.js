@@ -38,6 +38,11 @@ async function evaluateUserContent() {
  * Queue or update a pending marketplace_listings row for moderator approval and return
  * the status that should be persisted on market_assets ('draft').
  * Already-published assets keep published status when their details are edited.
+ *
+ * A queued result carries `listingId` and `previousStatus` (the listing status before this
+ * call, null for a new row) so the caller can add the submission to the listing thread once
+ * its own save has succeeded. A scheduled listing that is edited goes back to `pending`: the
+ * content changed after approval.
  */
 async function resolveMarketplacePublishStatus({
   accountId,
@@ -118,18 +123,21 @@ async function resolveMarketplacePublishStatus({
       return {
         status: 'draft',
         queued: true,
+        listingId: existingListing.listing_id,
+        previousStatus: existingListing.status || null,
         listingNumber: existingListing.listing_number,
         message: 'Listing submitted for moderator approval. It will be published once approved.',
       };
     }
 
     const listingNumber = `LST-${Date.now().toString().slice(-10)}`;
-    await pool.query(
+    const inserted = await pool.query(
       `
       INSERT INTO marketplace_listings (
         listing_number, submitted_by_account_id, market_asset_id, title, description,
         category, price_credits, thumbnail_url, status, created_at, updated_at
       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'pending', NOW(), NOW())
+      RETURNING listing_id
       `,
       [
         listingNumber,
@@ -146,12 +154,16 @@ async function resolveMarketplacePublishStatus({
     return {
       status: 'draft',
       queued: true,
+      listingId: inserted.rows[0]?.listing_id || null,
+      previousStatus: null,
       listingNumber,
       message: 'Listing submitted for moderator approval. It will be published once approved.',
     };
   } catch (err) {
-    console.warn('marketplaceListingReview queue skipped:', err.message);
-    return { status: requestedStatus, queued: false };
+    // Fail closed: a listing that could not enter the queue stays a draft. Returning the
+    // requested 'published' here used to put it in the catalog without any review.
+    console.error('marketplaceListingReview queue failed:', err.message);
+    return { status: 'draft', queued: false };
   }
 }
 
@@ -232,8 +244,24 @@ async function applyReportAutomations(reportRow, { staffId = null } = {}) {
   return { ...reportRow, priority };
 }
 
+/** Go-live time in notification text (UTC; the asset page shows it in local time). */
+function formatGoLive(value) {
+  const date = value ? new Date(value) : null;
+  if (!date || Number.isNaN(date.getTime())) return 'soon';
+  return `${date.toLocaleString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    timeZone: 'UTC',
+  })} UTC`;
+}
+
 /**
  * Dispatch in-app notification and realtime socket events for marketplace listing review decisions.
+ * `status` is the listing status after the change, plus two thread events:
+ * `published` (a scheduled listing went live) and `message` (staff replied in the thread).
  */
 async function sendMarketplaceListingNotification({
   accountId,
@@ -243,19 +271,29 @@ async function sendMarketplaceListingNotification({
   status,
   rejectionReason = null,
   moderationNote = null,
+  publishAt = null,
+  messageBody = null,
 }) {
   if (!accountId) return;
   const assetTitle = String(title || 'Untitled Asset').trim();
   const note = String(moderationNote || '').trim();
+  const excerpt = String(messageBody || '').trim();
+  const short = excerpt.length > 160 ? `${excerpt.slice(0, 157)}…` : excerpt;
   let message = '';
   if (status === 'approved') {
-    message = `Your asset "${assetTitle}" has been approved by moderators and is now published to the Marketplace!`;
+    message = `Your asset "${assetTitle}" has been approved by moderators and is now published to the Marketplace!${short ? ` Note: ${short}` : ''}`;
+  } else if (status === 'published') {
+    message = `Your asset "${assetTitle}" is now live on the Marketplace.`;
+  } else if (status === 'scheduled') {
+    message = `Your asset "${assetTitle}" was approved and goes live on the Marketplace on ${formatGoLive(publishAt)}.${short ? ` Note: ${short}` : ''}`;
   } else if (status === 'rejected') {
-    message = `Your asset "${assetTitle}" was not approved.${rejectionReason ? ` Reason: ${rejectionReason}` : ''} You can edit the asset to address this feedback and resubmit.`;
+    message = `Your asset "${assetTitle}" was not approved.${rejectionReason ? ` Reason: ${rejectionReason}` : ''} Open the asset to read the feedback, then resubmit it with a message.`;
   } else if (status === 'delisted') {
-    message = `Your asset "${assetTitle}" has been delisted from the Marketplace and reverted to draft.${note ? ` Reason: ${note}` : ''}`;
+    message = `Your asset "${assetTitle}" has been delisted from the Marketplace and reverted to draft.${note ? ` Reason: ${note}` : ''} You can resubmit it with a message from the asset page.`;
   } else if (status === 'pending') {
     message = `Your asset "${assetTitle}" was removed from the Marketplace and is being re-reviewed by moderators.${note ? ` Reason: ${note}` : ''}`;
+  } else if (status === 'message') {
+    message = `The marketplace review team replied about "${assetTitle}"${short ? `: ${short}` : '.'}`;
   } else {
     return;
   }
@@ -282,6 +320,7 @@ async function sendMarketplaceListingNotification({
           status,
           rejectionReason,
           moderationNote: note || null,
+          publishAt: publishAt || null,
         });
       }
     } catch (wsErr) {

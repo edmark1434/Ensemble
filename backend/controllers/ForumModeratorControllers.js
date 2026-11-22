@@ -1,5 +1,6 @@
 const {
   getForumOverview,
+  getForumTrends,
   getForumTickets,
   getForumReports,
   getTicketDetail,
@@ -35,6 +36,20 @@ async function getOverview(req, res) {
   } catch (err) {
     console.error('Error fetching forum overview:', err);
     res.status(500).json({ success: false, message: 'Failed to load forum overview' });
+  }
+}
+
+async function getTrends(req, res) {
+  try {
+    const data = await getForumTrends({ range: req.query.range });
+    res.status(200).json({ success: true, data });
+  } catch (err) {
+    if (err?.statusCode === 400) {
+      res.status(400).json({ success: false, message: err.message });
+      return;
+    }
+    console.error('Error fetching forum trends:', err);
+    res.status(500).json({ success: false, message: 'Failed to load forum trends' });
   }
 }
 
@@ -423,6 +438,7 @@ async function patchDisputeMessage(req, res) {
 
 module.exports = {
   getOverview,
+  getTrends,
   getTickets,
   getTicket,
   patchTicket,

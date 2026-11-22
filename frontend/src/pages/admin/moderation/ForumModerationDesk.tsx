@@ -1,16 +1,31 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type ReactNode,
+} from 'react';
+import { Link, useLocation } from 'react-router-dom';
 import {
   Archive,
   ArchiveRestore,
   ArrowLeft,
   Ban,
+  Bookmark,
   CheckCircle2,
+  CornerDownRight,
   Crown,
   Download,
+  ExternalLink,
   EyeOff,
   Heart,
+  LayoutGrid,
+  List,
   Loader2,
   Lock,
+  MessageCircle,
   MessageSquare,
   MessagesSquare,
   Pin,
@@ -18,6 +33,7 @@ import {
   RefreshCw,
   Search,
   Shield,
+  Tag,
   Undo2,
   Unlock,
   Users,
@@ -25,6 +41,8 @@ import {
 } from 'lucide-react';
 import api from '@/lib/axios';
 import { peekStaffGet, staffGet } from '@/lib/staffCache';
+import { useStaffLive } from '@/lib/staffLive';
+import { staffPlatformViewHref } from '@/lib/staffRoutes';
 import { showErrorToast, showSuccessToast } from '@/components/utility/toast.ts';
 import TableFilterBar from '../userTeam/components/TableFilterBar';
 import {
@@ -37,13 +55,26 @@ import {
   personLabel,
   statusClass,
 } from './moderationFormat';
+import {
+  AvatarStack,
+  ForumAvatar,
+  ForumImageGrid,
+  ForumMarkdown,
+  GroupImage,
+  PersonBadges,
+  PersonLine,
+  forumTimeAgo,
+} from './forumDeskUi';
 
 type ForumPerson = {
   userId: string | number | null;
   accountId?: string | null;
   name: string | null;
   handle: string | null;
+  /** Storage path of the member's avatar, as the member forum shows it. */
+  avatarUrl?: string | null;
   isVerified?: boolean;
+  subscriptionPlan?: string | null;
 };
 
 type ForumMember = ForumPerson & {
@@ -61,6 +92,8 @@ type ForumComment = {
   author: ForumPerson;
   likeCount: number;
   attachmentCount: number;
+  images?: string[];
+  isEdited?: boolean;
   isDeleted: boolean;
   deletedAt: string | null;
   removedBy?: string | null;
@@ -75,11 +108,19 @@ type ForumDiscussion = {
   id: string;
   title: string;
   description: string | null;
+  /** Plain-text start of the post body (lists). */
+  excerpt?: string | null;
+  /** Full post body as written, Markdown (detail only). */
+  content?: string | null;
+  /** First few image paths (lists) or all of them (detail). */
+  images?: string[];
+  imageCount?: number;
   groupId: string | null;
   groupName?: string | null;
   groupStatus?: string | null;
+  groupImageUrl?: string | null;
   author: ForumPerson;
-  tags?: ({ tag_name?: string } | string)[];
+  tags?: ForumTag[];
   attachmentCount?: number;
   commentCount: number;
   removedCommentCount: number;
@@ -107,8 +148,10 @@ type ForumGroup = {
   description: string | null;
   imageUrl: string | null;
   status: string;
-  tags: ({ tag_name?: string } | string)[];
+  tags: ForumTag[];
   memberCount: number;
+  /** Owner first, then other members (list only). */
+  memberPreview?: (ForumPerson & { role: string })[];
   bannedMemberCount: number;
   adminCount: number;
   moderatorCount: number;
@@ -152,13 +195,82 @@ function forumDeskApi(base: string) {
 }
 
 type View = 'groups' | 'discussions';
+type Layout = 'cards' | 'table';
 
-function tagLabel(tag: { tag_name?: string } | string) {
-  return typeof tag === 'string' ? tag : tag.tag_name || '';
+/** Discussion tags carry `tag_name`; group tags carry `tag`. */
+type ForumTag = { tag_name?: string; tag?: string } | string;
+
+function tagLabel(tag: ForumTag) {
+  return typeof tag === 'string' ? tag : tag.tag_name || tag.tag || '';
 }
 
-function tagList(tags?: ({ tag_name?: string } | string)[]) {
+function tagList(tags?: ForumTag[]) {
   return (tags || []).map(tagLabel).filter(Boolean);
+}
+
+/** Card or table layout is a per-browser preference. */
+const LAYOUT_KEY = 'forumDesk.layout';
+
+function readLayout(): Layout {
+  try {
+    return window.localStorage.getItem(LAYOUT_KEY) === 'table' ? 'table' : 'cards';
+  } catch {
+    return 'cards';
+  }
+}
+
+function saveLayout(layout: Layout) {
+  try {
+    window.localStorage.setItem(LAYOUT_KEY, layout);
+  } catch {
+    // Storage blocked: the choice lasts for this visit only.
+  }
+}
+
+/** Where members see this content, or why they can't right now. */
+function memberVisibility(kind: 'discussion' | 'group', item: ForumDiscussion | ForumGroup) {
+  if (kind === 'group') {
+    return (item as ForumGroup).status === 'active' ? null : 'Archived: members cannot open this group.';
+  }
+  const discussion = item as ForumDiscussion;
+  if (discussion.status === 'removed') return 'Removed: members cannot open this discussion.';
+  if (discussion.groupStatus && discussion.groupStatus !== 'active') {
+    return 'Its group is archived, so members cannot open it.';
+  }
+  return null;
+}
+
+/**
+ * Opens the member page in this console's platform view (new tab), so staff see the
+ * discussion or group exactly as members do while this desk stays open.
+ */
+function MemberViewLink({
+  consolePath,
+  memberPath,
+  hiddenReason,
+  compact = false,
+}: {
+  consolePath: string;
+  memberPath: string;
+  hiddenReason?: string | null;
+  compact?: boolean;
+}) {
+  const label = compact ? 'Member view' : 'Open as member';
+  return (
+    <Link
+      to={staffPlatformViewHref(consolePath, memberPath)}
+      target="_blank"
+      rel="noreferrer"
+      onClick={(event) => event.stopPropagation()}
+      title={hiddenReason || 'See this page the way members do (opens platform view)'}
+      className={`inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-white/10 text-zinc-300 transition hover:border-white/20 hover:text-white ${
+        compact ? 'px-2 py-1 text-[11px]' : 'px-3 py-1.5 text-xs'
+      }`}
+    >
+      <ExternalLink className={compact ? 'h-3 w-3' : 'h-3.5 w-3.5'} />
+      {label}
+    </Link>
+  );
 }
 
 /** The state words that matter on a discussion row, in one line. */
@@ -247,6 +359,8 @@ export default function ForumModerationDesk({
   initialView = 'groups',
   accent = 'rose',
   onViewChange,
+  openTarget = null,
+  onDetailClose,
 }: {
   /** Root of this console's forum routes, without a trailing slash. */
   apiBase: string;
@@ -255,6 +369,10 @@ export default function ForumModerationDesk({
   accent?: DeskAccent;
   /** Optional sync when the desk toggles Discussions ↔ Groups. */
   onViewChange?: (view: View) => void;
+  /** Opens this group or discussion when it changes (deep links such as `?discussion=`). */
+  openTarget?: { kind: 'group' | 'discussion'; id: string } | null;
+  /** Called when the open group or discussion is closed. */
+  onDetailClose?: () => void;
 }) {
   const theme = DESK_ACCENT[accent] || DESK_ACCENT.rose;
   const { groups: FORUM_GROUPS_URL, discussions: FORUM_DISCUSSIONS_URL } = useMemo(
@@ -281,7 +399,14 @@ export default function ForumModerationDesk({
   const [saving, setSaving] = useState(false);
   const [reason, setReason] = useState('');
   const [memberFilter, setMemberFilter] = useState('');
+  const [layout, setLayout] = useState<Layout>(readLayout);
+  const { pathname: consolePath } = useLocation();
   const firstLoad = useRef(true);
+
+  const changeLayout = (next: Layout) => {
+    setLayout(next);
+    saveLayout(next);
+  };
 
   // Debounce the search box: both desks query the server.
   useEffect(() => {
@@ -405,7 +530,56 @@ export default function ForumModerationDesk({
     setGroupDetail(null);
     setDiscussionDetail(null);
     setReason('');
+    onDetailClose?.();
   };
+
+  // A deep link opens its group or discussion once; the same link opens it again after a close.
+  const openedTarget = useRef<string | null>(null);
+  useEffect(() => {
+    if (!openTarget?.id) {
+      openedTarget.current = null;
+      return;
+    }
+    const key = `${openTarget.kind}:${openTarget.id}`;
+    if (openedTarget.current === key) return;
+    openedTarget.current = key;
+    if (openTarget.kind === 'group') void openGroup(openTarget.id);
+    else void openDiscussion(openTarget.id);
+    // openGroup / openDiscussion only read the API roots, which the target change already covers.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openTarget?.kind, openTarget?.id]);
+
+  // Live: new posts, comments, members, reports and other staff actions update the list and
+  // the open group or discussion. Filters, sort and the typed reason stay.
+  useStaffLive(
+    ['forum', 'reports', 'moderation', 'accounts'],
+    async () => {
+      const openGroupId = groupDetail?.id;
+      const openDiscussionId = discussionDetail?.id;
+      await Promise.all([
+        load(view, query, status),
+        openGroupId
+          ? api
+              .get(`${FORUM_GROUPS_URL}/${openGroupId}`)
+              .then((res) => {
+                const next = res.data?.data;
+                if (next) setGroupDetail((current) => (current?.id === openGroupId ? next : current));
+              })
+              .catch(() => undefined)
+          : null,
+        openDiscussionId
+          ? api
+              .get(`${FORUM_DISCUSSIONS_URL}/${openDiscussionId}`)
+              .then((res) => {
+                const next = res.data?.data;
+                if (next) setDiscussionDetail((current) => (current?.id === openDiscussionId ? next : current));
+              })
+              .catch(() => undefined)
+          : null,
+      ]);
+    },
+    { enabled: !saving, delayMs: 1200 },
+  );
 
   const saveGroupStatus = async (next: 'active' | 'inactive') => {
     if (!groupDetail) return;
@@ -666,6 +840,28 @@ export default function ForumModerationDesk({
             {stats?.lastActivityAt ? ` · last activity ${formatRelative(stats.lastActivityAt)}` : ''}
           </p>
           <div className="hidden flex-1 lg:block" />
+          <div role="group" aria-label="Layout" className="inline-flex rounded-xl border border-white/[0.08] p-0.5">
+            {(
+              [
+                { id: 'cards' as const, label: 'Member view', icon: LayoutGrid },
+                { id: 'table' as const, label: 'Table', icon: List },
+              ] as const
+            ).map(({ id, label, icon: Icon }) => (
+              <button
+                key={id}
+                type="button"
+                aria-pressed={layout === id}
+                onClick={() => changeLayout(id)}
+                title={id === 'cards' ? 'Cards laid out like the member forum' : 'Compact table with every count'}
+                className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium transition ${
+                  layout === id ? theme.tabOn : 'text-zinc-500 hover:text-zinc-200'
+                }`}
+              >
+                <Icon className={`h-3.5 w-3.5 ${layout === id ? theme.tabIcon : ''}`} />
+                {label}
+              </button>
+            ))}
+          </div>
           <button
             type="button"
             onClick={() => void load(view, query, status)}
@@ -743,7 +939,18 @@ export default function ForumModerationDesk({
             Loading forum
           </div>
         ) : view === 'groups' ? (
-          <GroupsTable groups={visibleGroups} onOpen={openGroup} />
+          layout === 'cards' ? (
+            <GroupCards groups={visibleGroups} onOpen={openGroup} consolePath={consolePath} />
+          ) : (
+            <GroupsTable groups={visibleGroups} onOpen={openGroup} />
+          )
+        ) : layout === 'cards' ? (
+          <DiscussionCards
+            discussions={visibleDiscussions}
+            onOpen={openDiscussion}
+            onOpenGroup={openGroup}
+            consolePath={consolePath}
+          />
         ) : (
           <DiscussionsTable discussions={visibleDiscussions} onOpen={openDiscussion} />
         )}
@@ -768,6 +975,7 @@ export default function ForumModerationDesk({
               onStatusChange={saveGroupStatus}
               onMemberBan={saveMemberBan}
               onOpenDiscussion={openDiscussion}
+              consolePath={consolePath}
             />
           ) : discussionDetail ? (
             <DiscussionDetail
@@ -779,11 +987,317 @@ export default function ForumModerationDesk({
               onSave={saveDiscussion}
               onCommentHidden={setCommentHidden}
               onOpenGroup={openGroup}
+              consolePath={consolePath}
             />
           ) : null}
         </DetailOverlay>
       )}
     </div>
+  );
+}
+
+/** Enter / Space open a card, unless the key was meant for a control inside it. */
+function openOnKey(event: ReactKeyboardEvent, open: () => void) {
+  if (event.target !== event.currentTarget) return;
+  if (event.key === 'Enter' || event.key === ' ') {
+    event.preventDefault();
+    open();
+  }
+}
+
+function EmptyCards({ children }: { children: ReactNode }) {
+  return <p className="px-4 py-14 text-center text-sm text-zinc-500">{children}</p>;
+}
+
+/** Only the states worth flagging on a card: visible is the normal case. */
+function flaggedStates(item: ForumDiscussion) {
+  return discussionState(item).filter((state) => state !== 'Visible');
+}
+
+/**
+ * Discussions laid out like the member forum feed (author, group, title, body, images,
+ * likes / replies / saves), with the moderation state on top so nothing is missed.
+ */
+function DiscussionCards({
+  discussions,
+  onOpen,
+  onOpenGroup,
+  consolePath,
+}: {
+  discussions: ForumDiscussion[];
+  onOpen: (id: string) => void;
+  onOpenGroup: (id: string) => void;
+  consolePath: string;
+}) {
+  if (!discussions.length) return <EmptyCards>No discussions match this view.</EmptyCards>;
+  return (
+    <ul className="grid gap-3 p-4 xl:grid-cols-2">
+      {discussions.map((item) => {
+        const removed = item.status === 'removed';
+        const tags = tagList(item.tags);
+        const states = flaggedStates(item);
+        return (
+          <li key={item.id} className="min-w-0">
+            <article
+              tabIndex={0}
+              onClick={() => onOpen(item.id)}
+              onKeyDown={(event) => openOnKey(event, () => onOpen(item.id))}
+              aria-label={`Review discussion ${item.title}`}
+              className={`flex h-full cursor-pointer flex-col rounded-xl border p-4 transition hover:border-white/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/20 ${
+                removed
+                  ? 'border-rose-500/25 bg-rose-500/[0.03]'
+                  : item.isSticky
+                    ? 'border-violet-500/25 bg-[#101117]'
+                    : 'border-white/[0.08] bg-[#101117]'
+              }`}
+            >
+              <div className="flex items-start gap-3">
+                <ForumAvatar person={item.author} size="md" />
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
+                    <span className="flex min-w-0 items-center gap-1">
+                      <span className="truncate text-sm font-medium text-white">
+                        {item.author?.name || 'Unknown member'}
+                      </span>
+                      <PersonBadges person={item.author} />
+                    </span>
+                    {item.author?.handle ? (
+                      <span className="text-[11px] text-zinc-500">@{item.author.handle}</span>
+                    ) : null}
+                    <span className="text-[11px] text-zinc-500">· {forumTimeAgo(item.createdAt)}</span>
+                  </div>
+                  <div className="mt-1.5 flex flex-wrap items-center gap-1">
+                    {item.groupId ? (
+                      <button
+                        type="button"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          onOpenGroup(item.groupId as string);
+                        }}
+                        title="Open this group"
+                        className="inline-flex max-w-[220px] items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] py-0.5 pl-0.5 pr-2 text-[10px] font-medium text-zinc-300 transition hover:bg-white/[0.08] hover:text-white"
+                      >
+                        <GroupImage
+                          name={item.groupName || 'Group'}
+                          imageUrl={item.groupImageUrl}
+                          size="xs"
+                          circle
+                        />
+                        <span className="truncate">{item.groupName || 'Group'}</span>
+                        {item.groupStatus && item.groupStatus !== 'active' ? (
+                          <span className="text-amber-200/80">· archived</span>
+                        ) : null}
+                      </button>
+                    ) : null}
+                    {tags.slice(0, 3).map((tag) => (
+                      <span
+                        key={tag}
+                        className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/[0.04] px-2 py-0.5 text-[10px] text-zinc-400"
+                      >
+                        <Tag className="h-2.5 w-2.5" />
+                        {tag}
+                      </span>
+                    ))}
+                    {tags.length > 3 ? (
+                      <span className="text-[10px] text-zinc-500">+{tags.length - 3}</span>
+                    ) : null}
+                  </div>
+                </div>
+                {states.length ? (
+                  <div className="flex shrink-0 flex-wrap justify-end gap-1">
+                    {states.map((state) => (
+                      <StatePill key={state} value={state}>
+                        {state}
+                      </StatePill>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+
+              <h3 className="mt-3 line-clamp-2 text-[15px] font-semibold leading-snug text-white">{item.title}</h3>
+              {item.excerpt ? (
+                <p className="mt-1 line-clamp-3 text-sm leading-relaxed text-zinc-400">{item.excerpt}</p>
+              ) : (
+                <p className="mt-1 text-sm italic text-zinc-600">No body text</p>
+              )}
+              {item.images?.length ? (
+                <div className="mt-3">
+                  <ForumImageGrid images={item.images} total={item.imageCount} compact />
+                </div>
+              ) : null}
+              {removed ? (
+                <p className="mt-3 rounded-lg border border-rose-500/20 bg-rose-500/[0.06] px-2.5 py-1.5 text-[11px] text-rose-100/90">
+                  {removedByLabel(item.removedBy)}
+                  {item.removalReason ? ` · “${item.removalReason}”` : ''}
+                </p>
+              ) : null}
+
+              <div className="min-h-3 flex-1" />
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-white/[0.06] pt-3 text-xs text-zinc-400">
+                <span className="inline-flex items-center gap-1.5" title="Likes">
+                  <Heart className="h-3.5 w-3.5" />
+                  {formatNumber(item.likeCount)}
+                </span>
+                <span className="inline-flex items-center gap-1.5" title="Replies">
+                  <MessageCircle className="h-3.5 w-3.5" />
+                  {formatNumber(item.commentCount)} replies
+                  {item.removedCommentCount ? (
+                    <span className="text-rose-200/80">· {formatNumber(item.removedCommentCount)} hidden</span>
+                  ) : null}
+                </span>
+                <span className="inline-flex items-center gap-1.5" title="Saves">
+                  <Bookmark className="h-3.5 w-3.5" />
+                  {formatNumber(item.saveCount)}
+                </span>
+                <span className="text-[11px] text-zinc-600">active {formatRelative(item.lastActivityAt)}</span>
+                <span className="flex-1" />
+                <MemberViewLink
+                  compact
+                  consolePath={consolePath}
+                  memberPath={`/forums/discussion/${item.id}`}
+                  hiddenReason={memberVisibility('discussion', item)}
+                />
+              </div>
+            </article>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+/** Groups laid out like the member forum's group cards, plus their moderation counts. */
+function GroupCards({
+  groups,
+  onOpen,
+  consolePath,
+}: {
+  groups: ForumGroup[];
+  onOpen: (id: string) => void;
+  consolePath: string;
+}) {
+  if (!groups.length) return <EmptyCards>No groups match this view.</EmptyCards>;
+  return (
+    <ul className="grid gap-3 p-4 sm:grid-cols-2 xl:grid-cols-3">
+      {groups.map((group) => {
+        const archived = group.status !== 'active';
+        const tags = tagList(group.tags);
+        const flagged =
+          group.removedDiscussionCount || group.lockedDiscussionCount || group.removedCommentCount || group.bannedMemberCount;
+        return (
+          <li key={group.id} className="min-w-0">
+            <article
+              tabIndex={0}
+              onClick={() => onOpen(group.id)}
+              onKeyDown={(event) => openOnKey(event, () => onOpen(group.id))}
+              aria-label={`Review group ${group.name}`}
+              className={`flex h-full cursor-pointer flex-col overflow-hidden rounded-xl border bg-[#101117] transition hover:border-white/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/20 ${
+                archived ? 'border-amber-500/25' : 'border-white/[0.08]'
+              }`}
+            >
+              <div className={`relative ${archived ? 'opacity-60' : ''}`}>
+                <GroupImage name={group.name} imageUrl={group.imageUrl} variant="banner" />
+                <span className="absolute right-2 top-2 rounded-full bg-black/55 backdrop-blur">
+                  <StatePill value={group.status}>{archived ? 'Archived' : 'Active'}</StatePill>
+                </span>
+              </div>
+              <div className="flex flex-1 flex-col p-4">
+                <h3 className="truncate text-sm font-semibold text-white">{group.name}</h3>
+                <div className="mt-1 flex min-w-0 items-center gap-1.5 text-[11px] text-zinc-500">
+                  {group.owner ? (
+                    <>
+                      <Crown className="h-3 w-3 shrink-0 text-amber-300" />
+                      <ForumAvatar person={group.owner} size="xs" />
+                      <span className="truncate text-zinc-300">{group.owner.name || 'Unknown owner'}</span>
+                      <PersonBadges person={group.owner} />
+                    </>
+                  ) : (
+                    <span>No owner</span>
+                  )}
+                </div>
+                <p className="mt-2 line-clamp-2 text-xs leading-relaxed text-zinc-400">
+                  {group.description || 'No description'}
+                </p>
+                <div className="mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs font-medium text-zinc-300">
+                  <span className="inline-flex items-center gap-1.5">
+                    <Users className="h-3 w-3 text-zinc-500" />
+                    {formatNumber(group.memberCount)} {group.memberCount === 1 ? 'member' : 'members'}
+                  </span>
+                  <span className="inline-flex items-center gap-1.5">
+                    <MessageCircle className="h-3 w-3 text-zinc-500" />
+                    {formatNumber(group.activeDiscussionCount)}{' '}
+                    {group.activeDiscussionCount === 1 ? 'discussion' : 'discussions'}
+                  </span>
+                  <span className="text-zinc-500">{formatNumber(group.commentCount)} replies</span>
+                </div>
+                {tags.length ? (
+                  <div className="mt-2 flex flex-wrap gap-1">
+                    {tags.slice(0, 3).map((tag) => (
+                      <span key={tag} className="rounded-full bg-white/[0.06] px-2 py-0.5 text-[10px] text-zinc-400">
+                        {tag}
+                      </span>
+                    ))}
+                    {tags.length > 3 ? (
+                      <span className="rounded-full bg-white/[0.06] px-2 py-0.5 text-[10px] text-zinc-500">
+                        +{tags.length - 3}
+                      </span>
+                    ) : null}
+                  </div>
+                ) : null}
+                {archived ? (
+                  <p className="mt-2.5 text-[11px] text-amber-200/80">
+                    {archivedByLabel(group.archivedBy)}
+                    {group.archiveReason ? ` · “${group.archiveReason}”` : ''}
+                  </p>
+                ) : null}
+                <div className="mt-2.5 flex flex-wrap gap-1">
+                  {group.removedDiscussionCount ? (
+                    <span className="rounded-full border border-rose-500/25 bg-rose-500/10 px-1.5 py-0.5 text-[10px] text-rose-200">
+                      {group.removedDiscussionCount} removed
+                    </span>
+                  ) : null}
+                  {group.lockedDiscussionCount ? (
+                    <span className="rounded-full border border-amber-500/25 bg-amber-500/10 px-1.5 py-0.5 text-[10px] text-amber-200">
+                      {group.lockedDiscussionCount} locked
+                    </span>
+                  ) : null}
+                  {group.removedCommentCount ? (
+                    <span className="rounded-full border border-white/10 bg-white/[0.04] px-1.5 py-0.5 text-[10px] text-zinc-400">
+                      {group.removedCommentCount} comments hidden
+                    </span>
+                  ) : null}
+                  {group.bannedMemberCount ? (
+                    <span className="rounded-full border border-rose-500/25 bg-rose-500/10 px-1.5 py-0.5 text-[10px] text-rose-200">
+                      {group.bannedMemberCount} banned
+                    </span>
+                  ) : null}
+                  {!flagged ? (
+                    <span className="inline-flex items-center gap-1 text-[10px] text-emerald-300/80">
+                      <CheckCircle2 className="h-3 w-3" />
+                      Clear
+                    </span>
+                  ) : null}
+                </div>
+                <div className="min-h-3 flex-1" />
+                <div className="flex items-center justify-between gap-2 border-t border-white/[0.06] pt-3">
+                  <AvatarStack people={group.memberPreview || []} total={group.memberCount} />
+                  <span className="flex-1" />
+                  <MemberViewLink
+                    compact
+                    consolePath={consolePath}
+                    memberPath={`/forums/group/${group.id}`}
+                    hiddenReason={memberVisibility('group', group)}
+                  />
+                </div>
+                <p className="mt-2 text-[10px] text-zinc-600">
+                  Active {formatRelative(group.lastActivityAt)} · created {formatRelative(group.createdAt)}
+                </p>
+              </div>
+            </article>
+          </li>
+        );
+      })}
+    </ul>
   );
 }
 
@@ -817,21 +1331,27 @@ function GroupsTable({
               onClick={() => onOpen(group.id)}
             >
               <td className="px-4 py-3">
-                <p className="font-medium text-white">{group.name}</p>
-                <p className="max-w-xs truncate text-[11px] text-zinc-600">
-                  {group.description || 'No description'}
-                </p>
-                {tagList(group.tags).length ? (
-                  <p className="mt-0.5 max-w-xs truncate text-[10px] text-zinc-600">
-                    {tagList(group.tags).join(' · ')}
-                  </p>
-                ) : null}
+                <div className="flex items-start gap-3">
+                  <GroupImage name={group.name} imageUrl={group.imageUrl} size="md" />
+                  <div className="min-w-0">
+                    <p className="font-medium text-white">{group.name}</p>
+                    <p className="max-w-xs truncate text-[11px] text-zinc-600">
+                      {group.description || 'No description'}
+                    </p>
+                    {tagList(group.tags).length ? (
+                      <p className="mt-0.5 max-w-xs truncate text-[10px] text-zinc-600">
+                        {tagList(group.tags).join(' · ')}
+                      </p>
+                    ) : null}
+                  </div>
+                </div>
               </td>
               <td className="px-4 py-3">
-                <p className="text-zinc-200">{group.owner?.name || 'No owner'}</p>
-                <p className="text-[10px] text-zinc-600">
-                  {group.owner?.handle ? `@${group.owner.handle}` : '—'}
-                </p>
+                {group.owner ? (
+                  <PersonLine person={group.owner} fallback="Unknown owner" />
+                ) : (
+                  <p className="text-zinc-500">No owner</p>
+                )}
               </td>
               <td className="px-4 py-3">
                 <StatePill value={group.status}>
@@ -934,20 +1454,31 @@ function DiscussionsTable({
               <td className="px-4 py-3">
                 <p className="font-medium text-white">{item.title}</p>
                 <p className="max-w-sm truncate text-[11px] text-zinc-600">
-                  {item.description || 'No body'}
+                  {item.excerpt || item.description || 'No body text'}
                 </p>
-              </td>
-              <td className="px-4 py-3">
-                <p className="text-zinc-200">{item.author?.name || 'Unknown'}</p>
-                <p className="text-[10px] text-zinc-600">
-                  {item.author?.handle ? `@${item.author.handle}` : '—'}
-                </p>
-              </td>
-              <td className="px-4 py-3">
-                <p className="text-zinc-300">{item.groupName || '—'}</p>
-                {item.groupStatus && item.groupStatus !== 'active' ? (
-                  <p className="text-[10px] text-amber-200/80">group archived</p>
+                {item.imageCount ? (
+                  <p className="mt-0.5 text-[10px] text-zinc-600">
+                    {item.imageCount} image{item.imageCount === 1 ? '' : 's'}
+                  </p>
                 ) : null}
+              </td>
+              <td className="px-4 py-3">
+                <PersonLine person={item.author} fallback="Unknown" />
+              </td>
+              <td className="px-4 py-3">
+                {item.groupName ? (
+                  <span className="flex items-center gap-2">
+                    <GroupImage name={item.groupName} imageUrl={item.groupImageUrl} size="sm" />
+                    <span className="min-w-0">
+                      <span className="block truncate text-zinc-300">{item.groupName}</span>
+                      {item.groupStatus && item.groupStatus !== 'active' ? (
+                        <span className="block text-[10px] text-amber-200/80">group archived</span>
+                      ) : null}
+                    </span>
+                  </span>
+                ) : (
+                  <p className="text-zinc-500">—</p>
+                )}
               </td>
               <td className="px-4 py-3 text-right">
                 <p className="tabular-nums text-zinc-200">{formatNumber(item.commentCount)}</p>
@@ -1013,31 +1544,43 @@ function DetailHeader({
   title,
   subtitle,
   chips,
+  media,
+  actions,
   onClose,
 }: {
   eyebrow: string;
   title: string;
   subtitle?: ReactNode;
   chips?: ReactNode;
+  /** Avatar or group picture beside the title. */
+  media?: ReactNode;
+  /** Buttons beside Close (for example Open as member). */
+  actions?: ReactNode;
   onClose: () => void;
 }) {
   return (
     <header className="sticky top-0 z-10 rounded-t-2xl border-b border-white/[0.06] bg-[#12131a]/95 px-6 py-5 backdrop-blur">
       <div className="flex items-start justify-between gap-4">
-        <div className="min-w-0">
-          <p className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500">{eyebrow}</p>
-          <h2 className="mt-1 text-lg font-bold leading-snug text-white">{title}</h2>
-          {subtitle ? <p className="mt-1 text-xs text-zinc-500">{subtitle}</p> : null}
-          {chips ? <div className="mt-2 flex flex-wrap items-center gap-1.5">{chips}</div> : null}
+        <div className="flex min-w-0 items-start gap-3">
+          {media ? <div className="shrink-0 pt-0.5">{media}</div> : null}
+          <div className="min-w-0">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500">{eyebrow}</p>
+            <h2 className="mt-1 text-lg font-bold leading-snug text-white">{title}</h2>
+            {subtitle ? <p className="mt-1 text-xs text-zinc-500">{subtitle}</p> : null}
+            {chips ? <div className="mt-2 flex flex-wrap items-center gap-1.5">{chips}</div> : null}
+          </div>
         </div>
-        <button
-          type="button"
-          aria-label="Close"
-          onClick={onClose}
-          className="shrink-0 rounded-lg p-1.5 text-zinc-400 hover:bg-white/[0.06] hover:text-white"
-        >
-          <X className="h-4 w-4" />
-        </button>
+        <div className="flex shrink-0 items-center gap-1.5">
+          {actions}
+          <button
+            type="button"
+            aria-label="Close"
+            onClick={onClose}
+            className="shrink-0 rounded-lg p-1.5 text-zinc-400 hover:bg-white/[0.06] hover:text-white"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
       </div>
     </header>
   );
@@ -1069,6 +1612,40 @@ function ReasonField({
   );
 }
 
+/** "What members see" label above a preview block. */
+function MemberViewCaption({ hiddenReason }: { hiddenReason?: string | null }) {
+  return (
+    <p className="mb-2 flex flex-wrap items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
+      As members see it
+      {hiddenReason ? (
+        <span className="rounded-full border border-amber-500/25 bg-amber-500/10 px-2 py-0.5 normal-case tracking-normal text-amber-200">
+          {hiddenReason}
+        </span>
+      ) : null}
+    </p>
+  );
+}
+
+function RoleChip({ role }: { role: string }) {
+  if (role === 'Admin') {
+    return (
+      <span className="inline-flex items-center gap-1 rounded-full border border-amber-500/25 bg-amber-500/10 px-1.5 py-0.5 text-[10px] text-amber-200">
+        <Crown className="h-2.5 w-2.5" />
+        Owner
+      </span>
+    );
+  }
+  if (role === 'Moderator') {
+    return (
+      <span className="inline-flex items-center gap-1 rounded-full border border-sky-500/25 bg-sky-500/10 px-1.5 py-0.5 text-[10px] text-sky-200">
+        <Shield className="h-2.5 w-2.5" />
+        Moderator
+      </span>
+    );
+  }
+  return null;
+}
+
 function GroupDetail({
   group,
   saving,
@@ -1080,6 +1657,7 @@ function GroupDetail({
   onStatusChange,
   onMemberBan,
   onOpenDiscussion,
+  consolePath,
 }: {
   group: ForumGroup;
   saving: boolean;
@@ -1091,6 +1669,7 @@ function GroupDetail({
   onStatusChange: (status: 'active' | 'inactive') => void;
   onMemberBan: (member: ForumMember) => void;
   onOpenDiscussion: (id: string) => void;
+  consolePath: string;
 }) {
   const members = useMemo(() => group.members || [], [group.members]);
   const filteredMembers = useMemo(() => {
@@ -1103,12 +1682,22 @@ function GroupDetail({
         String(member.role || '').toLowerCase().includes(q)
     );
   }, [members, memberFilter]);
+  const tags = tagList(group.tags);
+  const hiddenReason = memberVisibility('group', group);
 
   return (
     <>
       <DetailHeader
         eyebrow="Forum group"
         title={group.name}
+        media={<GroupImage name={group.name} imageUrl={group.imageUrl} size="lg" />}
+        actions={
+          <MemberViewLink
+            consolePath={consolePath}
+            memberPath={`/forums/group/${group.id}`}
+            hiddenReason={hiddenReason}
+          />
+        }
         subtitle={
           <>
             Created {formatDateTime(group.createdAt)} · last activity{' '}
@@ -1117,33 +1706,55 @@ function GroupDetail({
           </>
         }
         chips={
-          <>
-            <StatePill value={group.status}>
-              {group.status === 'active' ? 'Active' : 'Archived'}
-            </StatePill>
-            {group.owner ? (
-              <span className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/[0.03] px-2 py-0.5 text-[11px] text-zinc-300">
-                <Crown className="h-3 w-3 text-amber-300" />
-                {personLabel(group.owner)}
-              </span>
-            ) : null}
-            {tagList(group.tags).map((tag) => (
-              <span
-                key={tag}
-                className="rounded-full border border-white/10 bg-white/[0.03] px-2 py-0.5 text-[11px] text-zinc-400"
-              >
-                {tag}
-              </span>
-            ))}
-          </>
+          <StatePill value={group.status}>
+            {group.status === 'active' ? 'Active' : 'Archived'}
+          </StatePill>
         }
         onClose={onClose}
       />
 
       <div className="space-y-6 px-6 py-5">
-        <p className="text-sm leading-relaxed text-zinc-300">
-          {group.description || 'No description.'}
-        </p>
+        <section>
+          <MemberViewCaption hiddenReason={hiddenReason} />
+          <div className="overflow-hidden rounded-xl border border-white/[0.08] bg-[#0f1016]">
+            <GroupImage name={group.name} imageUrl={group.imageUrl} variant="banner" bannerHeight="h-32" />
+            <div className="p-4">
+              <p className="text-base font-semibold text-white">{group.name}</p>
+              {group.owner ? (
+                <div className="mt-1.5 flex items-center gap-1.5 text-[11px] text-zinc-500">
+                  by
+                  <ForumAvatar person={group.owner} size="xs" />
+                  <span className="text-zinc-300">{group.owner.name || 'Unknown owner'}</span>
+                  <PersonBadges person={group.owner} />
+                  {group.owner.handle ? <span>@{group.owner.handle}</span> : null}
+                </div>
+              ) : null}
+              <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-zinc-300">
+                {group.description || 'No description.'}
+              </p>
+              <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs font-medium text-zinc-300">
+                <span className="inline-flex items-center gap-1.5">
+                  <Users className="h-3 w-3 text-zinc-500" />
+                  {formatNumber(group.memberCount)} {group.memberCount === 1 ? 'member' : 'members'}
+                </span>
+                <span className="inline-flex items-center gap-1.5">
+                  <MessageCircle className="h-3 w-3 text-zinc-500" />
+                  {formatNumber(group.activeDiscussionCount)}{' '}
+                  {group.activeDiscussionCount === 1 ? 'discussion' : 'discussions'}
+                </span>
+              </div>
+              {tags.length ? (
+                <div className="mt-2.5 flex flex-wrap gap-1">
+                  {tags.map((tag) => (
+                    <span key={tag} className="rounded-full bg-white/[0.06] px-2 py-0.5 text-[10px] text-zinc-400">
+                      {tag}
+                    </span>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+          </div>
+        </section>
 
         <div className="grid gap-2 sm:grid-cols-3">
           <Metric
@@ -1202,33 +1813,33 @@ function GroupDetail({
               />
             ) : null}
           </div>
-          <ul className="mt-2 max-h-72 space-y-1.5 overflow-y-auto pr-1">
+          <ul className="mt-2 max-h-80 space-y-1.5 overflow-y-auto pr-1">
             {filteredMembers.map((member) => (
               <li
                 key={String(member.userId)}
-                className="flex items-center justify-between gap-3 rounded-xl border border-white/[0.06] bg-white/[0.02] px-3 py-2"
+                className={`flex items-center justify-between gap-3 rounded-xl border px-3 py-2 ${
+                  member.isBanned ? 'border-rose-500/20 bg-rose-500/[0.04]' : 'border-white/[0.06] bg-white/[0.02]'
+                }`}
               >
-                <div className="min-w-0">
-                  <p className="truncate text-sm text-white">
-                    {member.name}
-                    {member.handle ? (
-                      <span className="ml-1.5 text-xs text-zinc-500">@{member.handle}</span>
-                    ) : null}
-                  </p>
-                  <p className="text-[11px] text-zinc-500">
-                    <span className="inline-flex items-center gap-1">
-                      {member.role === 'Admin' ? (
-                        <Crown className="h-3 w-3 text-amber-300" />
-                      ) : member.role === 'Moderator' ? (
-                        <Shield className="h-3 w-3 text-sky-300" />
+                <div className="flex min-w-0 items-center gap-2.5">
+                  <ForumAvatar person={member} size="md" className={member.isBanned ? 'opacity-60' : ''} />
+                  <div className="min-w-0">
+                    <p className="flex min-w-0 flex-wrap items-center gap-1.5 text-sm text-white">
+                      <span className="truncate">{member.name}</span>
+                      <PersonBadges person={member} />
+                      <RoleChip role={member.role} />
+                      {member.isBanned ? (
+                        <span className="rounded-full border border-rose-500/25 bg-rose-500/10 px-1.5 py-0.5 text-[10px] text-rose-200">
+                          Banned
+                        </span>
                       ) : null}
-                      {member.role}
-                    </span>
-                    {member.joinedAt ? ` · joined ${formatRelative(member.joinedAt)}` : ''}
-                    {member.isBanned
-                      ? ` · banned${member.bannedAt ? ` ${formatRelative(member.bannedAt)}` : ''}`
-                      : ''}
-                  </p>
+                    </p>
+                    <p className="truncate text-[11px] text-zinc-500">
+                      {member.handle ? `@${member.handle}` : 'No handle'}
+                      {member.joinedAt ? ` · joined ${formatRelative(member.joinedAt)}` : ''}
+                      {member.isBanned && member.bannedAt ? ` · banned ${formatRelative(member.bannedAt)}` : ''}
+                    </p>
+                  </div>
                 </div>
                 <button
                   type="button"
@@ -1259,23 +1870,30 @@ function GroupDetail({
               <MessagesSquare className="h-3.5 w-3.5 text-zinc-500" />
               Discussions in this group
             </h3>
-            <ul className="mt-2 max-h-64 space-y-1.5 overflow-y-auto pr-1">
+            <ul className="mt-2 max-h-72 space-y-1.5 overflow-y-auto pr-1">
               {(group.discussions || []).map((item) => (
                 <li key={item.id}>
                   <button
                     type="button"
                     onClick={() => onOpenDiscussion(item.id)}
-                    className="flex w-full items-center justify-between gap-3 rounded-xl border border-white/[0.06] bg-white/[0.02] px-3 py-2 text-left hover:bg-white/[0.04]"
+                    className={`flex w-full items-center justify-between gap-3 rounded-xl border px-3 py-2 text-left hover:bg-white/[0.04] ${
+                      item.status === 'removed'
+                        ? 'border-rose-500/20 bg-rose-500/[0.03]'
+                        : 'border-white/[0.06] bg-white/[0.02]'
+                    }`}
                   >
-                    <div className="min-w-0">
-                      <p className="truncate text-sm text-white">{item.title}</p>
-                      <p className="text-[11px] text-zinc-500">
-                        {personLabel(item.author)} · {formatNumber(item.commentCount)} comments ·{' '}
-                        {formatRelative(item.createdAt)}
-                      </p>
+                    <div className="flex min-w-0 items-center gap-2.5">
+                      <ForumAvatar person={item.author} size="sm" />
+                      <div className="min-w-0">
+                        <p className="truncate text-sm text-white">{item.title}</p>
+                        <p className="truncate text-[11px] text-zinc-500">
+                          {personLabel(item.author)} · {formatNumber(item.commentCount)} replies ·{' '}
+                          {forumTimeAgo(item.createdAt)}
+                        </p>
+                      </div>
                     </div>
                     <div className="flex shrink-0 gap-1">
-                      {discussionState(item).map((state) => (
+                      {flaggedStates(item).map((state) => (
                         <StatePill key={state} value={state}>
                           {state}
                         </StatePill>
@@ -1341,6 +1959,144 @@ function GroupDetail({
   );
 }
 
+/** Replies nest under the comment they answer, like the member thread. */
+function buildCommentTree(comments: ForumComment[]) {
+  const ids = new Set(comments.map((comment) => comment.commentId));
+  const children = new Map<string, ForumComment[]>();
+  const roots: ForumComment[] = [];
+  for (const comment of comments) {
+    const parent = comment.replyToCommentId;
+    if (parent && parent !== comment.commentId && ids.has(parent)) {
+      children.set(parent, [...(children.get(parent) || []), comment]);
+    } else {
+      roots.push(comment);
+    }
+  }
+  return { roots, children };
+}
+
+/** Deeper replies stop indenting here so long threads stay readable. */
+const MAX_COMMENT_INDENT = 4;
+
+function CommentNode({
+  comment,
+  childrenOf,
+  depth,
+  seen,
+  showRemoved,
+  saving,
+  onCommentHidden,
+}: {
+  comment: ForumComment;
+  childrenOf: Map<string, ForumComment[]>;
+  depth: number;
+  seen: Set<string>;
+  showRemoved: boolean;
+  saving: boolean;
+  onCommentHidden: (commentId: string, hidden: boolean) => void;
+}) {
+  if (seen.has(comment.commentId)) return null;
+  seen.add(comment.commentId);
+  const replies = childrenOf.get(comment.commentId) || [];
+  const collapsed = comment.isDeleted && !showRemoved;
+
+  return (
+    <li className={depth > 0 ? 'border-l border-white/[0.08] pl-3' : ''}>
+      {collapsed ? (
+        <p className="rounded-lg border border-dashed border-white/[0.08] px-3 py-1.5 text-[11px] italic text-zinc-600">
+          Removed comment{replies.length ? ` · ${replies.length} ${replies.length === 1 ? 'reply' : 'replies'} below` : ''}
+        </p>
+      ) : (
+        <div
+          className={`rounded-xl border px-3 py-2.5 ${
+            comment.isDeleted ? 'border-rose-500/15 bg-rose-500/[0.03]' : 'border-white/[0.06] bg-white/[0.02]'
+          }`}
+        >
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex min-w-0 items-start gap-2">
+              <ForumAvatar person={comment.author} size="sm" className={comment.isDeleted ? 'opacity-60' : ''} />
+              <div className="min-w-0">
+                <p className="flex min-w-0 flex-wrap items-center gap-x-1.5 text-xs">
+                  <span className="truncate font-medium text-zinc-100">{comment.author?.name || 'Unknown member'}</span>
+                  <PersonBadges person={comment.author} />
+                  {comment.author?.handle ? <span className="text-zinc-500">@{comment.author.handle}</span> : null}
+                </p>
+                <p className="text-[10px] text-zinc-600">
+                  {forumTimeAgo(comment.createdAt)}
+                  {comment.isEdited ? ' · edited' : ''}
+                  {comment.likeCount ? ` · ${formatNumber(comment.likeCount)} likes` : ''}
+                  {comment.isDeleted && comment.deletedAt ? ` · removed ${formatRelative(comment.deletedAt)}` : ''}
+                </p>
+              </div>
+            </div>
+            {comment.isDeleted ? (
+              <div className="flex shrink-0 items-center gap-1.5">
+                <span className="rounded-full border border-white/10 bg-white/[0.03] px-2 py-0.5 text-[10px] text-zinc-500">
+                  {removedByLabel(comment.removedBy)}
+                </span>
+                {comment.canRestore ? (
+                  <button
+                    type="button"
+                    disabled={saving}
+                    onClick={() => onCommentHidden(comment.commentId, false)}
+                    className="inline-flex items-center gap-1 rounded-lg border border-white/10 px-2 py-1 text-[11px] text-zinc-200 hover:bg-white/5 disabled:opacity-50"
+                  >
+                    <Undo2 className="h-3 w-3" />
+                    Restore
+                  </button>
+                ) : null}
+              </div>
+            ) : (
+              <button
+                type="button"
+                disabled={saving}
+                onClick={() => onCommentHidden(comment.commentId, true)}
+                className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-rose-500/30 px-2 py-1 text-[11px] text-rose-200 hover:bg-rose-500/10 disabled:opacity-50"
+              >
+                <EyeOff className="h-3 w-3" />
+                Hide
+              </button>
+            )}
+          </div>
+          <p
+            className={`mt-1.5 whitespace-pre-wrap break-words pl-9 text-sm ${comment.isDeleted ? 'italic text-zinc-500' : 'text-zinc-200'}`}
+          >
+            {comment.comment}
+          </p>
+          {comment.images?.length ? (
+            <div className="mt-2 pl-9">
+              <ForumImageGrid images={comment.images} compact />
+            </div>
+          ) : null}
+          {comment.isDeleted && (comment.removalReason || comment.restoreBlockedReason) ? (
+            <p className="mt-1 pl-9 text-[10px] text-zinc-500">
+              {comment.removalReason ? `Reason: “${comment.removalReason}”` : ''}
+              {comment.removalReason && comment.restoreBlockedReason ? ' · ' : ''}
+              {comment.restoreBlockedReason || ''}
+            </p>
+          ) : null}
+        </div>
+      )}
+      {replies.length ? (
+        <ul className={`mt-2 space-y-2 ${depth < MAX_COMMENT_INDENT ? 'ml-4' : ''}`}>
+          {replies.map((reply) => (
+            <CommentNode
+              key={reply.commentId}
+              comment={reply}
+              childrenOf={childrenOf}
+              depth={depth + 1}
+              seen={seen}
+              showRemoved={showRemoved}
+              saving={saving}
+              onCommentHidden={onCommentHidden}
+            />
+          ))}
+        </ul>
+      ) : null}
+    </li>
+  );
+}
+
 function DiscussionDetail({
   discussion,
   saving,
@@ -1350,6 +2106,7 @@ function DiscussionDetail({
   onSave,
   onCommentHidden,
   onOpenGroup,
+  consolePath,
 }: {
   discussion: ForumDiscussion;
   saving: boolean;
@@ -1359,18 +2116,32 @@ function DiscussionDetail({
   onSave: (patch: { status?: string; isLocked?: boolean; isSticky?: boolean }) => void;
   onCommentHidden: (commentId: string, hidden: boolean) => void;
   onOpenGroup: (id: string) => void;
+  consolePath: string;
 }) {
-  const comments = discussion.comments || [];
+  const comments = useMemo(() => discussion.comments || [], [discussion.comments]);
   const [showRemoved, setShowRemoved] = useState(true);
-  const visibleComments = showRemoved ? comments : comments.filter((c) => !c.isDeleted);
+  const [plainBody, setPlainBody] = useState(false);
+  const tree = useMemo(() => buildCommentTree(comments), [comments]);
   const isRemoved = discussion.status === 'removed';
   const restoreBlocked = isRemoved && discussion.canRestore === false;
+  const hiddenReason = memberVisibility('discussion', discussion);
+  const body = discussion.content ?? discussion.description ?? '';
+  const tags = tagList(discussion.tags);
+  const seen = new Set<string>();
 
   return (
     <>
       <DetailHeader
         eyebrow="Forum discussion"
         title={discussion.title}
+        media={<ForumAvatar person={discussion.author} size="lg" />}
+        actions={
+          <MemberViewLink
+            consolePath={consolePath}
+            memberPath={`/forums/discussion/${discussion.id}`}
+            hiddenReason={hiddenReason}
+          />
+        }
         subtitle={
           <>
             {personLabel(discussion.author)} · posted {formatDateTime(discussion.createdAt)}
@@ -1378,72 +2149,113 @@ function DiscussionDetail({
             {discussion.removedAt ? ` · removed ${formatRelative(discussion.removedAt)}` : ''}
           </>
         }
-        chips={
-          <>
-            {discussionState(discussion).map((state) => (
-              <StatePill key={state} value={state}>
-                {state}
-              </StatePill>
-            ))}
-            {discussion.groupId ? (
-              <button
-                type="button"
-                onClick={() => onOpenGroup(discussion.groupId as string)}
-                className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/[0.03] px-2 py-0.5 text-[11px] text-zinc-300 hover:bg-white/[0.06]"
-              >
-                <ArrowLeft className="h-3 w-3" />
-                {discussion.groupName || 'Group'}
-              </button>
-            ) : null}
-            {tagList(discussion.tags).map((tag) => (
-              <span
-                key={tag}
-                className="rounded-full border border-white/10 bg-white/[0.03] px-2 py-0.5 text-[11px] text-zinc-400"
-              >
-                {tag}
-              </span>
-            ))}
-          </>
-        }
+        chips={discussionState(discussion).map((state) => (
+          <StatePill key={state} value={state}>
+            {state}
+          </StatePill>
+        ))}
         onClose={onClose}
       />
 
       <div className="space-y-6 px-6 py-5">
-        <p className="whitespace-pre-wrap rounded-xl border border-white/[0.06] bg-white/[0.02] px-3 py-2.5 text-sm leading-relaxed text-zinc-300">
-          {discussion.description || 'No body.'}
-        </p>
+        <section>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <MemberViewCaption hiddenReason={hiddenReason} />
+            {body ? (
+              <button
+                type="button"
+                onClick={() => setPlainBody((value) => !value)}
+                className="mb-2 text-[11px] text-zinc-400 underline-offset-2 hover:text-white hover:underline"
+              >
+                {plainBody ? 'Show formatted' : 'Show plain text'}
+              </button>
+            ) : null}
+          </div>
+          <article
+            className={`rounded-xl border p-4 ${
+              isRemoved ? 'border-rose-500/25 bg-rose-500/[0.03]' : 'border-white/[0.08] bg-[#0f1016]'
+            }`}
+          >
+            <div className="flex items-start gap-3">
+              <ForumAvatar person={discussion.author} size="md" />
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
+                  <span className="flex min-w-0 items-center gap-1">
+                    <span className="truncate text-sm font-medium text-white">
+                      {discussion.author?.name || 'Unknown member'}
+                    </span>
+                    <PersonBadges person={discussion.author} />
+                  </span>
+                  {discussion.author?.handle ? (
+                    <span className="text-[11px] text-zinc-500">@{discussion.author.handle}</span>
+                  ) : null}
+                  <span className="text-[11px] text-zinc-500">· {forumTimeAgo(discussion.createdAt)}</span>
+                </div>
+                <div className="mt-1.5 flex flex-wrap items-center gap-1">
+                  {discussion.groupId ? (
+                    <button
+                      type="button"
+                      onClick={() => onOpenGroup(discussion.groupId as string)}
+                      className="inline-flex max-w-[240px] items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] py-0.5 pl-0.5 pr-2 text-[10px] font-medium text-zinc-300 hover:bg-white/[0.08] hover:text-white"
+                    >
+                      <ArrowLeft className="ml-1 h-3 w-3" />
+                      <GroupImage
+                        name={discussion.groupName || 'Group'}
+                        imageUrl={discussion.groupImageUrl}
+                        size="xs"
+                        circle
+                      />
+                      <span className="truncate">{discussion.groupName || 'Group'}</span>
+                    </button>
+                  ) : null}
+                  {tags.map((tag) => (
+                    <span
+                      key={tag}
+                      className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/[0.04] px-2 py-0.5 text-[10px] text-zinc-400"
+                    >
+                      <Tag className="h-2.5 w-2.5" />
+                      {tag}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </div>
 
-        <div className="grid gap-2 sm:grid-cols-3">
-          <Metric
-            label="Comments"
-            value={
-              <>
-                {formatNumber(discussion.commentCount)}
-                <span className="ml-1.5 text-xs text-zinc-500">
-                  {formatNumber(discussion.removedCommentCount)} removed
-                </span>
-              </>
-            }
-          />
-          <Metric
-            label="Engagement"
-            value={
+            <h3 className="mt-3 text-base font-semibold text-white">{discussion.title}</h3>
+            <div className="mt-2">
+              {!body ? (
+                <p className="text-sm italic text-zinc-600">No body text.</p>
+              ) : plainBody ? (
+                <p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-zinc-300">{body}</p>
+              ) : (
+                <ForumMarkdown text={body} />
+              )}
+            </div>
+            {discussion.images?.length ? (
+              <div className="mt-3">
+                <ForumImageGrid images={discussion.images} />
+              </div>
+            ) : null}
+
+            <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-white/[0.06] pt-3 text-xs text-zinc-400">
               <span className="inline-flex items-center gap-1.5">
                 <Heart className="h-3.5 w-3.5 text-rose-300" />
-                {formatNumber(discussion.likeCount)}
-                <span className="text-xs text-zinc-500">
-                  · {formatNumber(discussion.saveCount)} saves
-                </span>
+                {formatNumber(discussion.likeCount)} likes
               </span>
-            }
-          />
-          <Metric
-            label="Last comment"
-            value={
-              discussion.lastCommentAt ? formatRelative(discussion.lastCommentAt) : 'No comments yet'
-            }
-          />
-        </div>
+              <span className="inline-flex items-center gap-1.5">
+                <MessageCircle className="h-3.5 w-3.5" />
+                {formatNumber(discussion.commentCount)} replies
+              </span>
+              <span className="inline-flex items-center gap-1.5">
+                <Bookmark className="h-3.5 w-3.5" />
+                {formatNumber(discussion.saveCount)} saves
+              </span>
+              <span className="text-[11px] text-zinc-600">
+                {discussion.lastCommentAt ? `last reply ${formatRelative(discussion.lastCommentAt)}` : 'No replies yet'}
+              </span>
+            </div>
+          </article>
+        </section>
 
         <section className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
           <p className="text-sm font-medium text-white">Moderation actions</p>
@@ -1531,82 +2343,27 @@ function DiscussionDetail({
               </label>
             ) : null}
           </div>
-          <ul className="mt-2 space-y-2">
-            {visibleComments.map((comment) => (
-              <li
-                key={comment.commentId}
-                className={`rounded-xl border px-3 py-2.5 ${
-                  comment.isDeleted
-                    ? 'border-white/[0.04] bg-white/[0.01]'
-                    : 'border-white/[0.06] bg-white/[0.02]'
-                }`}
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="text-xs text-zinc-300">
-                      {personLabel(comment.author)}
-                      {comment.replyToCommentId ? (
-                        <span className="ml-1.5 text-[10px] text-zinc-600">in reply</span>
-                      ) : null}
-                    </p>
-                    <p className="text-[10px] text-zinc-600">
-                      {formatShortDateTime(comment.createdAt)}
-                      {comment.likeCount ? ` · ${formatNumber(comment.likeCount)} likes` : ''}
-                      {comment.replyCount ? ` · ${formatNumber(comment.replyCount)} replies` : ''}
-                      {comment.isDeleted && comment.deletedAt
-                        ? ` · removed ${formatRelative(comment.deletedAt)}`
-                        : ''}
-                    </p>
-                  </div>
-                  {comment.isDeleted ? (
-                    <div className="flex shrink-0 items-center gap-1.5">
-                      <span className="rounded-full border border-white/10 bg-white/[0.03] px-2 py-0.5 text-[10px] text-zinc-500">
-                        {removedByLabel(comment.removedBy)}
-                      </span>
-                      {comment.canRestore ? (
-                        <button
-                          type="button"
-                          disabled={saving}
-                          onClick={() => onCommentHidden(comment.commentId, false)}
-                          className="inline-flex items-center gap-1 rounded-lg border border-white/10 px-2 py-1 text-[11px] text-zinc-200 hover:bg-white/5 disabled:opacity-50"
-                        >
-                          <Undo2 className="h-3 w-3" />
-                          Restore
-                        </button>
-                      ) : null}
-                    </div>
-                  ) : (
-                    <button
-                      type="button"
-                      disabled={saving}
-                      onClick={() => onCommentHidden(comment.commentId, true)}
-                      className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-rose-500/30 px-2 py-1 text-[11px] text-rose-200 hover:bg-rose-500/10 disabled:opacity-50"
-                    >
-                      <EyeOff className="h-3 w-3" />
-                      Hide
-                    </button>
-                  )}
-                </div>
-                <p
-                  className={`mt-1.5 whitespace-pre-wrap break-words text-sm ${comment.isDeleted ? 'italic text-zinc-600' : 'text-zinc-200'}`}
-                >
-                  {comment.comment}
-                </p>
-                {comment.isDeleted && (comment.removalReason || comment.restoreBlockedReason) ? (
-                  <p className="mt-1 text-[10px] text-zinc-500">
-                    {comment.removalReason ? `Reason: “${comment.removalReason}”` : ''}
-                    {comment.removalReason && comment.restoreBlockedReason ? ' · ' : ''}
-                    {comment.restoreBlockedReason || ''}
-                  </p>
-                ) : null}
-              </li>
-            ))}
-            {visibleComments.length === 0 ? (
-              <li className="rounded-xl border border-white/[0.06] px-3 py-6 text-center text-xs text-zinc-500">
-                No comments on this discussion.
-              </li>
-            ) : null}
-          </ul>
+          {tree.roots.length ? (
+            <ul className="mt-2 space-y-2">
+              {tree.roots.map((comment) => (
+                <CommentNode
+                  key={comment.commentId}
+                  comment={comment}
+                  childrenOf={tree.children}
+                  depth={0}
+                  seen={seen}
+                  showRemoved={showRemoved}
+                  saving={saving}
+                  onCommentHidden={onCommentHidden}
+                />
+              ))}
+            </ul>
+          ) : (
+            <p className="mt-2 flex items-center justify-center gap-1.5 rounded-xl border border-white/[0.06] px-3 py-6 text-center text-xs text-zinc-500">
+              <CornerDownRight className="h-3.5 w-3.5" />
+              No comments on this discussion.
+            </p>
+          )}
         </section>
       </div>
     </>

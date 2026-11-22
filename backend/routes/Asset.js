@@ -10,6 +10,8 @@ const {
   updateAssetController,
   deleteAssetController,
   getSellerAssetMetricsController,
+  getAssetSubmissionController,
+  postAssetSubmissionMessageController,
   restoreAssetController,
   getAssetDownloadController,
   getAssetOriginalPreviewController,
@@ -54,6 +56,8 @@ router.post('/:assetId/template-use', useTemplateController);
 
 router.post('/', createAssetController);
 router.post('/:assetId/report', reportAssetController);
+router.get('/:assetId/submission', getAssetSubmissionController);
+router.post('/:assetId/submission/messages', postAssetSubmissionMessageController);
 router.post('/:assetId/purchase', purchaseAssetController);
 router.get('/:assetId/licenses', listAssetLicensesController);
 router.post('/:assetId/licenses/:licenseId/assign', assignAssetLicenseController);

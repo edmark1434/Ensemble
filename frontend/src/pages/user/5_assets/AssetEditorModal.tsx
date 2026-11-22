@@ -35,6 +35,10 @@ const FileAudio = AudioLines;
 
 const IMAGE_ACCEPT = "image/jpeg,image/png,image/gif,image/webp,image/avif";
 const ORIGINAL_ACCEPT = IMAGE_ACCEPT + ",video/mp4,audio/mpeg,audio/wav,audio/x-wav,audio/ogg";
+// A listing keeps its type, so replacement files are limited to it.
+const ACCEPT_BY_KIND: Record<SourceKind, string> = {
+  image: IMAGE_ACCEPT, video: "video/mp4", audio: "audio/mpeg,audio/wav,audio/x-wav,audio/ogg",
+};
 
 function sourceKind(file: File): SourceKind | undefined {
   return MIME_TO_KIND[file.type];
@@ -92,6 +96,15 @@ export function AssetListingModal({ open, asset, onClose, onSaved, onQueued, tem
   const [ydocSnapshotId, setYdocSnapshotId] = useState("");
   const [tags, setTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState("");
+  // Saving an unpublished asset (re)submits it; a rejected or delisted one needs a message.
+  const [submissionMessage, setSubmissionMessage] = useState("");
+  const showSubmissionMessage = Boolean(asset) && !isAdminUpload && asset?.status !== "published";
+  const submissionMessageRequired = showSubmissionMessage
+    && (asset?.review_status === "rejected" || asset?.review_status === "delisted");
+  // Files can be swapped until the asset is live (draft, under review, scheduled, rejected or
+  // delisted) and nobody has bought it; saving sends the new files to review. The server checks too.
+  const canReplaceFiles = Boolean(asset) && !isAdminUpload && asset?.status !== "published"
+    && asset?.type !== "template" && !(Number(asset?.purchase_count) > 0);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [openingPreview, setOpeningPreview] = useState(false);
@@ -133,7 +146,7 @@ export function AssetListingModal({ open, asset, onClose, onSaved, onQueued, tem
     setThumbnailSelectionDirty(false);
 
     setYdocSnapshotId(template?.snapshotId || "");
-    setTags(asset?.tags || []); setTagInput(""); setError("");
+    setTags(asset?.tags || []); setTagInput(""); setError(""); setSubmissionMessage("");
   }, [asset, open, template?.snapshotId, template?.name]);
 
 
@@ -178,6 +191,8 @@ export function AssetListingModal({ open, asset, onClose, onSaved, onQueued, tem
     !asset.media_assets.some((mediaFile) => mediaFile.media_asset_id === item.media_asset_id)
     && !showcaseOrder.includes(`retained:${item.media_asset_id}`)) || [];
   const hasAvailableExistingShowcaseImages = availableMediaShowcaseItems.length > 0 || availableThumbnailShowcaseItems.length > 0;
+  const retainedMediaItems = (asset?.media_assets || []).filter((item) => retainedMediaAssetIds.includes(item.media_asset_id));
+  const mediaChanged = files.length > 0 || retainedMediaAssetIds.length !== (asset?.media_assets?.length || 0);
 
   const changeListingType = (nextType: AssetType) => {
     setListingType(nextType);
@@ -263,6 +278,16 @@ export function AssetListingModal({ open, asset, onClose, onSaved, onQueued, tem
     });
     setThumbnailSelectionDirty(true);
   };
+  const removeRetainedMedia = (mediaAssetId: string) => {
+    setError("");
+    setRetainedMediaAssetIds((current) => current.filter((id) => id !== mediaAssetId));
+    setShowcaseOrder((current) => current.filter((item) => item !== `media:${mediaAssetId}`));
+    setThumbnailSelectionDirty(true);
+    if (retainedMediaAssetIds.length - 1 + files.length === 1) {
+      setThumbnailFiles([]);
+      setShowcaseOrder([]);
+    }
+  };
   const removeAssetFile = (index: number, key: string) => {
     setFiles((current) => current.filter((_, itemIndex) => itemIndex !== index));
     setShowcaseOrder((current) => current.filter((item) => item !== `asset:${key}`));
@@ -308,7 +333,12 @@ export function AssetListingModal({ open, asset, onClose, onSaved, onQueued, tem
     // Proxies and preview thumbnails are made by the server (a worker for video/audio),
     // so only asset files and uploaded showcase images are uploaded.
     if (asset) {
-      const replaceMedia = false;
+      const cleanSubmissionMessage = showSubmissionMessage ? submissionMessage.trim() : "";
+      if (submissionMessageRequired && cleanSubmissionMessage.length < 5) {
+        return setError("Tell the review team what you changed (at least 5 characters) before resubmitting.");
+      }
+      if (cleanSubmissionMessage.length > 2000) return setError("Keep the message to the review team under 2,000 characters.");
+      const replaceMedia = canReplaceFiles && mediaChanged;
       const replaceYdoc = isTemplate && snapshotId !== "";
       const finalMediaCount = retainedMediaAssetIds.length + files.length;
       const hasShowcase = isTemplate || finalMediaCount > 1;
@@ -354,6 +384,7 @@ export function AssetListingModal({ open, asset, onClose, onSaved, onQueued, tem
           priceCredits: price,
           status: "published",
           tags: submittedTags,
+          ...(cleanSubmissionMessage ? { submissionMessage: cleanSubmissionMessage } : {}),
           ...(hasContentUpdate ? {
             contentUpdate: {
               type: listingType,
@@ -481,15 +512,59 @@ export function AssetListingModal({ open, asset, onClose, onSaved, onQueued, tem
                       </div>
                     </div>
 
-                    <div className="flex items-start gap-2.5 rounded-xl border border-gray-200 bg-gray-50/70 p-3 text-xs text-gray-600 dark:border-zinc-800 dark:bg-zinc-950/60 dark:text-zinc-400">
-                      <Lock className="mt-0.5 h-3.5 w-3.5 shrink-0 text-gray-400 dark:text-zinc-500" />
-                      <p className="leading-relaxed">
-                        <span className="font-semibold text-gray-800 dark:text-zinc-200">Asset file is locked:</span> The uploaded media file cannot be replaced once published to protect existing buyers and licenses. You can still modify its title, price, description, tags, and showcase images.
-                      </p>
-                    </div>
+                    {canReplaceFiles ? (
+                      <div className="flex items-start gap-2.5 rounded-xl border border-blue-500/20 bg-blue-500/5 p-3 text-xs text-gray-600 dark:text-zinc-400">
+                        <Upload className="mt-0.5 h-3.5 w-3.5 shrink-0 text-blue-600 dark:text-blue-400" />
+                        <p className="leading-relaxed">
+                          <span className="font-semibold text-gray-800 dark:text-zinc-200">You can still replace the file:</span> This asset is not live yet, so you can remove its files and upload new ones, for example when the review team asks for a different version. Saving sends the new files to review. Once the asset is published, its files are locked.
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="flex items-start gap-2.5 rounded-xl border border-gray-200 bg-gray-50/70 p-3 text-xs text-gray-600 dark:border-zinc-800 dark:bg-zinc-950/60 dark:text-zinc-400">
+                        <Lock className="mt-0.5 h-3.5 w-3.5 shrink-0 text-gray-400 dark:text-zinc-500" />
+                        <p className="leading-relaxed">
+                          <span className="font-semibold text-gray-800 dark:text-zinc-200">Asset file is locked:</span> The uploaded media file cannot be replaced once published to protect existing buyers and licenses. You can still modify its title, price, description, tags, and showcase images.
+                        </p>
+                      </div>
+                    )}
                   </div>
                 )}
-                {(!asset || showShowcaseControls || showcaseOrder.length > 0) && (
+                {asset && canReplaceFiles && (
+                  <div className="rounded-xl border border-gray-200 bg-gray-50/60 p-3 dark:border-zinc-800 dark:bg-zinc-950/60">
+                    <p className="mb-1 text-xs font-semibold text-gray-900 dark:text-zinc-200">Current files ({retainedMediaItems.length})</p>
+                    <p className="mb-3 text-[11px] text-gray-500 dark:text-zinc-400">Remove a file with ×, then add its replacement below.</p>
+                    {retainedMediaItems.length === 0 ? (
+                      <p className="rounded-lg border border-dashed border-gray-300 px-3 py-2.5 text-xs text-gray-500 dark:border-zinc-700 dark:text-zinc-400">
+                        All current files will be removed. Add at least one new {listingType} file.
+                      </p>
+                    ) : (
+                      <div className="scroll-thin max-h-48 space-y-2 overflow-y-auto pr-1">
+                        {retainedMediaItems.map((mediaFile) => {
+                          const Icon = mediaFile.type === "image" ? FileImage : mediaFile.type === "video" ? FileVideo : FileAudio;
+                          return (
+                            <div key={mediaFile.media_asset_id} className="flex items-center gap-3 rounded-lg border border-gray-200 bg-white p-2.5 dark:border-zinc-800 dark:bg-zinc-900/60">
+                              {mediaFile.thumbnail_path ? (
+                                <img src={mediaUrl(mediaFile.thumbnail_path)} alt="" className="h-12 w-12 rounded-md object-cover" />
+                              ) : (
+                                <span className="flex h-12 w-12 items-center justify-center rounded-md bg-blue-500/10 text-blue-500">
+                                  <Icon className="h-5 w-5" />
+                                </span>
+                              )}
+                              <div className="min-w-0 flex-1">
+                                <p className="truncate text-xs font-semibold text-gray-900 dark:text-zinc-100">{mediaFile.name}</p>
+                                <p className="text-[10px] uppercase text-gray-500 dark:text-zinc-400">{mediaFile.type} · {(Number(mediaFile.size_bytes || 0) / 1024 / 1024).toFixed(1)}MB</p>
+                              </div>
+                              <button type="button" onClick={() => removeRetainedMedia(mediaFile.media_asset_id)} aria-label={`Remove ${mediaFile.name}`} className="rounded p-1.5 text-gray-400 hover:bg-red-500/10 hover:text-red-500 dark:hover:bg-red-500/15">
+                                <X className="h-3.5 w-3.5" />
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )}
+                {(!asset || canReplaceFiles || showShowcaseControls || showcaseOrder.length > 0) && (
                   <>
                     {!asset && !isTemplate && (
                       <div>
@@ -539,29 +614,29 @@ export function AssetListingModal({ open, asset, onClose, onSaved, onQueued, tem
                       </div>
                     )}
 
-                    {!asset && !isTemplate && (
+                    {(!asset || canReplaceFiles) && !isTemplate && (
                       <div>
                         <label className="mb-2 block text-sm font-semibold text-gray-900 dark:text-zinc-200">
-                          Asset files <span className="text-red-500">*</span>
+                          {asset ? "Add replacement files" : <>Asset files <span className="text-red-500">*</span></>}
                         </label>
-                        <input ref={originalInputRef} type="file" multiple className="hidden" accept={ORIGINAL_ACCEPT} onChange={(event) => { addFiles(Array.from(event.target.files || [])); event.currentTarget.value = ""; }} />
+                        <input ref={originalInputRef} type="file" multiple className="hidden" accept={asset && listingType !== "template" ? ACCEPT_BY_KIND[listingType] : ORIGINAL_ACCEPT} onChange={(event) => { addFiles(Array.from(event.target.files || [])); event.currentTarget.value = ""; }} />
                         <button type="button" onClick={() => originalInputRef.current?.click()} className="flex min-h-28 w-full items-center gap-3.5 rounded-xl border border-dashed border-gray-300 bg-gray-50/70 p-4 text-left transition hover:border-blue-500 dark:border-zinc-800 dark:bg-zinc-950/60 dark:hover:border-zinc-700">
                           <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-blue-600/10 text-blue-600 dark:bg-blue-500/15 dark:text-blue-400">
                             {primaryFile ? <PrimaryIcon className="h-5 w-5" /> : <Upload className="h-5 w-5" />}
                           </span>
                           <span>
                             <span className="block text-sm font-semibold text-gray-900 dark:text-zinc-100">
-                              {files.length ? `${files.length} asset file${files.length === 1 ? "" : "s"} selected` : "Choose asset files"}
+                              {files.length ? `${files.length} ${asset ? "new" : "asset"} file${files.length === 1 ? "" : "s"} selected` : asset ? `Choose new ${listingType} files` : "Choose asset files"}
                             </span>
-                            <span className="mt-1 block text-xs text-gray-500 dark:text-zinc-400">Up to 20 files, 1GB each.</span>
+                            <span className="mt-1 block text-xs text-gray-500 dark:text-zinc-400">{asset ? `Same type as this listing (${listingType}). Up to 20 files in total, 1GB each.` : "Up to 20 files, 1GB each."}</span>
                           </span>
                         </button>
                       </div>
                     )}
 
-                    {!asset && files.length > 0 && (
+                    {files.length > 0 && (
                       <div className="rounded-xl border border-gray-200 bg-gray-50/60 p-3 dark:border-zinc-800 dark:bg-zinc-950/60">
-                        <p className="mb-3 text-xs font-semibold text-gray-900 dark:text-zinc-200">Asset files ({files.length})</p>
+                        <p className="mb-3 text-xs font-semibold text-gray-900 dark:text-zinc-200">{asset ? "New files" : "Asset files"} ({files.length})</p>
                         <div className="scroll-thin max-h-48 space-y-2 overflow-y-auto pr-1">
                           {files.map((file, index) => {
                             const kind = sourceKind(file);
@@ -802,6 +877,35 @@ export function AssetListingModal({ open, asset, onClose, onSaved, onQueued, tem
                     Press Enter or comma to add a tag. At least 3 tags are required to upload.
                   </p>
                 </div>
+
+                {showSubmissionMessage && (
+                  <div>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <label htmlFor="asset-submission-message" className="text-sm font-semibold text-gray-900 dark:text-zinc-200">
+                        Message to the review team {submissionMessageRequired ? <span className="text-red-500">*</span> : <span className="text-xs font-normal text-gray-500 dark:text-zinc-400">(optional)</span>}
+                      </label>
+                      <span className="text-xs text-gray-400 dark:text-zinc-500">{submissionMessage.length}/2000</span>
+                    </div>
+                    {submissionMessageRequired && (asset?.rejection_reason || asset?.review_note) && (
+                      <p className="mb-2 rounded-lg border border-rose-500/20 bg-rose-500/10 px-3 py-2 text-xs text-rose-700 dark:text-rose-300">
+                        <span className="font-semibold">{asset?.review_status === "delisted" ? "Delisted: " : "Feedback: "}</span>
+                        {asset?.review_status === "delisted" ? asset?.review_note : asset?.rejection_reason}
+                      </p>
+                    )}
+                    <textarea
+                      id="asset-submission-message"
+                      value={submissionMessage}
+                      onChange={(event) => setSubmissionMessage(event.target.value)}
+                      maxLength={2000}
+                      rows={3}
+                      className={inputClass}
+                      placeholder={submissionMessageRequired ? "Say what you changed to address the feedback…" : "Anything the reviewer should know about this update"}
+                    />
+                    <p className="mt-1 text-[11px] text-gray-500 dark:text-zinc-400">
+                      Saving sends the asset {submissionMessageRequired ? "back to review" : "to review"}. Your message appears in the review conversation on the asset page.
+                    </p>
+                  </div>
+                )}
               </div>
             </div>
 

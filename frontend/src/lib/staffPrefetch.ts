@@ -57,6 +57,8 @@ addModeratorDesk('forum', {
   'forum-discussion': FORUM_CONTENT_DESK,
   groups: FORUM_CONTENT_DESK,
 });
+// Dashboard Trends with its default range (`ForumTrendsSection`).
+ROUTE_DATA['/moderator/forum'].push(['/api/moderator/forum/trends', { range: '30d' }]);
 addModeratorDesk(
   'marketplace',
   {

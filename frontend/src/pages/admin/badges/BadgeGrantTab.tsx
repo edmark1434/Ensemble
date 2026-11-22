@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Award, Check, Loader2, Search, Send, Trash2, X } from 'lucide-react';
 import api from '@/lib/axios';
 import { peekStaffGet, staffGet } from '@/lib/staffCache';
+import { useStaffLive } from '@/lib/staffLive';
 import { badgesRegistry } from '@/pages/user/7_profile/Utilities/BadgesRegistry';
 import { errorMessage, type CatalogBadge } from './badgeAdminTypes';
 
@@ -84,19 +85,25 @@ export default function BadgeGrantTab() {
     }
   }, []);
 
-  const loadHolders = useCallback(async (registryId: string) => {
-    setHoldersLoading(true);
+  const loadHolders = useCallback(async (registryId: string, silent = false) => {
+    if (!silent) setHoldersLoading(true);
     try {
       const res = await api.get(`/api/admin/badges/${encodeURIComponent(registryId)}/holders`);
       setHolders(res.data?.data || []);
     } catch {
-      setHolders([]);
+      if (!silent) setHolders([]);
     } finally {
-      setHoldersLoading(false);
+      if (!silent) setHoldersLoading(false);
     }
   }, []);
 
   useEffect(() => { void loadCatalog(); }, [loadCatalog]);
+
+  // Live: grants by other admins and members claiming a badge update the catalog and holders.
+  useStaffLive(['badges', 'accounts'], (batch) => {
+    if (batch.resync || batch.topics.includes('badges')) setRefreshKey((k) => k + 1);
+    return Promise.all([loadCatalog(), selectedId ? loadHolders(selectedId, true) : null]);
+  });
 
   useEffect(() => {
     if (!selectedId) return;

@@ -385,6 +385,7 @@ async function updateAccountRestriction(accountId, status, staffSession = null, 
 }
 
 module.exports = {
+  FORUM_TIMEOUT_MATCH,
   violationExpiryFromPoints,
   isViolationActive,
   getViolationsAndRestrictions,

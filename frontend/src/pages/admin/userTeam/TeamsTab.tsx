@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Search } from 'lucide-react';
 import { peekStaffGet, staffGet } from '@/lib/staffCache';
+import { useStaffLive } from '@/lib/staffLive';
 import StatCards from './components/StatCards';
 import RowActionsMenu from './components/RowActionsMenu';
 import TableFilterBar, { uniqueOptions } from './components/TableFilterBar';
@@ -12,8 +13,9 @@ import {
   BulkConfirmModal,
   ConfirmStatusModal,
   CreditActivityModal,
-  HistoryModal,
   TeamOverviewModal,
+  TeamRecordModal,
+  teamMeritPercent,
   TransferTeamOwnershipModal,
   VerificationModal,
   WarnAccountModal,
@@ -126,7 +128,8 @@ const ATTENTION_FILTERS = [
   { value: 'leader', label: 'Leader restricted' },
   { value: 'no_leader', label: 'No active leader' },
   { value: 'held', label: 'Credits held' },
-  { value: 'disputes', label: 'Open disputes' },
+  { value: 'disputes', label: 'Members with open disputes' },
+  { value: 'low_merit', label: 'Members at low merit' },
 ];
 
 function statusChipTone(status: string | null | undefined) {
@@ -170,6 +173,8 @@ function matchesAttention(team: PlatformTeam, filter: string) {
       return (team.wallet?.held || 0) > 0;
     case 'disputes':
       return (team.history?.openDisputes || 0) > 0;
+    case 'low_merit':
+      return (team.memberMerit?.below60 || 0) > 0;
     default:
       return true;
   }
@@ -272,6 +277,8 @@ export default function TeamsTab({
           return a.name.localeCompare(b.name);
         case 'members':
           return b.memberCount - a.memberCount;
+        case 'merit':
+          return (teamMeritPercent(a.memberMerit) ?? 101) - (teamMeritPercent(b.memberMerit) ?? 101);
         case 'wallet':
           return (b.wallet?.available ?? b.walletBalance) - (a.wallet?.available ?? a.walletBalance);
         case 'attention':
@@ -341,14 +348,24 @@ export default function TeamsTab({
     if (res.data?.success) {
       setData(res.data.data);
       onStatsLoaded?.(res.data.data.stats.totalPendingVerification);
-      if (selected) {
+      // Functional update: a live refresh must not reopen a modal that closed meanwhile.
+      setSelected((current) => {
+        if (!current) return current;
         const next = res.data.data.teams.find(
-          (t: PlatformTeam) => String(t.accountId) === String(selected.accountId)
+          (t: PlatformTeam) => String(t.accountId) === String(current.accountId)
         );
-        if (next) setSelected(next);
-      }
+        return next || current;
+      });
     }
   };
+
+  // Live: the list and the open team modal follow membership, verification, standing and
+  // wallet changes made anywhere.
+  useStaffLive(
+    ['teams', 'accounts', 'economy', 'moderation', 'marketplace', 'jobs'],
+    () => refreshAfterChange().catch(() => {}),
+    { delayMs: 1500 },
+  );
 
   const handleBulkAction = (actionId: BulkActionId) => {
     if (actionId === 'clear') {
@@ -488,6 +505,7 @@ export default function TeamsTab({
                 { value: 'oldest', label: 'Oldest first' },
                 { value: 'name', label: 'Name A–Z' },
                 { value: 'members', label: 'Most members' },
+                { value: 'merit', label: 'Lowest team merit' },
                 { value: 'wallet', label: 'Largest wallet' },
                 { value: 'attention', label: 'Most flags' },
                 { value: 'lastSeen', label: 'Recently seen' },
@@ -532,7 +550,7 @@ export default function TeamsTab({
                 </th>
                 <th className="px-4 py-3">Team</th>
                 <th className="px-4 py-3">Team leader</th>
-                <th className="px-4 py-3">Members</th>
+                <th className="px-4 py-3">Members · merit</th>
                 <th className="px-4 py-3">Team wallet</th>
                 <th className="px-4 py-3">Verification</th>
                 <th className="px-4 py-3">Status</th>
@@ -606,7 +624,26 @@ export default function TeamsTab({
                         <span className="text-xs text-rose-300">No active leader</span>
                       )}
                     </td>
-                    <td className="px-4 py-3 tabular-nums">{team.memberCount}</td>
+                    <td className="px-4 py-3 tabular-nums">
+                      <p className="text-white">{team.memberCount}</p>
+                      {(() => {
+                        const percent = teamMeritPercent(team.memberMerit ?? team.history?.memberMerit);
+                        if (percent == null) return null;
+                        return (
+                          <p
+                            className={`text-[10px] ${percent >= 80 ? 'text-emerald-300' : percent > 60 ? 'text-amber-200' : 'text-rose-300'}`}
+                            title="Team merit: the members' merit added up, out of 100 each"
+                          >
+                            Merit {percent}%
+                          </p>
+                        );
+                      })()}
+                      {(team.history?.activeWarnings || 0) > 0 && (
+                        <p className="text-[10px] text-amber-300">
+                          {team.history.activeWarnings} active warning{team.history.activeWarnings === 1 ? '' : 's'}
+                        </p>
+                      )}
+                    </td>
                     <td className="px-4 py-3 tabular-nums">
                       <p className="text-white">{Number(available || 0).toLocaleString()}</p>
                       {held > 0 && <p className="text-[10px] text-amber-300">{held.toLocaleString()} held</p>}
@@ -685,12 +722,9 @@ export default function TeamsTab({
         />
       )}
       {selected && modal === 'history' && (
-        <HistoryModal
-          entityName={selected.name}
-          accountId={selected.accountId}
-          history={selected.history}
-          forTeam
-          leader={selected.leader ?? null}
+        <TeamRecordModal
+          team={selected}
+          canRescind={capabilities.canWarn}
           onClose={closeModal}
           onChanged={() => void refreshAfterChange()}
         />
@@ -699,7 +733,8 @@ export default function TeamsTab({
         <WarnAccountModal
           entityName={selected.name}
           accountId={selected.accountId}
-          team={{ leader: selected.leader ?? null }}
+          desk={capabilities.variant}
+          team={{ leader: selected.leader ?? null, members: selected.members }}
           onClose={closeModal}
           onChanged={() => void refreshAfterChange()}
         />
@@ -717,7 +752,7 @@ export default function TeamsTab({
           action={statusModal}
           desk={capabilities.variant}
           openEndedAllowed={capabilities.canBan}
-          team={{ leader: selected.leader ?? null }}
+          team={{ leader: selected.leader ?? null, members: selected.members }}
           onClose={closeModal}
           onConfirm={async (options) => {
             try {
@@ -738,17 +773,11 @@ export default function TeamsTab({
           tone={bulkPending.tone}
           onClose={() => setBulkPending(null)}
           requireReason={bulkPending.kind === 'status'}
-          leaderOption={
+          memberScopeOption={
             bulkPending.kind === 'status' && ['ban', 'suspend', 'lock'].includes(bulkPending.action)
-              ? {
-                  label: `Also ${bulkPending.action} each team's leader`,
-                  hint: 'Leaders already at the same or a stricter standing are left as they are. Teams with no leader change alone.',
-                }
-              : bulkPending.kind === 'status' && bulkPending.action === 'restore'
-                ? {
-                    label: 'Also restore leaders whose penalty was set with their team',
-                    hint: 'Only penalties applied together with the team are lifted; other leader penalties stay.',
-                  }
+              ? { mode: 'apply', verb: bulkPending.action }
+              : bulkPending.kind === 'status' && ['restore', 'unban', 'unsuspend', 'unlock'].includes(bulkPending.action)
+                ? { mode: 'lift', verb: 'restore' }
                 : undefined
           }
           onConfirm={async (reason, options) => {
@@ -759,7 +788,7 @@ export default function TeamsTab({
                 bulkPending.kind,
                 bulkPending.action,
                 reason,
-                { includeLeader: options?.includeLeader }
+                { memberScope: options?.memberScope }
               );
               setSelectedIds(new Set());
               await refreshAfterChange();

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Gavel, Loader2, Pencil, Plus, Search, Trash2, X } from 'lucide-react';
 import api from '@/lib/axios';
 import { peekStaffGet, staffGet } from '@/lib/staffCache';
+import { useStaffLive } from '@/lib/staffLive';
 import { showErrorToast, showSuccessToast } from '@/components/utility/toast';
 import { DURATION_OPTIONS, clampDurationDays } from '@/lib/warningLadder';
 import {
@@ -87,6 +88,9 @@ export default function AdminPunishmentDefsPanel() {
       .catch((err) => showErrorToast(errorMessage(err, 'Unable to load punishments')))
       .finally(() => setLoading(false));
   }, []);
+
+  // Another admin's catalog edits show up at once; an open editor keeps its own draft.
+  useStaffLive(['policy'], () => load().catch(() => {}));
 
   const filtered = useMemo(() => {
     const term = search.trim().toLowerCase();

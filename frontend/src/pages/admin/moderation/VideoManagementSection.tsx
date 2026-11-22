@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import api from '@/lib/axios';
 import { peekStaffGet, staffGet } from '@/lib/staffCache';
+import { useStaffLive } from '@/lib/staffLive';
 import { showErrorToast, showSuccessToast } from '@/components/utility/toast.ts';
 import TableFilterBar from '../userTeam/components/TableFilterBar';
 import {
@@ -182,6 +183,8 @@ export default function VideoManagementSection() {
   const [sortBy, setSortBy] = useState('updated');
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const selectedIdRef = useRef<string | null>(null);
+  selectedIdRef.current = selectedId;
   const [detail, setDetail] = useState<VideoProject | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailTab, setDetailTab] = useState<DetailTab>('overview');
@@ -228,6 +231,29 @@ export default function VideoManagementSection() {
   useEffect(() => {
     void load(status, query);
   }, [load, status, query]);
+
+  // Live: renames, shares, trash and other admins' actions update the list and the open
+  // project (its note stays). Edits saved by the separate editor service send no event, so a
+  // slow poll covers them.
+  useStaffLive(
+    ['videos', 'accounts'],
+    async () => {
+      const openId = selectedId;
+      await Promise.all([
+        load(status, query),
+        openId
+          ? api
+              .get(`${VIDEOS_URL}/${openId}`)
+              .then((res) => {
+                const next = res.data?.data;
+                if (next) setDetail((current) => (current && selectedIdRef.current === openId ? next : current));
+              })
+              .catch(() => undefined)
+          : null,
+      ]);
+    },
+    { enabled: !saving, delayMs: 1200, pollMs: 60_000 },
+  );
 
   const visible = useMemo(() => {
     const list = [...projects];

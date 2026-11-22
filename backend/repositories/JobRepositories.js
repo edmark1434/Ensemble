@@ -1655,7 +1655,17 @@ async function autoExpireJobsRepositories() {
     }
 }
 
+/** A job's status and staff hold (set while staff keep it paused, closed or archived). */
+async function getJobStaffHoldRepositories(jobId) {
+    const { rows } = await pool.query(
+        `SELECT status, staff_hold_at FROM jobs WHERE job_id = $1`,
+        [jobId]
+    );
+    return rows[0] || null;
+}
+
 module.exports = {
+    getJobStaffHoldRepositories,
     getActiveJobsByClientRepositories,
     createJobInvitationRepositories,
     checkJobInvitationExistsRepositories,

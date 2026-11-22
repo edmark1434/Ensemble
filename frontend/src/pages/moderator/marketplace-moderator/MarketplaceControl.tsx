@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Archive,
+  CalendarClock,
   ChevronDown,
   Clock,
+  MessageSquare,
   Coins,
   Gauge,
   History,
@@ -18,6 +20,7 @@ import {
 } from 'lucide-react';
 import api from '@/lib/axios';
 import { peekStaffGet, staffGet } from '@/lib/staffCache';
+import { useStaffLive } from '@/lib/staffLive';
 import { showErrorToast, showSuccessToast } from '@/components/utility/toast.ts';
 import AssetEditorModal from '@/pages/user/5_assets/AssetEditorModal';
 import ListingThumb from './ListingThumb';
@@ -29,8 +32,13 @@ import ListingDetailModal, {
 import {
   LISTING_ACTIONS,
   ListingReasonDialog,
+  actionLabel,
   actionsForStatus,
+  decisionSuccessMessage,
+  formatGoLive,
+  listingDecisionPayload,
   type ListingAction,
+  type ListingDecisionInput,
 } from './listingActions';
 import type {
   MarketplaceListing,
@@ -38,7 +46,7 @@ import type {
   MarketplaceSummary,
 } from './marketplaceTypes';
 
-type StatusFilter = 'all' | 'pending' | 'approved' | 'rejected' | 'delisted';
+type StatusFilter = 'all' | 'pending' | 'scheduled' | 'approved' | 'rejected' | 'delisted';
 
 const STATUS_TABS: {
   id: StatusFilter;
@@ -46,6 +54,7 @@ const STATUS_TABS: {
   countKey: keyof MarketplaceSummary;
 }[] = [
   { id: 'pending', label: 'Pending review', countKey: 'pendingListings' },
+  { id: 'scheduled', label: 'Scheduled', countKey: 'scheduledListings' },
   { id: 'approved', label: 'Live catalog', countKey: 'approvedListings' },
   { id: 'rejected', label: 'Rejected', countKey: 'rejectedListings' },
   { id: 'delisted', label: 'Delisted', countKey: 'delistedListings' },
@@ -68,11 +77,16 @@ const DEFAULT_API_BASE = '/api/moderator/marketplace';
 
 /** Help text under the queue heading, so every tab says what it is for. */
 const STATUS_HINTS: Record<StatusFilter, string> = {
-  pending: 'Submissions waiting on a first decision, oldest first inside the queue.',
+  pending:
+    'Submissions and resubmissions waiting on a decision. A chat marker means the seller wrote last.',
+  scheduled:
+    'Approved listings waiting for their go-live time, soonest first. Publish one early, move its time, or reject it.',
   approved:
     'Assets live in the catalog right now. Delist one for a takedown, or send it back for re-approval when a copyright report still has to be checked.',
-  rejected: 'Turned down submissions. Approving one publishes it without a resubmission.',
-  delisted: 'Pulled from the catalog. Relist it, or send it back to the queue for a fresh review.',
+  rejected:
+    'Turned down submissions waiting on the seller to resubmit with a message. Approving one publishes it without a resubmission.',
+  delisted:
+    'Pulled from the catalog. The seller can resubmit with a message; you can also relist it or send it back to the queue.',
   all: 'Every listing in the marketplace, whatever state it is in.',
 };
 
@@ -281,6 +295,13 @@ export default function MarketplaceControl({
     await Promise.all([load(), loadOverview()]);
   };
 
+  // Live: new and edited listings, finished previews, reports and other reviewers' decisions
+  // update the queue and headline counts with the current filters and page size.
+  useStaffLive(['marketplace', 'reports', 'moderation', 'accounts'], () => refreshAll(), {
+    enabled: !saving,
+    delayMs: 1000,
+  });
+
   useEffect(() => {
     void loadOverview();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -307,6 +328,7 @@ export default function MarketplaceControl({
     () => ({
       totalListings: listings.length,
       pendingListings: listings.filter((l) => l.status === 'pending').length,
+      scheduledListings: listings.filter((l) => l.status === 'scheduled').length,
       approvedListings: listings.filter((l) => l.status === 'approved').length,
       rejectedListings: listings.filter((l) => l.status === 'rejected').length,
       delistedListings: listings.filter((l) => l.status === 'delisted').length,
@@ -325,21 +347,16 @@ export default function MarketplaceControl({
     return typeof fallback === 'number' ? fallback : 0;
   };
 
-  const runAction = async (listing: MarketplaceListing, action: ListingAction, reason?: string) => {
-    const meta = LISTING_ACTIONS[action];
-    if (meta.requiresReason && !reason) {
+  /** Every action opens the decision dialog first; approve asks when the asset goes live. */
+  const runAction = async (listing: MarketplaceListing, action: ListingAction, input?: ListingDecisionInput) => {
+    if (!input) {
       setPrompt({ listing, action });
       return;
     }
     setSaving(true);
     try {
-      await api.patch(`${apiBase}/listings/${listing.id}`, {
-        status: meta.status,
-        rejectionReason: action === 'reject' ? reason : undefined,
-        moderationNote: action === 'reject' ? undefined : reason,
-        reason,
-      });
-      showSuccessToast(meta.successMessage);
+      const res = await api.patch(`${apiBase}/listings/${listing.id}`, listingDecisionPayload(action, input));
+      showSuccessToast(decisionSuccessMessage(action, input, res.data?.data?.publishAt));
       setPrompt(null);
       await refreshAll();
     } catch (err) {
@@ -357,7 +374,7 @@ export default function MarketplaceControl({
     { id: 'seller', label: 'Seller listing history', icon: History },
     ...actionsForStatus(listing.status).map((action) => ({
       id: action,
-      label: LISTING_ACTIONS[action].label,
+      label: actionLabel(action, listing.status),
       icon: LISTING_ACTIONS[action].icon,
       section: 'manage',
       danger: action === 'reject',
@@ -450,9 +467,11 @@ export default function MarketplaceControl({
           icon={ShoppingBag}
           label="Live catalog"
           value={countFor('approvedListings')}
-          sub={`${countFor('approvedCreditValue').toLocaleString()} credits of approved assets`}
+          sub={`${countFor('approvedCreditValue').toLocaleString()} credits of approved assets${
+            countFor('scheduledListings') > 0 ? ` · ${countFor('scheduledListings')} scheduled to go live` : ''
+          }`}
           tone="bg-emerald-500/15 text-emerald-300"
-          active={statusFilter === 'approved'}
+          active={statusFilter === 'approved' || statusFilter === 'scheduled'}
           onClick={() => changeStatus('approved')}
         />
         <StatCard
@@ -643,6 +662,19 @@ export default function MarketplaceControl({
                                   {note}
                                 </p>
                               )}
+                              {l.status === 'scheduled' && (
+                                <p className="mt-1 flex items-center gap-1 text-[11px] text-sky-200/90">
+                                  <CalendarClock className="h-3 w-3 shrink-0" />
+                                  Goes live {formatGoLive(l.publishAt)}
+                                </p>
+                              )}
+                              {l.lastMessage?.authorType === 'seller' && (
+                                <p className="mt-1 inline-flex items-center gap-1 rounded-full border border-amber-500/30 bg-amber-500/10 px-1.5 py-px text-[10px] font-medium text-amber-200">
+                                  <MessageSquare className="h-3 w-3" />
+                                  {l.lastMessage.kind === 'resubmitted' ? 'Resubmitted' : l.lastMessage.kind === 'submitted' ? 'New submission' : 'Seller replied'}{' '}
+                                  {relativeTime(l.lastMessage.createdAt)}
+                                </p>
+                              )}
                             </div>
                           </div>
                         </td>
@@ -736,9 +768,11 @@ export default function MarketplaceControl({
         <ListingReasonDialog
           action={prompt.action}
           listingTitle={`${prompt.listing.number} · ${prompt.listing.title}`}
+          currentStatus={prompt.listing.status}
+          currentPublishAt={prompt.listing.status === 'scheduled' ? prompt.listing.publishAt : null}
           saving={saving}
           onCancel={() => setPrompt(null)}
-          onConfirm={(reason) => void runAction(prompt.listing, prompt.action, reason)}
+          onConfirm={(input) => void runAction(prompt.listing, prompt.action, input)}
         />
       )}
 

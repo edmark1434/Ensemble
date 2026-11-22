@@ -15,6 +15,7 @@ import {
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import useGlobalState from '@/lib/global_state';
 import { peekStaffGet, staffGet } from '@/lib/staffCache';
+import { useStaffLive } from '@/lib/staffLive';
 import LedgerEntryModal from './LedgerEntryModal';
 import LedgerTab from './LedgerTab';
 import OverviewTab from './OverviewTab';
@@ -105,6 +106,9 @@ export default function CreditEconomyDesk({ variant }: { variant: EconomyVariant
   useEffect(() => {
     void load();
   }, [load]);
+
+  // Live: overview figures and alerts follow credit movement anywhere on the platform.
+  useStaffLive(['economy', 'accounts', 'teams', 'disputes', 'jobs'], () => load(), { delayMs: 1200 });
 
   useEffect(() => {
     const raw = searchParams.get('tab');

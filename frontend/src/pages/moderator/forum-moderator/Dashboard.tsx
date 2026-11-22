@@ -18,12 +18,9 @@ import {
 } from 'lucide-react';
 import useGlobalState from '@/lib/global_state';
 import { peekStaffGet, staffGet } from '@/lib/staffCache';
-import { useStaffCaseEvents } from '@/lib/staffCaseEvents';
-import {
-  ChartCard,
-  DonutChart,
-  HorizontalBarChart,
-} from '@/pages/admin/analytics/components/AnalyticsCharts';
+import { useStaffLive } from '@/lib/staffLive';
+import { ForumAvatar, GroupImage, PersonBadges, forumTimeAgo } from '@/pages/admin/moderation/forumDeskUi';
+import ForumTrendsSection from './ForumTrendsSection';
 import { ReportCaseDetailModal } from '@/pages/admin/moderation/CaseDetailModals';
 import ModeratorTicketDetailModal from '../shared/ModeratorTicketDetailModal';
 import type { Alert, ForumOverview } from '../shared/moderatorTypes';
@@ -162,8 +159,13 @@ export default function ForumModeratorDashboard() {
     void load();
   }, [load]);
 
-  // Counts, alerts and the flagged list follow new reports and tickets without a refresh.
-  useStaffCaseEvents(['ticket', 'report'], () => void load(true), { delayMs: 800 });
+  // Counts, alerts and the flagged list follow forum activity, reports, tickets and other
+  // moderators' actions without a refresh.
+  useStaffLive(
+    ['forum', 'tickets', 'reports', 'moderation', 'accounts', 'staff'],
+    () => load(true),
+    { delayMs: 800 },
+  );
 
   const handleAlertClick = (alert: Alert) => {
     const tab = alert.action?.tab;
@@ -200,7 +202,7 @@ export default function ForumModeratorDashboard() {
     );
   }
 
-  const { summary, forumContent, charts, recentTickets, flaggedReports, alerts, notice } = data;
+  const { summary, forumContent, recentTickets, flaggedReports, alerts, notice } = data;
   const content = forumContent?.available ? forumContent : null;
   const workload = data.staffWorkload || [];
 
@@ -407,37 +409,7 @@ export default function ForumModeratorDashboard() {
           </div>
         </section>
 
-        <section className="space-y-3">
-          <SectionHeading title="Trends" hint="Live mix across forum tickets and reports." />
-          <div className="grid gap-4 lg:grid-cols-2">
-            <ChartCard>
-              <DonutChart
-                title="Forum tickets by status"
-                segments={(charts.ticketStatusMix || []).map((s) => ({
-                  label: s.label,
-                  value: s.value,
-                  color: s.color || '#a78bfa',
-                }))}
-              />
-            </ChartCard>
-            <ChartCard>
-              <DonutChart
-                title="Forum reports by status"
-                segments={(charts.reportStatusMix || []).map((s) => ({
-                  label: s.label,
-                  value: s.value,
-                  color: s.color || '#c084fc',
-                }))}
-              />
-            </ChartCard>
-            <ChartCard>
-              <HorizontalBarChart title="Forum tickets by type" data={charts.ticketCategories || []} />
-            </ChartCard>
-            <ChartCard>
-              <HorizontalBarChart title="Forum reports by target" data={charts.reportTypes || []} />
-            </ChartCard>
-          </div>
-        </section>
+        <ForumTrendsSection />
 
         <div className="grid gap-6 xl:grid-cols-3">
           <section className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-5 xl:col-span-2">
@@ -550,21 +522,26 @@ export default function ForumModeratorDashboard() {
               />
               <ul className="mt-4 space-y-2">
                 {(content.recentGroups || []).map((g) => (
-                  <li
-                    key={g.id}
-                    className="flex items-center justify-between gap-3 rounded-xl border border-white/[0.04] bg-white/[0.02] px-3 py-2.5"
-                  >
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-medium text-white">{g.name}</p>
-                      <p className="text-[11px] text-zinc-500">
-                        {g.memberCount} members · {formatDateTime(g.createdAt)}
-                      </p>
-                    </div>
-                    <span
-                      className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] ${statusPill(g.status)}`}
+                  <li key={g.id}>
+                    <Link
+                      to={`/moderator/forum/forum-control?view=groups&group=${encodeURIComponent(g.id)}`}
+                      className="flex items-center justify-between gap-3 rounded-xl border border-white/[0.04] bg-white/[0.02] px-3 py-2.5 transition hover:bg-white/[0.04]"
                     >
-                      {titleCaseWords(g.status)}
-                    </span>
+                      <div className="flex min-w-0 items-center gap-3">
+                        <GroupImage name={g.name} imageUrl={g.imageUrl} size="md" />
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-medium text-white">{g.name}</p>
+                          <p className="text-[11px] text-zinc-500">
+                            {g.memberCount} members · created {forumTimeAgo(g.createdAt)}
+                          </p>
+                        </div>
+                      </div>
+                      <span
+                        className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] ${statusPill(g.status)}`}
+                      >
+                        {g.status === 'active' ? 'Active' : 'Archived'}
+                      </span>
+                    </Link>
                   </li>
                 ))}
                 {(!content.recentGroups || content.recentGroups.length === 0) && (
@@ -582,24 +559,41 @@ export default function ForumModeratorDashboard() {
               />
               <ul className="mt-4 space-y-2">
                 {(content.recentDiscussions || []).map((d) => (
-                  <li
-                    key={d.id}
-                    className="rounded-xl border border-white/[0.04] bg-white/[0.02] px-3 py-2.5"
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <p className="line-clamp-1 text-sm font-medium text-white">{d.title}</p>
-                      <span
-                        className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] ${statusPill(d.status)}`}
-                      >
-                        {titleCaseWords(d.status)}
-                      </span>
-                    </div>
-                    <p className="mt-1 text-[11px] text-zinc-500">
-                      {d.groupName || 'Ungrouped'} · {d.commentCount} comments
-                      {d.isLocked ? ' · locked' : ''}
-                      {d.isSticky ? ' · sticky' : ''}
-                    </p>
-                    <p className="mt-0.5 text-[11px] text-zinc-600">{formatDateTime(d.updatedAt)}</p>
+                  <li key={d.id}>
+                    <Link
+                      to={`/moderator/forum/forum-control?discussion=${encodeURIComponent(d.id)}`}
+                      className="flex items-start gap-3 rounded-xl border border-white/[0.04] bg-white/[0.02] px-3 py-2.5 transition hover:bg-white/[0.04]"
+                    >
+                      <ForumAvatar person={d.author} size="md" />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-start justify-between gap-2">
+                          <p className="line-clamp-1 text-sm font-medium text-white">{d.title}</p>
+                          <span
+                            className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] ${statusPill(d.status)}`}
+                          >
+                            {titleCaseWords(d.status)}
+                          </span>
+                        </div>
+                        <p className="mt-0.5 flex min-w-0 items-center gap-1 text-[11px] text-zinc-400">
+                          <span className="truncate">{d.author?.name || 'Unknown member'}</span>
+                          <PersonBadges person={d.author} />
+                        </p>
+                        <p className="mt-1 flex min-w-0 flex-wrap items-center gap-1.5 text-[11px] text-zinc-500">
+                          {d.groupName ? (
+                            <span className="inline-flex min-w-0 items-center gap-1">
+                              <GroupImage name={d.groupName} imageUrl={d.groupImageUrl} size="xs" circle />
+                              <span className="truncate">{d.groupName}</span>
+                            </span>
+                          ) : (
+                            <span>Ungrouped</span>
+                          )}
+                          <span>· {d.commentCount} replies</span>
+                          {d.isLocked ? <span>· locked</span> : null}
+                          {d.isSticky ? <span>· pinned</span> : null}
+                          <span className="text-zinc-600">· {forumTimeAgo(d.updatedAt)}</span>
+                        </p>
+                      </div>
+                    </Link>
                   </li>
                 ))}
                 {(!content.recentDiscussions || content.recentDiscussions.length === 0) && (

@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import useGlobalState from '@/lib/global_state';
 import { peekStaffGet, staffGet } from '@/lib/staffCache';
+import { useStaffLive } from '@/lib/staffLive';
 import {
   ChartCard,
   DonutChart,
@@ -225,6 +226,13 @@ export default function JobsModeratorDashboard() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  // Live: postings, contracts, cases, SLAs and team load follow changes made anywhere.
+  useStaffLive(
+    ['jobs', 'tickets', 'reports', 'disputes', 'moderation', 'accounts', 'staff'],
+    () => load(true),
+    { delayMs: 1000 },
+  );
 
   const handleAlertClick = (alert: Alert) => {
     const tab = alert.action?.tab;

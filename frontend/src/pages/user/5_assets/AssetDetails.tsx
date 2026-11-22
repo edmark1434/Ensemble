@@ -44,6 +44,7 @@ import { MediaFallback } from "./AssetMedia";
 import AssetOriginalModal from "./AssetOriginalModal";
 import AssetReportButton from "./AssetReportButton";
 import AssetPurchaseModal from "./AssetPurchaseModal";
+import AssetSubmissionThread from "./AssetSubmissionThread";
 import TemplateUseModal from "./TemplateUseModal";
 import { marketTemplatePreviewUrl } from "./templatePreview";
 import { isVideoPreviewPath, mediaUrl, readableDuration, readableSize, type AssetComment, type AssetMediaFile, type AssetPurchaseResponse, type AssetRecord, type AssetReply, type AssetReview } from "./assetTypes";
@@ -707,6 +708,15 @@ export default function AssetDetails() {
             </div>
           </section>
         </div>
+
+        {asset.is_owner && !asset.is_admin_asset && asset.review_status && (
+          <AssetSubmissionThread
+            assetId={asset.market_asset_id}
+            refreshKey={`${asset.review_status}:${asset.updated_at}`}
+            onEdit={asset.trashed_at ? undefined : () => setEditorOpen(true)}
+            onChanged={() => void load()}
+          />
+        )}
 
         <section className="mb-7 flex flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm dark:border-white/10 dark:bg-dark-surface dark:shadow-none">
           <div className="flex items-center gap-4">

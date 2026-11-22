@@ -1,4 +1,5 @@
 const { pool } = require('../lib/Database');
+const { releaseCountsSql, netReleaseCreditsSql } = require('../lib/TeamContractReserve');
 
 const ELIGIBLE_CONTRACTS_CTE = `
   WITH eligible_contracts AS (
@@ -551,13 +552,14 @@ async function getContractFinancialSnapshot(teamId, contractId) {
   const contract = contractResult.rows[0];
   const contractValue = Number(contract?.rate_credits || 0);
 
+  // Net of dispute reversals (lib/TeamContractReserve.js).
   const releasedResult = await pool.query(
-    `SELECT COALESCE(SUM(amount_credits), 0)::int AS released_credits
-       FROM credit_transactions
-      WHERE reference_table = 'contracts'
-        AND reference_id = $1
-        AND type = 'Escrow Release'
-        AND LOWER(status) = 'completed'`,
+    `SELECT COALESCE(SUM(${netReleaseCreditsSql('ct')}), 0)::int AS released_credits
+       FROM credit_transactions ct
+      WHERE ct.reference_table = 'contracts'
+        AND ct.reference_id = $1
+        AND ct.type = 'Escrow Release'
+        AND ${releaseCountsSql('ct')}`,
     [contractId]
   );
   const releasedCredits = Number(releasedResult.rows[0]?.released_credits || 0);
@@ -650,13 +652,14 @@ async function distributeContractFunds(workspaceId, teamId, contractId, distribu
     }
 
     // 2. Lock & calculate released credits for this contract
+    // Net of dispute reversals (lib/TeamContractReserve.js).
     const releasedRow = (await client.query(
-      `SELECT COALESCE(SUM(amount_credits), 0)::int AS released_credits
-         FROM credit_transactions
-        WHERE reference_table = 'contracts'
-          AND reference_id = $1
-          AND type = 'Escrow Release'
-          AND LOWER(status) = 'completed'`,
+      `SELECT COALESCE(SUM(${netReleaseCreditsSql('ct')}), 0)::int AS released_credits
+         FROM credit_transactions ct
+        WHERE ct.reference_table = 'contracts'
+          AND ct.reference_id = $1
+          AND ct.type = 'Escrow Release'
+          AND ${releaseCountsSql('ct')}`,
       [contractId]
     )).rows[0];
     const releasedCredits = Number(releasedRow?.released_credits || 0);

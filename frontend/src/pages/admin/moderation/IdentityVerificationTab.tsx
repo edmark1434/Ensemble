@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Building2, Hand, Loader2, Search, ShieldAlert, UserRound } from 'lucide-react';
 import api from '@/lib/axios';
+import { useStaffLive } from '@/lib/staffLive';
 import { showErrorToast, showSuccessToast } from '@/components/utility/toast.ts';
 import { VerificationModal } from '../userTeam/components/AccountModals';
 import type { ModerationCase } from './moderationTypes';
@@ -157,9 +158,22 @@ export default function IdentityVerificationTab({
   const isMine = (c: ModerationCase) =>
     myStaffId != null && c.assignedStaffId != null && String(c.assignedStaffId) === myStaffId;
 
+  // Live: the open case follows a resubmission, a Didit result or another reviewer's decision.
+  const [openCase, setOpenCase] = useState<ModerationCase | null>(null);
+  useStaffLive(
+    ['accounts', 'teams'],
+    async () => {
+      if (!openCase) return;
+      const next = await loadVerificationSubject(openCase).catch(() => null);
+      if (next) setSubject((current) => (current && current.accountId === next.accountId ? next : current));
+    },
+    { enabled: Boolean(subject && openCase), delayMs: 1200 },
+  );
+
   const openVerification = async (c: ModerationCase) => {
     setSubjectLoading(true);
     setSubject(null);
+    setOpenCase(c);
     try {
       setSubject(await loadVerificationSubject(c));
     } catch (err: unknown) {

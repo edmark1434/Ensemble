@@ -24,6 +24,10 @@ export type CaseAccess = {
   /** Disputes: made public by staff. Null for tickets. */
   visibility: boolean | null;
   viewerRole: "requester" | "participant" | "disputer" | "disputee" | null;
+  /** Disputes: named with the disputee's team (not the disputee account or its manager). */
+  namedMember?: boolean;
+  /** Disputes: filing or answering for a team account the member manages. */
+  viaTeam?: boolean;
   /** Disputes: the disputee sees only the outcome of a private case. */
   limited?: boolean;
   canReply: boolean;

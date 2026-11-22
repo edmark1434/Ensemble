@@ -35,6 +35,7 @@
 
 - `frontend/src/lib/staffCache.ts` keeps the last successful response of each staff page/tab GET in memory, keyed by URL plus sorted params. There is no storage persistence and no TTL. Pages render the cached response, then always refetch on mount. Identical in-flight GETs are shared.
 - Any non-GET request through the shared `api` client (including logout) clears the cache, as does a change of signed-in staff identity. Responses that started before a clear are not stored.
+- A live staff event (`staffDataChanged` / `staffCaseChanged`) calls `forgetStaffInflight`: requests already running are no longer shared or stored, so a live re-read never joins a request that started before the change. Cached responses stay, so other pages still open at once.
 - `frontend/src/lib/staffPrefetch.ts` maps sidebar routes and data-owning tabs to their first-mount GETs. Hover or focus prefetches them unless a response under 15 seconds old or the same request already exists. Keep this map in sync when a page changes what it loads on mount.
 
 ## Request-path sweeps

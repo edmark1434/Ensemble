@@ -34,6 +34,16 @@ export function clearStaffCache() {
   inflight.clear();
 }
 
+/**
+ * Something changed on the server (a live staff event). Requests already running may carry
+ * the old data: later `staffGet` calls start their own request, and the running ones are not
+ * stored. Cached responses stay, so other pages still open at once and refetch on mount.
+ */
+export function forgetStaffInflight() {
+  generation += 1;
+  inflight.clear();
+}
+
 /** Last successful response for this GET, if one is cached. */
 export function peekStaffGet<T = Body>(url: string, params?: Params): AxiosResponse<T> | undefined {
   return responses.get(cacheKey(url, params))?.response as AxiosResponse<T> | undefined;

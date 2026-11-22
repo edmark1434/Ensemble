@@ -1,6 +1,7 @@
 import { Suspense, useEffect } from 'react';
 import { Outlet } from 'react-router-dom';
 import api from '@/lib/axios';
+import { useStaffLiveConnection } from '@/lib/staffLive';
 import { preloadStaffConsole, type StaffConsole } from './staffPages';
 import ConsolePageSkeleton from './ConsolePageSkeleton';
 
@@ -31,6 +32,8 @@ function StaffPageLoader() {
 /** Console content area: keeps the sidebar mounted while a page loads and preloads sibling pages when idle. */
 export default function StaffOutlet({ consoleId }: { consoleId: StaffConsole }) {
   useStaffPresenceHeartbeat();
+  // Pages follow `staffDataChanged` / `staffCaseChanged`; connect before they mount.
+  useStaffLiveConnection();
   useEffect(() => {
     const run = () => preloadStaffConsole(consoleId);
     if (typeof window.requestIdleCallback === 'function') {

@@ -13,7 +13,9 @@
  *                                 on hold (`contract_dispute_decisions`):
  *                                   both continue         → resumes; a new dispute round starts
  *                                   either ends it        → cancelled under the cancellation rules
- *                                   nobody ends it in 72h → continues
+ *                                   nobody ends it in 72h → continues, except that when one
+ *                                     side chose continue and the other is silent, the silent
+ *                                     side first gets 48h more (once) and another reminder
  *   Resuming moves every clock forward by the time spent on hold.
  *
  * `syncHoldForDispute` runs after every dispute state change (from emitDisputeState, before the
@@ -266,7 +268,11 @@ async function chooseAfterDisputeService({ contractId, actorAccountIds, personal
             accountIds: [otherId],
             referencePrefix: 'CONTRACT_DECISION_NEEDED',
             messageFor: () =>
-                `${sideLabel} wants to continue "${context.contract_title}". Choose on the contract page by ${formatPayoutDate(result.decision.decide_by)}; if you don't end it by then, it continues.`,
+                `${sideLabel} wants to continue "${context.contract_title}". Choose on the contract page by ${formatPayoutDate(result.decision.decide_by)}. ${
+                    result.decision.extended_at
+                        ? "If you don't end it by then, it continues."
+                        : "If you haven't answered by then, you get one extension before it continues."
+                }`,
         });
     }
 
@@ -280,15 +286,37 @@ async function chooseAfterDisputeService({ contractId, actorAccountIds, personal
     };
 }
 
-/** Questions nobody ended in time: the contract continues. */
+/**
+ * Questions nobody ended in time. When one side chose to continue and the other stayed silent,
+ * the silent side first gets one extension and a notice; otherwise the contract continues.
+ */
 async function settleExpiredDecisions() {
     let continued = 0;
+    let extended = 0;
     for (const item of await listExpiredDecisions()) {
         try {
             const result = await autoContinueDecision(item.decision_id, item.contract_id);
             if (!result) continue;
-            continued++;
             const context = await getContractHoldContext(item.contract_id);
+            if (result.outcome === 'extended') {
+                extended++;
+                if (!context) continue;
+                const silentId = String(
+                    result.silentSide === 'client' ? context.client_account_id : context.freelancer_account_id
+                );
+                const voterLabel = result.silentSide === 'client' ? 'The freelancer' : 'The client';
+                const otherLabel = result.silentSide === 'client' ? 'the client' : 'the freelancer';
+                const by = formatPayoutDate(result.decision.decide_by);
+                await notifyContractParties(context, {
+                    referencePrefix: 'CONTRACT_DECISION_EXTENDED',
+                    messageFor: (accountId) =>
+                        String(accountId) === silentId
+                            ? `${voterLabel} wants to continue "${context.contract_title}", and you have not answered yet. You have until ${by} to choose to continue or end it. If you don't end it by then, it continues.`
+                            : `${capitalize(otherLabel)} has not answered about continuing "${context.contract_title}" yet, so they have until ${by}. If they don't end it by then, it continues.`,
+                });
+                continue;
+            }
+            continued++;
             if (!context) continue;
             await notifyContractParties(context, {
                 referencePrefix: 'CONTRACT_RESUMED',
@@ -299,7 +327,7 @@ async function settleExpiredDecisions() {
             console.error(`Continuing contract ${item.contract_id} after its dispute failed:`, error.message);
         }
     }
-    return continued;
+    return { continued, extended };
 }
 
 /** One reminder to each party who has not answered, close to the deadline. */
@@ -313,11 +341,20 @@ async function remindPendingDecisions() {
             if (!decision.client_choice) waiting.push(String(context.client_account_id));
             if (!decision.freelancer_choice) waiting.push(String(context.freelancer_account_id));
             if (!waiting.length) continue;
+            // One side chose continue and the extension is still unused: the silent side gets it.
+            const extensionAhead =
+                waiting.length === 1 && !decision.extended_at && 'extended_at' in decision;
             await notifyContractParties(context, {
                 accountIds: waiting,
                 referencePrefix: 'CONTRACT_DECISION_REMINDER',
                 messageFor: () =>
-                    `Reminder: choose whether to continue "${context.contract_title}" by ${formatPayoutDate(decision.decide_by)}. If neither of you ends it by then, it continues.`,
+                    `Reminder: choose whether to continue "${context.contract_title}" by ${formatPayoutDate(decision.decide_by)}. ${
+                        extensionAhead
+                            ? "The other party already chose to continue. If you haven't answered by then, you get one extension before it continues."
+                            : decision.extended_at
+                                ? "This is your extension: if you don't end it by then, it continues."
+                                : 'If neither of you ends it by then, it continues.'
+                    }`,
             });
             reminded += waiting.length;
         } catch (error) {
@@ -361,7 +398,7 @@ async function reconcileContractDisputeHoldsServices() {
         }
     }
 
-    const continued = await settleExpiredDecisions();
+    const { continued, extended } = await settleExpiredDecisions();
     const reminded = await remindPendingDecisions();
 
     for (const contractId of await listContractsNeedingHoldSync()) {
@@ -374,7 +411,7 @@ async function reconcileContractDisputeHoldsServices() {
         }
     }
 
-    return { ended, synced, continued, reminded };
+    return { ended, synced, continued, extended, reminded };
 }
 
 module.exports = {

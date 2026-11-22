@@ -8,6 +8,7 @@ const {
   getListingDetail,
   getSellerListings,
   patchListing,
+  postListingMessage,
   getListingFileOriginal,
   getTickets,
   getTicket,
@@ -53,6 +54,7 @@ router.get('/marketplace/overview', [checkSession, marketplaceModerator], getOve
 router.get('/marketplace/listings', [checkSession, marketplaceModerator], getListings);
 router.get('/marketplace/listings/:id', [checkSession, marketplaceModerator], getListingDetail);
 router.patch('/marketplace/listings/:id', [checkSession, marketplaceModerator], patchListing);
+router.post('/marketplace/listings/:id/messages', [checkSession, marketplaceModerator], postListingMessage);
 router.get(
   '/marketplace/listings/:id/media/:mediaAssetId/original',
   [checkSession, marketplaceModerator],
@@ -131,6 +133,7 @@ router.patch('/support/disputes/:id/messages/:messageId', [checkSession, support
 
 // ─── Forum Moderator ─────────────────────────────────────────────────────
 router.get('/forum/overview', [checkSession, forumModerator], ForumModerator.getOverview);
+router.get('/forum/trends', [checkSession, forumModerator], ForumModerator.getTrends);
 router.get('/forum/tickets', [checkSession, forumModerator], ForumModerator.getTickets);
 router.get('/forum/tickets/:id', [checkSession, forumModerator], ForumModerator.getTicket);
 router.patch('/forum/tickets/:id', [checkSession, forumModerator], ForumModerator.patchTicket);

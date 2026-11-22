@@ -2,6 +2,7 @@ import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { AlertTriangle, Check, Info, Loader2, Lock, Pencil, Save, Search, X } from 'lucide-react';
 import api from '@/lib/axios';
 import { peekStaffGet, staffGet } from '@/lib/staffCache';
+import { useStaffLive } from '@/lib/staffLive';
 import { showErrorToast, showSuccessToast } from '@/components/utility/toast';
 
 interface PlanFeature {
@@ -390,6 +391,9 @@ export function AdminSubscriptionsTab() {
   useEffect(() => {
     void fetchPlans();
   }, []);
+
+  // Plan edits and subscriber counts update live; an open plan editor keeps its draft.
+  useStaffLive(['economy'], () => fetchPlans());
 
   const rules = payload?.rules ?? FALLBACK_RULES;
   const plans = payload?.plans ?? [];

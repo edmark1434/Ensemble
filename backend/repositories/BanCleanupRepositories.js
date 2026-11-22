@@ -255,7 +255,7 @@ async function delistListingsForBan(accountId) {
            reviewed_at = NOW(),
            updated_at = NOW()
        WHERE submitted_by_account_id = $1
-         AND status IN ('approved', 'pending')
+         AND status IN ('approved', 'pending', 'scheduled')
        RETURNING listing_id, market_asset_id`,
       [accountId]
     );

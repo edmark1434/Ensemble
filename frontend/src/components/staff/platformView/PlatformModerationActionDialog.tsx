@@ -6,6 +6,14 @@ import { SanctionScheduleFields, type SanctionTiming } from "@/pages/admin/userT
 import { punishmentDurationLabel, type PunishmentPreset } from "@/lib/punishmentCatalog";
 import { caseWhen } from "@/pages/moderator/shared/StaffStandingSummary";
 import {
+  TeamMemberScopeFields,
+  defaultTeamScope,
+  teamScopeReady,
+  teamScopeRequest,
+  timedOutAlready,
+  type TeamScopeValue,
+} from "@/components/staff/TeamMemberScopeFields";
+import {
   ACCOUNT_ACTION_LABELS,
   ModerationActionError,
   submitModerationAction,
@@ -71,7 +79,7 @@ export function PlatformModerationActionDialog({
   const [preset, setPreset] = useState<PunishmentPreset | null>(null);
   const [customDuration, setCustomDuration] = useState(false);
   const [timing, setTiming] = useState<SanctionTiming>({ duration: "temporary", endsAt: null, summary: "" });
-  const [includeLeader, setIncludeLeader] = useState(true);
+  const [memberScope, setMemberScope] = useState<TeamScopeValue>({ scope: "leader", memberAccountIds: [] });
   const [reason, setReason] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -82,7 +90,10 @@ export function PlatformModerationActionDialog({
   const usesSchedule = accountAction === "lock" || (usesCatalog && customDuration);
   const openEndedAllowed = viewer.fullRole || accountAction === "ban" || accountAction === "lock";
   const leader = account?.team?.leader ?? null;
-  const offersLeader = Boolean(account?.isTeam && leader && (accountAction === "suspend" || accountAction === "lock" || accountAction === "ban"));
+  const teamMembers = account?.team?.members ?? [];
+  // Every team action reaches people; warnings and timeouts reach only people (no team merit, no posts).
+  const offersMembers = Boolean(account?.isTeam && accountAction);
+  const peopleOnly = accountAction === "warn" || accountAction === "timeout";
   const trimmed = reason.replace(/\s+/g, " ").trim();
   const reasonOk = trimmed.length >= context.limits.reasonMin && trimmed.length <= context.limits.reasonMax;
 
@@ -95,12 +106,18 @@ export function PlatformModerationActionDialog({
     setError(null);
   }, [accountAction, accountId]);
 
+  // A different team starts from its own default (its leader, or every member when it has none).
+  useEffect(() => {
+    setMemberScope(defaultTeamScope("apply", leader));
+  }, [accountId, leader?.accountId]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const accountReady =
     !accountAction
     || (Boolean(account) && Boolean(rule?.allowed)
       && (accountAction !== "warn" || Boolean(warningId))
       && (!usesCatalog || Boolean(punishmentId))
-      && (!usesSchedule || timing.duration === "permanent" || Boolean(timing.endsAt)));
+      && (!usesSchedule || timing.duration === "permanent" || Boolean(timing.endsAt))
+      && (!offersMembers || teamScopeReady(memberScope)));
   const canSubmit = !saving && reasonOk && (Boolean(contentAction) || Boolean(accountAction)) && accountReady;
 
   const onTiming = useCallback((next: SanctionTiming) => setTiming(next), []);
@@ -118,16 +135,24 @@ export function PlatformModerationActionDialog({
     const content = context.contentActions.find((row) => row.id === contentAction);
     if (content) parts.push(`${content.label.toLowerCase()}`);
     if (account && accountAction) {
-      const who = accountAction === "warn" || accountAction === "timeout"
-        ? account.isTeam && leader ? `${leader.name} (leader of ${account.name})` : account.name
-        : account.name;
       const what = accountAction === "warn" ? "warn" : ACCOUNT_ACTION_LABELS[accountAction].toLowerCase();
-      parts.push(`${what} ${who}${offersLeader && includeLeader && leader ? ` and the team leader, ${leader.name}` : ""}`);
+      const people = !offersMembers
+        ? ""
+        : memberScope.scope === "leader" && leader
+          ? `the team leader, ${leader.name}`
+          : memberScope.scope === "all"
+            ? `all ${teamMembers.length} members`
+            : memberScope.scope === "selected" && memberScope.memberAccountIds.length
+              ? `${memberScope.memberAccountIds.length} chosen member${memberScope.memberAccountIds.length === 1 ? "" : "s"}`
+              : "";
+      if (!offersMembers) parts.push(`${what} ${account.name}`);
+      else if (peopleOnly) parts.push(`${what} ${people || "the members you pick"} of ${account.name}`);
+      else parts.push(`${what} ${account.name}${people ? ` and ${people}` : ""}`);
     }
     if (!parts.length) return null;
     const text = parts.join(", then ");
     return text.charAt(0).toUpperCase() + text.slice(1) + ".";
-  }, [account, accountAction, contentAction, context.contentActions, includeLeader, leader, offersLeader]);
+  }, [account, accountAction, contentAction, context.contentActions, memberScope, leader, offersMembers, peopleOnly, teamMembers.length]);
 
   const submit = async (confirmRecent = false) => {
     if (!canSubmit) return;
@@ -149,7 +174,7 @@ export function PlatformModerationActionDialog({
                 ...(accountAction === "warn" ? { warningId } : {}),
                 ...(usesCatalog ? { punishmentId, customDuration } : {}),
                 ...(usesSchedule ? { duration: timing.duration, endsAt: timing.endsAt } : {}),
-                ...(offersLeader ? { includeLeader } : {}),
+                ...(offersMembers ? teamScopeRequest(memberScope) : {}),
               },
             }
           : {}),
@@ -354,21 +379,38 @@ export function PlatformModerationActionDialog({
                       </p>
                     ) : null}
 
-                    {offersLeader && leader ? (
-                      <label className="flex items-start gap-2 rounded-lg border border-white/[0.08] bg-white/[0.02] p-2.5 text-xs text-zinc-200">
-                        <input
-                          type="checkbox"
-                          checked={includeLeader}
-                          onChange={(event) => setIncludeLeader(event.target.checked)}
-                          className="mt-0.5 rounded border-white/20 bg-transparent"
-                        />
-                        <span>
-                          Also apply it to the team leader, {leader.name}
-                          <span className="mt-0.5 block text-[11px] text-zinc-500">
-                            The leader answers for the team. Skipped if their account is already as strict or stricter.
-                          </span>
-                        </span>
-                      </label>
+                    {offersMembers && peopleOnly ? (
+                      <TeamMemberScopeFields
+                        dense
+                        mode="apply"
+                        verb={accountAction === "warn" ? "warn" : "time out"}
+                        tone="amber"
+                        teamIncluded={false}
+                        showMerit={accountAction === "warn"}
+                        covered={accountAction === "timeout" ? timedOutAlready : undefined}
+                        title={accountAction === "warn" ? "Who gets this warning" : "Who gets the forum timeout"}
+                        subtitle={
+                          accountAction === "warn"
+                            ? "Teams have no merit: each person carries the warning on their own record."
+                            : "Teams never post: only people are timed out. Members already timed out stay as they are."
+                        }
+                        leader={leader}
+                        members={teamMembers}
+                        value={memberScope}
+                        onChange={setMemberScope}
+                      />
+                    ) : null}
+                    {offersMembers && (accountAction === "suspend" || accountAction === "lock" || accountAction === "ban") ? (
+                      <TeamMemberScopeFields
+                        dense
+                        mode="apply"
+                        verb={ACCOUNT_ACTION_LABELS[accountAction].toLowerCase()}
+                        targetStatus={accountAction === "ban" ? "banned" : accountAction === "lock" ? "locked" : "suspended"}
+                        leader={leader}
+                        members={teamMembers}
+                        value={memberScope}
+                        onChange={setMemberScope}
+                      />
                     ) : null}
                   </div>
                 ) : null}

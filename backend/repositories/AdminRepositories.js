@@ -1,5 +1,49 @@
 const { pool } = require('../lib/Database');
 const { getMongoClient, connectMongoDB } = require('../lib/MongoDb');
+const { fetchMemberSummary } = require('./AdminAnalyticsRepositories');
+const { FORUM_TIMEOUT_MATCH } = require('./ModeratorRepositories');
+
+/** Member accounts (not staff or teams) that still exist, as Analytics counts them. */
+const LIVE_MEMBER = `a.type = 'User' AND a.deleted_at IS NULL`;
+
+/**
+ * This week's member pulse for the dashboard's Members card: signups this week and last,
+ * members active this week, and members carrying an active warning or a forum timeout.
+ */
+async function fetchMemberPulse() {
+  const result = await pool.query(`
+    SELECT
+      (SELECT COUNT(*)::int FROM accounts a
+        WHERE ${LIVE_MEMBER} AND a.created_at >= NOW() - INTERVAL '7 days') AS new_this_week,
+      (SELECT COUNT(*)::int FROM accounts a
+        WHERE ${LIVE_MEMBER}
+          AND a.created_at >= NOW() - INTERVAL '14 days'
+          AND a.created_at < NOW() - INTERVAL '7 days') AS new_last_week,
+      (SELECT COUNT(DISTINCT d.account_id)::int
+        FROM account_active_days d
+        INNER JOIN accounts a ON a.account_id = d.account_id
+        WHERE ${LIVE_MEMBER} AND d.active_on > CURRENT_DATE - 7) AS active_this_week,
+      (SELECT COUNT(DISTINCT v.account_id)::int
+        FROM violations v
+        INNER JOIN accounts a ON a.account_id = v.account_id
+        WHERE ${LIVE_MEMBER}
+          AND v.deleted_at IS NULL
+          AND LOWER(COALESCE(v.status, 'active')) IN ('active', 'open')
+          AND (v.expires_at IS NULL OR v.expires_at > NOW())) AS with_active_warnings,
+      (SELECT COUNT(DISTINCT r.account_id)::int
+        FROM restrictions r
+        INNER JOIN accounts a ON a.account_id = r.account_id
+        WHERE ${LIVE_MEMBER} AND ${FORUM_TIMEOUT_MATCH}) AS forum_timeouts
+  `);
+  const r = result.rows[0] || {};
+  return {
+    newThisWeek: Number(r.new_this_week || 0),
+    newLastWeek: Number(r.new_last_week || 0),
+    activeThisWeek: Number(r.active_this_week || 0),
+    withActiveWarnings: Number(r.with_active_warnings || 0),
+    forumTimeouts: Number(r.forum_timeouts || 0),
+  };
+}
 
 async function getForumCounts() {
   let client = getMongoClient();
@@ -21,6 +65,15 @@ async function getForumCounts() {
   }
 }
 
+/**
+ * Contract workspaces (`teams.team_type = 'contractual'`) are job/gig scaffolding, not team
+ * accounts: they never verify or wait for approval, so the queue and its counts skip them.
+ */
+const NOT_CONTRACT_WORKSPACE = (accountIdColumn) => `NOT EXISTS (
+  SELECT 1 FROM teams ct
+  WHERE ct.account_id = ${accountIdColumn} AND ct.team_type = 'contractual'
+)`;
+
 async function getDashboardOverview() {
   const [
     ticketCountsResult,
@@ -33,6 +86,8 @@ async function getDashboardOverview() {
     roleBreakdown,
     statusBreakdown,
     forumCounts,
+    memberSummary,
+    memberPulse,
   ] = await Promise.all([
     pool
       .query(`
@@ -56,12 +111,15 @@ async function getDashboardOverview() {
         (SELECT COUNT(*)::int FROM accounts WHERE LOWER(COALESCE(status, '')) = 'active') AS active_users,
         (SELECT COUNT(*)::int FROM accounts WHERE type = 'User') AS platform_user_accounts,
         (SELECT COUNT(*)::int FROM accounts WHERE type = 'Staff') AS staff_accounts,
-        (SELECT COUNT(*)::int FROM accounts WHERE LOWER(COALESCE(status, '')) != 'active' OR status IS NULL) AS pending_review,
+        (SELECT COUNT(*)::int FROM accounts a
+         WHERE (LOWER(COALESCE(a.status, '')) != 'active' OR a.status IS NULL)
+           AND ${NOT_CONTRACT_WORKSPACE('a.account_id')}) AS pending_review,
         (SELECT COUNT(*)::int
          FROM verifications v
          LEFT JOIN verification_sessions avs ON avs.verification_session_id = v.verification_session_id
          WHERE COALESCE(v.is_verified, FALSE) = FALSE
-           AND LOWER(COALESCE(avs.verification_status, 'unverified')) IN ('unverified', 'pending', 'pending review')) AS pending_verifications
+           AND LOWER(COALESCE(avs.verification_status, 'unverified')) IN ('unverified', 'pending', 'pending review')
+           AND ${NOT_CONTRACT_WORKSPACE('v.account_id')}) AS pending_verifications
     `),
     pool.query(`
       SELECT
@@ -121,6 +179,7 @@ async function getDashboardOverview() {
       LEFT JOIN verifications v ON v.account_id = a.account_id
       LEFT JOIN verification_sessions avs ON avs.verification_session_id = v.verification_session_id
       WHERE a.deleted_at IS NULL
+        AND ${NOT_CONTRACT_WORKSPACE('a.account_id')}
         AND (
           LOWER(COALESCE(a.status, '')) != 'active'
           OR (
@@ -177,6 +236,15 @@ async function getDashboardOverview() {
       ORDER BY count DESC
     `),
     getForumCounts(),
+    // The Members card is a summary: a failed read hides its extra figures, not the dashboard.
+    fetchMemberSummary().catch((err) => {
+      console.warn('Dashboard member summary skipped:', err.message);
+      return null;
+    }),
+    fetchMemberPulse().catch((err) => {
+      console.warn('Dashboard member pulse skipped:', err.message);
+      return null;
+    }),
   ]);
 
   const stats = statsResult.rows[0];
@@ -218,6 +286,7 @@ async function getDashboardOverview() {
     recentSignups: signups,
     recentActivity,
     economyFeed,
+    memberHealth: memberSummary ? { ...memberSummary, pulse: memberPulse } : null,
     breakdowns: {
       staffByRole: roleBreakdown.rows.map((r) => ({
         role: r.role,

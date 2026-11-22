@@ -174,8 +174,95 @@ export type DisputeDetail = {
   escrowPending?: number;
   /** What happened to the contract after this case (hold, the parties' continue-or-end answers). */
   contractAfterCase?: DisputeContractAfterCase | null;
+  /**
+   * The disputee side as people: the team and contract roster, who is named on the case, the team
+   * wallet, and who a ban reaches by default. Null when the disputee is one person on their own.
+   */
+  respondentGroup?: DisputeRespondentGroup | null;
   /** Set when a money ruling went through but a follow-up step (the ban) did not. */
   warning?: string;
+  /** After a ban: who else was banned, skipped or could not be banned. */
+  banSummary?: string | null;
+  /** After `set_members`: who was added and taken off. */
+  membersResult?: { changed: boolean; scope: string; added: string[]; removed: string[] } | null;
+};
+
+export type DisputeMemberScope = "leader" | "selected" | "all";
+
+/** One person on the disputee side (team roster, contract workspace, or named on the case). */
+export type DisputeRespondentMember = {
+  accountId: string;
+  name: string;
+  handle: string | null;
+  avatar: string | null;
+  /** Their own account status (Active, Suspended, Locked, Banned…). */
+  status: string;
+  teamRole: string | null;
+  /** Role on the contract workspace: Freelancer, Contributor, Subcontractor or a subcontract title. */
+  contractRole: string | null;
+  teamAccountId: string | null;
+  onTeam: boolean;
+  onContract: boolean;
+  /** False when named but no longer on the team or the contract. */
+  onRoster: boolean;
+  isLeader: boolean;
+  named: boolean;
+  namedBy: "filer" | "staff" | null;
+  namedAt: string | null;
+  namedByStaff: string | null;
+  /** Staff standing summary; loaded for named people and the leader. */
+  standing: CaseAccountSummary | null;
+};
+
+export type DisputeRespondentGroup = {
+  /** Which side of the contract the disputee is. */
+  side: "freelancer" | "client" | null;
+  respondent: {
+    accountId: string;
+    name: string;
+    handle: string | null;
+    avatar: string | null;
+    isTeam: boolean;
+    teamType: string | null;
+    status: string;
+  } | null;
+  team: {
+    accountId: string;
+    teamId: string;
+    name: string;
+    handle: string | null;
+    avatar: string | null;
+    status: string;
+    teamType: string;
+    memberCount: number;
+    /** Team wallet, with what this contract released to it that it still owes its members. */
+    wallet: {
+      available: number;
+      held: number;
+      escrow: number;
+      contractReleased: number;
+      contractDistributed: number;
+      contractOwed: number;
+    } | null;
+  } | null;
+  contractTeam: { accountId: string; teamId: string; name: string; handle: string | null } | null;
+  leader: DisputeRespondentMember | null;
+  /** Staff may change who is named (the client disputes the freelancer side's team). */
+  canName: boolean;
+  /** What the filer chose when filing. */
+  filedScope: DisputeMemberScope | null;
+  members: DisputeRespondentMember[];
+  namedCount: number;
+  removed: {
+    accountId: string;
+    name: string;
+    handle: string | null;
+    removedAt: string;
+    reason: string | null;
+    removedBy: string | null;
+  }[];
+  /** Who a ban reaches when staff do not change it: the named people, else the leader. */
+  banDefault: { scope: DisputeMemberScope; memberAccountIds: string[] };
 };
 
 /**
@@ -195,6 +282,8 @@ export type DisputeContractAfterCase = {
     freelancerChoice: "continue" | "end" | null;
     freelancerChosenAt: string | null;
     decideBy: string;
+    /** Set once a silent party (the other chose continue) was given its one extension. */
+    extendedAt?: string | null;
     /** both_continued | auto_continued | ended_by_client | ended_by_freelancer | reopened | contract_ended */
     resolution: string | null;
     resolvedAt: string | null;
@@ -340,6 +429,7 @@ export type ForumContentStats =
       recentGroups?: {
         id: string;
         name: string;
+        imageUrl?: string | null;
         status: string;
         memberCount: number;
         createdAt: string | null;
@@ -347,8 +437,10 @@ export type ForumContentStats =
       recentDiscussions?: {
         id: string;
         title: string;
+        author?: ForumTrendPerson;
         groupId: string | null;
         groupName: string | null;
+        groupImageUrl?: string | null;
         commentCount: number;
         status: string;
         isLocked: boolean;
@@ -356,6 +448,70 @@ export type ForumContentStats =
         updatedAt: string | null;
       }[];
     };
+
+/** A forum member as the trends and dashboard lists show them. */
+export type ForumTrendPerson = {
+  userId: string | number | null;
+  accountId: string | null;
+  name: string | null;
+  handle: string | null;
+  avatarUrl: string | null;
+  isVerified: boolean;
+  subscriptionPlan: string | null;
+};
+
+export type ForumTrendRangeKey = '7d' | '30d' | '90d' | '12m';
+
+export type ForumTrendSegment = { label: string; value: number; color: string };
+
+export type ForumTrendMetric =
+  | 'discussions'
+  | 'comments'
+  | 'groups'
+  | 'activeMembers'
+  | 'takedowns'
+  | 'reports'
+  | 'tickets'
+  | 'actions';
+
+export type ForumTrendPoint = { start: string; end: string; partial: boolean } & Record<ForumTrendMetric, number>;
+
+/** Mirrors `GET /api/moderator/forum/trends` (`getForumTrends` in ForumModeratorServices.js). */
+export type ForumTrends = {
+  range: {
+    key: ForumTrendRangeKey;
+    from: string;
+    to: string;
+    days: number;
+    bucket: 'day' | 'week' | 'month';
+    label: string;
+    previous: { from: string; to: string } | null;
+    today: string;
+  };
+  points: ForumTrendPoint[];
+  totals: Record<ForumTrendMetric, number>;
+  previousTotals: Record<ForumTrendMetric, number> | null;
+  /** Every segment carries its color from the server. */
+  mix: {
+    ticketStatus: ForumTrendSegment[];
+    reportStatus: ForumTrendSegment[];
+    reportTargets: ForumTrendSegment[];
+    actionKinds: ForumTrendSegment[];
+  };
+  topGroups: {
+    id: string;
+    name: string;
+    imageUrl: string | null;
+    status: string;
+    memberCount: number;
+    posts: number;
+    comments: number;
+  }[];
+  topMembers: (ForumTrendPerson & { posts: number; comments: number })[];
+  available: { cases: boolean; community: boolean };
+  notes: string[];
+  lastUpdated: string;
+};
 
 export type ForumOverview = {
   lastUpdated: string;

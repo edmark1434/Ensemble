@@ -15,6 +15,7 @@ import {
   X,
 } from 'lucide-react';
 import api from '@/lib/axios';
+import { useStaffLive } from '@/lib/staffLive';
 import { showErrorToast, showSuccessToast } from '@/components/utility/toast.ts';
 import type { ActivityDetail, ModerationActivity } from './moderationTypes';
 import {
@@ -156,6 +157,19 @@ export default function ActivityDetailModal({
       active = false;
     };
   }, [activity]);
+
+  // Live: a reversal by another admin shows here at once, so this one cannot reverse it twice.
+  useStaffLive(
+    ['moderation'],
+    () =>
+      api
+        .get(`/api/admin/moderation/activity/${activity.id}`)
+        .then((res) => {
+          if (res.data?.success && res.data.data) setEntry(res.data.data);
+        })
+        .catch(() => undefined),
+    { enabled: !reversing },
+  );
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {

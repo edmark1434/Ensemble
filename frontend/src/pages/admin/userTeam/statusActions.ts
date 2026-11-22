@@ -108,15 +108,18 @@ export function buildRowActionItems(
 }
 
 /**
- * Row menu for a team. A team acts as one account, but warnings and forum timeouts go to its
- * leader (teams have no Platform Merit and never post in the forums), so those items name the
- * leader and disappear when the team has none.
+ * Row menu for a team. A team acts as one account, but people work in it: ban / suspend / lock
+ * change the team and the people staff pick, and warnings and forum timeouts (teams have no
+ * Platform Merit and never post) land only on the people staff pick.
  */
 export function buildTeamRowActionItems(
   team: {
     status?: string | null;
     teamType?: string | null;
     leader?: { name: string; forumTimeout?: boolean } | null;
+    memberCount?: number;
+    members?: { forumTimeout?: boolean }[];
+    membersTimedOutViaTeam?: number;
   },
   capabilities?: UserTeamCapabilities
 ): MenuItem[] {
@@ -124,7 +127,7 @@ export function buildTeamRowActionItems(
     view: 'View team',
     credit: 'Team wallet',
     verification: 'Business verification',
-    history: 'Warnings & disputes',
+    history: "Members' warnings & disputes",
   };
   const primary = getPrimaryRowActions(capabilities).map((item) =>
     primaryLabels[item.id] ? { ...item, label: primaryLabels[item.id] } : item
@@ -149,17 +152,19 @@ export function buildTeamRowActionItems(
     manage.push({ id: 'lock', label: 'Lock team', section: 'manage' });
   }
 
-  const leader = team.leader || null;
-  if (leader) {
-    if (allowAction('warn', caps)) manage.push({ id: 'warn', label: 'Warn team leader', section: 'manage' });
-    if (leader.forumTimeout) {
-      if (allowAction('clear_timeout', caps)) manage.push({ id: 'clear_timeout', label: 'Remove leader timeout', section: 'manage' });
-    } else if (allowAction('timeout', caps)) {
-      manage.push({ id: 'timeout', label: 'Timeout team leader', section: 'manage' });
+  const memberCount = team.members?.length ?? team.memberCount ?? 0;
+  if (memberCount > 0) {
+    if (allowAction('warn', caps)) manage.push({ id: 'warn', label: 'Warn team members', section: 'manage' });
+    const everyoneTimedOut = Boolean(team.members?.length) && team.members!.every((member) => member.forumTimeout);
+    if (!everyoneTimedOut && allowAction('timeout', caps)) {
+      manage.push({ id: 'timeout', label: 'Timeout team members', section: 'manage' });
+    }
+    if ((team.membersTimedOutViaTeam ?? (team.leader?.forumTimeout ? 1 : 0)) > 0 && allowAction('clear_timeout', caps)) {
+      manage.push({ id: 'clear_timeout', label: 'Remove team timeouts', section: 'manage' });
     }
   }
   if (caps?.canTransferTeams && String(team.teamType || 'standard') === 'standard') {
-    manage.push({ id: 'transfer', label: leader ? 'Transfer ownership' : 'Assign an owner', section: 'manage' });
+    manage.push({ id: 'transfer', label: team.leader ? 'Transfer ownership' : 'Assign an owner', section: 'manage' });
   }
 
   return [...primary, ...manage];
