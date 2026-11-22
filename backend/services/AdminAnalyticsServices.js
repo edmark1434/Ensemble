@@ -196,10 +196,11 @@ function platformEarnings(totals, costs, creditValuePhp) {
   const revenue = {
     subscriptionsPhp: round(t.subscriptionPhp || 0, 2),
     feesPhp: round((t.feeCredits || 0) * creditValuePhp, 2),
-    cashoutFeesPhp: round(t.cashoutFeePhp || 0, 2),
+    officialAssetsPhp: round((t.officialAssetCredits || 0) * creditValuePhp, 2),
     topupMarkupPhp: round(Math.max(0, topupMarginPhp), 2),
   };
-  const revenuePhp = round(revenue.subscriptionsPhp + revenue.feesPhp + revenue.cashoutFeesPhp + revenue.topupMarkupPhp, 2);
+  // Cashout fees are left out on purpose: the payout provider keeps them, not Ensemble.
+  const revenuePhp = round(revenue.subscriptionsPhp + revenue.feesPhp + revenue.officialAssetsPhp + revenue.topupMarkupPhp, 2);
   if (!costs) {
     return { revenuePhp, revenue, costPhp: null, costs: null, profitPhp: null, marginPct: null };
   }

@@ -45,7 +45,7 @@ export default function EarningsSection({ data }: { data: PlatformAnalytics }) {
           animate={false}
           spark={series.map((p) => p.revenuePhp)}
           sparkColor={SERIES_COLORS.revenue}
-          sub="Subscriptions, fees and cashout fees"
+          sub="Subscriptions, fees and official asset sales"
         />
         <StatTile
           label="Platform costs"
@@ -100,7 +100,7 @@ export default function EarningsSection({ data }: { data: PlatformAnalytics }) {
                 rows={[
                   ['Subscriptions', fmtPhp(earnings.revenue.subscriptionsPhp), 'Renewals charged and upgrade payments', 'subscriptionRevenue'],
                   ['Platform fees', fmtPhp(earnings.revenue.feesPhp), 'Commissions, posting and proposal fees, net of refunds', 'feeRevenue'],
-                  ['Cashout fees', fmtPhp(earnings.revenue.cashoutFeesPhp), 'Taken from succeeded cashouts'],
+                  ['Official asset sales', fmtPhp(earnings.revenue.officialAssetsPhp), 'Ensemble’s own marketplace assets, full price', 'officialAssets'],
                   ['Top-up markup', fmtPhp(earnings.revenue.topupMarkupPhp), 'Paid above the credits’ value', 'topupMarkup'],
                 ]}
               />
@@ -172,7 +172,8 @@ export default function EarningsSection({ data }: { data: PlatformAnalytics }) {
             </div>
           </div>
           <p className="mt-3 text-[11px] text-zinc-600">
-            Payment-provider charges, hosting and other running costs are not recorded in Ensemble and are not taken off.
+            Cashout fees go to the payout provider and are not counted. Payment-provider charges, hosting and other running costs are not
+            recorded in Ensemble and are not taken off.
           </p>
         </Panel>
 
@@ -188,7 +189,7 @@ export default function EarningsSection({ data }: { data: PlatformAnalytics }) {
                   rows={[
                     ['Subscriptions', fmtPhp(lifetime.revenue.subscriptionsPhp)],
                     ['Platform fees', fmtPhp(lifetime.revenue.feesPhp)],
-                    ['Cashout fees', fmtPhp(lifetime.revenue.cashoutFeesPhp)],
+                    ['Official asset sales', fmtPhp(lifetime.revenue.officialAssetsPhp)],
                     ['Top-up markup', fmtPhp(lifetime.revenue.topupMarkupPhp)],
                     ['Costs', fmtPhp(lifetime.costPhp == null ? null : -lifetime.costPhp)],
                     [

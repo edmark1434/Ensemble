@@ -274,7 +274,6 @@ export default function MoneyTab({
                 rows={[
                   ['Paid out', fmtPhp(cashouts.paidPhp), `${fmtInt(cashouts.paidCount)} cashouts · ${fmtInt(cashouts.earners)} members`],
                   ['Credits redeemed', fmtCredits(cashouts.paidCredits)],
-                  ['Processing fees', fmtPhp(cashouts.feesPhp)],
                   ['Average payout', fmtPhp(cashouts.averagePhp)],
                   ['Failed or returned', fmtInt(cashouts.failedCount), cashouts.failedCredits ? `${fmtCredits(cashouts.failedCredits)}` : undefined],
                 ]}

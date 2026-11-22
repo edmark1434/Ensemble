@@ -9,7 +9,7 @@ Admin → Analytics shows what Ensemble itself earns: total platform revenue, co
 ## Acceptance Criteria
 
 - **Server.** `GET /api/admin/analytics-overview` adds `summary.platformRevenuePhp` / `platformProfitPhp` (KPIs), `money.earnings` (revenue lines, cost lines, profit, margin, `previous`), `money.lifetime`, and per-bucket `revenuePhp` / `costPhp` / `profitPhp` (docs/api.md). Cache key is `analytics:overview:v3`.
-- **Revenue.** Subscriptions + fee credits × credit value + cashout fees + top-up markup. **Costs.** Staff grants + platform-wallet payouts (not top-ups or refunds) + top-up bonus credits − staff deductions. A failed cost read shows costs and profit as unavailable, never a failed page.
+- **Revenue.** Subscriptions + (fee credits + official admin-asset sale credits) × credit value + top-up markup. Cashout fees are never revenue (the payout provider keeps them); the admin Cashouts panel no longer shows them, while the member cashout flow is unchanged. **Costs.** Staff grants + platform-wallet payouts (not top-ups or refunds) + top-up bonus credits − staff deductions. A failed cost read shows costs and profit as unavailable, never a failed page.
 - **Money tab.** Revenue, costs, net profit and margin tiles; a Platform earnings statement with previous period and lifetime; a Lifetime revenue panel; a revenue / costs / profit chart (the line chart now handles negative values).
 - **Overview.** Platform revenue and Net profit tiles. Every new figure has a glossary entry.
 

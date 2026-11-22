@@ -78,7 +78,7 @@ const SETTINGS_RULES = Object.freeze({
 const FEE_USAGE = Object.freeze({
   'fee-job': { mode: 'commission', percent: true, flat: true, note: 'Deducted from each milestone payment released on a job contract.' },
   'fee-gig': { mode: 'commission', percent: true, flat: true, note: 'Deducted from each milestone payment released on a gig order.' },
-  'fee-cashout': { mode: 'commission', percent: true, flat: false, note: 'Percent of each cashout. Any flat cashout fee is set in server configuration.' },
+  'fee-cashout': { mode: 'commission', percent: true, flat: false, note: 'Percent of each cashout shown to and taken from the member. It covers the payout provider’s charge and is not Ensemble revenue. Any flat cashout fee is set in server configuration.' },
   'fee-marketplace': { mode: 'linked', percent: false, flat: false, note: 'Uses the marketplace transaction fee under Marketplace rules.' },
   'fee-job-post': { mode: 'flat', percent: false, flat: true, note: 'Charged when a client publishes a job.' },
   'fee-gig-create': { mode: 'flat', percent: false, flat: true, note: 'Charged when a freelancer publishes a gig.' },

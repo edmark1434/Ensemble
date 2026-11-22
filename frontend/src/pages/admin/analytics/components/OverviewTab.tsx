@@ -62,7 +62,7 @@ export default function OverviewTab({ data }: { data: PlatformAnalytics }) {
           kpi={summary.platformRevenuePhp}
           spark={series.map((p) => p.revenuePhp)}
           sparkColor={SERIES_COLORS.revenue}
-          sub={money.lifetime ? `${fmtPhpShort(money.lifetime.revenuePhp)} lifetime` : 'Subscriptions, fees and cashout fees'}
+          sub={money.lifetime ? `${fmtPhpShort(money.lifetime.revenuePhp)} lifetime` : 'Subscriptions, fees and official asset sales'}
         />
         <StatTile
           label="Net profit"

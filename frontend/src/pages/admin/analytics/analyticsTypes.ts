@@ -32,7 +32,8 @@ export type SeriesPoint = {
   feeCredits: number;
   cashoutPhp: number;
   topupCredits: number;
-  cashoutFeePhp: number;
+  /** Net credits from official (admin-uploaded) asset sales, which go wholly to the platform. */
+  officialAssetCredits: number;
   /** Platform earnings for the bucket (see `PlatformEarnings`); cost and profit are null when costs could not be read. */
   revenuePhp: number;
   costPhp: number | null;
@@ -51,7 +52,7 @@ export type EarningsTotals = {
 export type EarningsRevenue = {
   subscriptionsPhp: number;
   feesPhp: number;
-  cashoutFeesPhp: number;
+  officialAssetsPhp: number;
   topupMarkupPhp: number;
 };
 
@@ -178,7 +179,6 @@ export type CashoutBreakdown = {
   paidCount: number;
   paidCredits: number;
   paidPhp: number;
-  feesPhp: number;
   averagePhp: number;
   earners: number;
   failedCount: number;

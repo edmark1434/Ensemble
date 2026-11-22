@@ -15,10 +15,11 @@ const { CLOSED_REPORT_STATUSES } = require('../lib/ReportEnums');
  *   it stored cents were saved in pesos; `INVOICE_CENTS_SQL` scales those back up when the
  *   stored value is exactly the plan price / 100.
  * - Fee revenue: Completed fee rows minus Completed fee refunds, in credits.
- * - Cashouts: net PHP of SUCCEEDED rows, dated by request (`created_at`). Their
- *   `fee_php_cents` is the cashout fee Ensemble keeps.
+ * - Cashouts: net PHP of SUCCEEDED rows, dated by request (`created_at`). The cashout fee
+ *   (`fee_php_cents`) goes to the payout provider, so it is never Ensemble revenue.
  * - Platform earnings (worked out in AdminAnalyticsServices `platformEarnings`): revenue is
- *   subscriptions + fee credits × credit value + cashout fees + top-up markup (paid pesos −
+ *   subscriptions + (fee credits + official asset sale credits) × credit value
+ *   + top-up markup (paid pesos −
  *   credits issued × credit value, when positive); costs are staff credit grants + credits the
  *   platform wallet paid out (`fetchPlatformCosts`) + top-up bonus credits (the markup when
  *   negative) − staff deductions. Profit = revenue − costs.
@@ -60,6 +61,23 @@ const MONTHLY_FACTOR_SQL = `CASE UPPER(COALESCE(p.billing_period, 'MONTH'))
 END`;
 
 const CLOSED_REPORTS = CLOSED_REPORT_STATUSES.map((s) => `'${s}'`).join(', ');
+
+/**
+ * Official (admin-uploaded) marketplace assets send the whole price to the platform wallet as
+ * an `Asset Purchase` (no `Fee` row), so they are platform revenue on their own. Signed:
+ * sales into the platform wallet minus refunds out of it. Completed, non-reversal rows only.
+ */
+const OFFICIAL_ASSET_FROM = `
+  FROM credit_transactions ct
+  INNER JOIN wallets sw ON sw.wallet_id = ct.source_wallet_id
+  INNER JOIN wallets dw ON dw.wallet_id = ct.destination_wallet_id
+  WHERE ct.status::text = 'Completed'
+    AND ct.reverses_credit_transaction_id IS NULL
+    AND (
+      (ct.type::text = 'Asset Purchase' AND dw.type = 'platform wallets' AND sw.type <> 'platform wallets')
+      OR (ct.type::text = 'Asset Refund' AND sw.type = 'platform wallets' AND dw.type <> 'platform wallets')
+    )`;
+const OFFICIAL_ASSET_CREDITS_SQL = `CASE WHEN ct.type::text = 'Asset Purchase' THEN ct.amount_credits ELSE -ct.amount_credits END`;
 
 function inPeriod(column, fromIdx, toIdx) {
   return `${column} >= $${fromIdx}::date AND ${column} < ($${toIdx}::date + 1)`;
@@ -263,8 +281,8 @@ async function fetchPeriodTotals({ from, to }) {
           AND ${inPeriod('ct.created_at', 1, 2)})::bigint AS fee_credits,
       (SELECT COALESCE(SUM(c.net_amount_php_cents), 0) FROM cashouts c
         WHERE UPPER(COALESCE(c.status, '')) = ANY($7::text[]) AND ${inPeriod('c.created_at', 1, 2)})::bigint AS cashout_cents,
-      (SELECT COALESCE(SUM(c.fee_php_cents), 0) FROM cashouts c
-        WHERE UPPER(COALESCE(c.status, '')) = ANY($7::text[]) AND ${inPeriod('c.created_at', 1, 2)})::bigint AS cashout_fee_cents
+      (SELECT COALESCE(SUM(${OFFICIAL_ASSET_CREDITS_SQL}), 0)
+        ${OFFICIAL_ASSET_FROM} AND ${inPeriod('ct.created_at', 1, 2)})::bigint AS official_asset_credits
     `,
     [from, to, TOPUP_STATUSES.paid, INVOICE_STATUSES.paid, FEE_TYPES, FEE_REFUND_TYPES, CASHOUT_STATUSES.paid]
   );
@@ -281,7 +299,7 @@ async function fetchPeriodTotals({ from, to }) {
     subscriptionPhp: Math.round((num(r.upgrade_php) + phpFromCents(r.invoice_cents)) * 100) / 100,
     feeCredits: num(r.fee_credits),
     cashoutPhp: phpFromCents(r.cashout_cents),
-    cashoutFeePhp: phpFromCents(r.cashout_fee_cents),
+    officialAssetCredits: num(r.official_asset_credits),
   };
 }
 
@@ -348,10 +366,14 @@ async function fetchSeries({ from, to, bucket }) {
       GROUP BY 1
     ),
     cashouts AS (
-      SELECT date_trunc($3::text, c.created_at::timestamp) AS b, COALESCE(SUM(c.net_amount_php_cents), 0)::bigint AS cents,
-        COALESCE(SUM(c.fee_php_cents), 0)::bigint AS fee_cents
+      SELECT date_trunc($3::text, c.created_at::timestamp) AS b, COALESCE(SUM(c.net_amount_php_cents), 0)::bigint AS cents
       FROM cashouts c
       WHERE UPPER(COALESCE(c.status, '')) = ANY($8::text[]) AND ${inPeriod('c.created_at', 1, 2)}
+      GROUP BY 1
+    ),
+    official_assets AS (
+      SELECT date_trunc($3::text, ct.created_at::timestamp) AS b, COALESCE(SUM(${OFFICIAL_ASSET_CREDITS_SQL}), 0)::bigint AS credits
+      ${OFFICIAL_ASSET_FROM} AND ${inPeriod('ct.created_at', 1, 2)}
       GROUP BY 1
     )
     SELECT
@@ -367,7 +389,7 @@ async function fetchSeries({ from, to, bucket }) {
       COALESCE(inv.cents, 0) AS invoice_cents,
       COALESCE(fe.credits, 0) AS fee_credits,
       COALESCE(co.cents, 0) AS cashout_cents,
-      COALESCE(co.fee_cents, 0) AS cashout_fee_cents
+      COALESCE(oa.credits, 0) AS official_asset_credits
     FROM spine s
     LEFT JOIN signups su ON su.b = s.b
     LEFT JOIN tickets ti ON ti.b = s.b
@@ -378,6 +400,7 @@ async function fetchSeries({ from, to, bucket }) {
     LEFT JOIN invoices inv ON inv.b = s.b
     LEFT JOIN fees fe ON fe.b = s.b
     LEFT JOIN cashouts co ON co.b = s.b
+    LEFT JOIN official_assets oa ON oa.b = s.b
     ORDER BY s.b ASC
     `,
     [
@@ -403,7 +426,7 @@ async function fetchSeries({ from, to, bucket }) {
     subscriptionPhp: Math.round((num(r.upgrade_php) + phpFromCents(r.invoice_cents)) * 100) / 100,
     feeCredits: num(r.fee_credits),
     cashoutPhp: phpFromCents(r.cashout_cents),
-    cashoutFeePhp: phpFromCents(r.cashout_fee_cents),
+    officialAssetCredits: num(r.official_asset_credits),
   }));
 }
 
@@ -724,7 +747,6 @@ async function fetchCashoutBreakdown({ from, to }) {
         COUNT(*) FILTER (WHERE UPPER(c.status) = ANY($3::text[]))::int AS paid_count,
         COALESCE(SUM(c.amount_credits) FILTER (WHERE UPPER(c.status) = ANY($3::text[])), 0)::bigint AS paid_credits,
         COALESCE(SUM(c.net_amount_php_cents) FILTER (WHERE UPPER(c.status) = ANY($3::text[])), 0)::bigint AS paid_net_cents,
-        COALESCE(SUM(c.fee_php_cents) FILTER (WHERE UPPER(c.status) = ANY($3::text[])), 0)::bigint AS fee_cents,
         COUNT(*) FILTER (WHERE UPPER(c.status) = ANY($4::text[]))::int AS failed_count,
         COALESCE(SUM(c.amount_credits) FILTER (WHERE UPPER(c.status) = ANY($4::text[])), 0)::bigint AS failed_credits,
         COUNT(DISTINCT c.user_id) FILTER (WHERE UPPER(c.status) = ANY($3::text[]))::int AS earners
@@ -754,7 +776,6 @@ async function fetchCashoutBreakdown({ from, to }) {
     paidCount,
     paidCredits: num(p.paid_credits),
     paidPhp,
-    feesPhp: phpFromCents(p.fee_cents),
     averagePhp: paidCount ? Math.round((paidPhp / paidCount) * 100) / 100 : 0,
     earners: num(p.earners),
     failedCount: num(p.failed_count),

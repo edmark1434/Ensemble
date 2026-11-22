@@ -125,9 +125,9 @@ export const GLOSSARY = {
   platformRevenue: {
     term: 'Platform revenue',
     what: 'Money Ensemble earned and keeps in this period, as opposed to money that still belongs to members.',
-    calc: 'Subscriptions + platform fees (credits × credit value) + cashout fees + top-up markup',
-    source: 'Paid subscription invoices and upgrade payments, Completed fee entries net of refunds, the fee on succeeded cashouts, and paid top-ups compared with the credits they issued.',
-    note: 'Top-up sales are not revenue: those pesos became credits members can still spend or cash out. Only the markup, when a package costs more than its credits are worth, is kept.',
+    calc: 'Subscriptions + platform fees + official asset sales (credits × credit value) + top-up markup',
+    source: 'Paid subscription invoices and upgrade payments, Completed fee entries net of refunds, purchases of Ensemble’s own marketplace assets, and paid top-ups compared with the credits they issued.',
+    note: 'Top-up sales are not revenue: those pesos became credits members can still spend or cash out. Only the markup, when a package costs more than its credits are worth, is kept. Cashout fees are not revenue either: the payout provider keeps them.',
   },
   platformCosts: {
     term: 'Platform costs',
@@ -152,6 +152,13 @@ export const GLOSSARY = {
     term: 'Platform earnings',
     what: 'A profit and loss view for the period: every source of revenue, every cost, and the profit that leaves, with the previous period and the lifetime total beside it.',
     note: 'Credit amounts are converted at today’s credit value.',
+  },
+  officialAssets: {
+    term: 'Official asset sales',
+    what: 'Credits members spent on marketplace assets uploaded by Ensemble staff. The whole price goes to the platform wallet, with no seller share.',
+    calc: 'asset purchases into the platform wallet − asset refunds out of it, in credits (≈ pesos at the credit value)',
+    source: 'Completed Asset Purchase entries in the credit ledger whose destination is the platform wallet.',
+    note: 'Commissions on members’ own asset sales are counted under Platform fees instead.',
   },
   topupMarkup: {
     term: 'Top-up markup and bonus credits',
@@ -211,7 +218,7 @@ export const GLOSSARY = {
   cashoutsPaid: {
     term: 'Cashouts paid',
     what: 'Pesos sent to members for cashouts that succeeded.',
-    calc: 'sum of net payouts (after the cashout fee)',
+    calc: 'sum of net payouts (after the payout provider’s cashout fee)',
     source: 'Cashout records with a succeeded status, dated by the day the member asked for the cashout.',
     note: 'A cashout requested in this period but paid later is counted here once it succeeds. The change badge stays grey: more cashouts are neither good nor bad.',
   },
@@ -265,7 +272,7 @@ export const GLOSSARY = {
   },
   cashoutBreakdown: {
     term: 'Cashouts breakdown',
-    what: 'Cashouts members requested in this period. Paid out is the pesos they received; credits redeemed is what left their wallets; processing fees are the cashout fees taken; failed or returned are ones the provider failed, rejected or reversed, or that expired.',
+    what: 'Cashouts members requested in this period. Paid out is the pesos they received; credits redeemed is what left their wallets; failed or returned are ones the provider failed, rejected or reversed, or that expired.',
     source: 'Cashout records, dated by request.',
   },
   inFlight: {
@@ -477,6 +484,7 @@ export const GLOSSARY_SECTIONS: GlossarySection[] = [
       'netProfit',
       'profitMargin',
       'earningsStatement',
+      'officialAssets',
       'topupMarkup',
       'lifetimeEarnings',
       'earningsChart',
