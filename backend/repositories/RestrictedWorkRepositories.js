@@ -133,7 +133,63 @@ async function countRestrictedPartyContracts() {
   return result.rows[0] || { total: 0, banned: 0, locked: 0, suspended: 0, team_leader: 0 };
 }
 
+/** A dashboard alert counts contracts this long past a ban or lock with no settlement yet. */
+const STALE_RESTRICTED_DAYS = 7;
+
+/**
+ * Live contracts where a side has been banned or locked for STALE_RESTRICTED_DAYS or more and
+ * nothing is resolving it (no open dispute). Suspensions end on their own and are left out.
+ * Best effort: a failure reads as zero so a dashboard never breaks on it.
+ * @returns {Promise<{ count: number, days: number }>}
+ */
+async function countStaleRestrictedContracts({ days = STALE_RESTRICTED_DAYS } = {}) {
+  try {
+    const result = await pool.query(
+      `WITH parties AS (${CONTRACT_PARTIES_SQL}),
+       rows AS (
+         SELECT pt.contract_id,
+                ${ownerUnavailableReasonSql('ca', { deactivated: false, suspended: false })} AS client_reason,
+                ${ownerUnavailableReasonSql('fa', { deactivated: false, suspended: false })} AS freelancer_reason,
+                ${RESTRICTED_SINCE_SQL('ca')} AS client_since,
+                ${RESTRICTED_SINCE_SQL('fa')} AS freelancer_since
+         FROM parties pt
+         JOIN accounts ca ON ca.account_id = pt.client_account_id
+         JOIN accounts fa ON fa.account_id = pt.freelancer_account_id
+         WHERE NOT EXISTS (
+           SELECT 1 FROM disputes d
+           WHERE d.contract_id = pt.contract_id
+             AND d.deleted_at IS NULL
+             AND LOWER(COALESCE(d.status, '')) <> 'closed'
+         )
+       )
+       SELECT COUNT(*)::int AS n
+       FROM rows
+       WHERE (client_reason IS NOT NULL AND COALESCE(client_since, NOW()) <= NOW() - make_interval(days => $2::int))
+          OR (freelancer_reason IS NOT NULL AND COALESCE(freelancer_since, NOW()) <= NOW() - make_interval(days => $2::int))`,
+      [LIVE_CONTRACT_STATUSES, days]
+    );
+    return { count: Number(result.rows[0]?.n || 0), days };
+  } catch (err) {
+    console.warn('Stale restricted-contract count failed:', err.message);
+    return { count: 0, days };
+  }
+}
+
+/** The dashboard alert for stale restricted contracts, or null when there are none. */
+function staleRestrictedAlert(stale, action) {
+  if (!stale || !stale.count) return null;
+  return {
+    id: 'stale-restricted-contracts',
+    message: `${stale.count} live contract${stale.count === 1 ? ' has' : 's have'} had a banned or locked party for ${stale.days}+ days with no dispute open — settle the escrow.`,
+    severity: 'error',
+    ...action,
+  };
+}
+
 module.exports = {
+  STALE_RESTRICTED_DAYS,
+  countStaleRestrictedContracts,
+  staleRestrictedAlert,
   LIVE_CONTRACT_STATUSES,
   listLiveContractsForAccount,
   listRestrictedPartyContracts,

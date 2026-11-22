@@ -263,6 +263,18 @@ async function getDashboardOverview() {
   const recentActivity = buildPlatformActivity(signups, staff, verificationQueue);
   const economyFeed = creditLeaders.rows.map(mapEconomyItem);
   const alerts = buildPlatformAlerts(stats, verificationQueue, staff, forumCounts, ticketStats);
+  // Money waiting on a banned or locked party comes first (docs/punishment-system.md §9).
+  {
+    const restricted = require('./RestrictedWorkRepositories');
+    const staleAlert = restricted.staleRestrictedAlert(await restricted.countStaleRestrictedContracts(), {
+      to: '/admin/restricted-work',
+    });
+    if (staleAlert) {
+      // The "all clear" card no longer applies; keep the list at five.
+      const others = alerts.filter((alert) => alert.id !== 'healthy');
+      alerts.splice(0, alerts.length, staleAlert, ...others.slice(0, 4));
+    }
+  }
 
   return {
     lastUpdated: new Date().toISOString(),

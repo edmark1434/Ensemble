@@ -885,7 +885,14 @@ async function getSupportOverview(session = null) {
     recentActivity: ticketLog,
     staffWorkload,
     currentStaffId: currentStaff,
-    alerts: buildAlerts(tc, rc, dc, queueHealth),
+    // Money waiting on a banned or locked party comes first (docs/punishment-system.md §9).
+    alerts: [
+      require('./RestrictedWorkRepositories').staleRestrictedAlert(
+        await require('./RestrictedWorkRepositories').countStaleRestrictedContracts(),
+        { action: { tab: 'restricted-work' } }
+      ),
+      ...buildAlerts(tc, rc, dc, queueHealth),
+    ].filter(Boolean),
     dataSources: {
       tables: [
         'tickets',

@@ -195,10 +195,23 @@ function Alerts({ alerts }: { alerts: PlatformAlert[] }) {
       {alerts.map((a) => {
         const tone = ALERT_TONE[a.severity] || ALERT_TONE.info;
         const Icon = tone.icon;
-        return (
-          <div key={a.id} className={`flex items-start gap-2 rounded-xl border px-3 py-2.5 text-sm ${tone.box}`}>
+        const body = (
+          <>
             <Icon className="mt-0.5 h-4 w-4 shrink-0" />
             <span className="min-w-0">{a.message}</span>
+          </>
+        );
+        return a.to ? (
+          <Link
+            key={a.id}
+            to={a.to}
+            className={`flex items-start gap-2 rounded-xl border px-3 py-2.5 text-sm transition hover:brightness-125 ${tone.box}`}
+          >
+            {body}
+          </Link>
+        ) : (
+          <div key={a.id} className={`flex items-start gap-2 rounded-xl border px-3 py-2.5 text-sm ${tone.box}`}>
+            {body}
           </div>
         );
       })}

@@ -1642,7 +1642,14 @@ async function getJobsOverview() {
     flaggedPostings,
     disputes: disputes.slice(0, 10),
     staffWorkload,
-    alerts: buildAlerts(tc, dc, reportBreakdown, pc, pl, queueHealth),
+    // Money waiting on a banned or locked party comes first (docs/punishment-system.md §9).
+    alerts: [
+      require('./RestrictedWorkRepositories').staleRestrictedAlert(
+        await require('./RestrictedWorkRepositories').countStaleRestrictedContracts(),
+        { action: { tab: 'restricted-work' } }
+      ),
+      ...buildAlerts(tc, dc, reportBreakdown, pc, pl, queueHealth),
+    ].filter(Boolean),
     dataSources: {
       tables: [
         'tickets',

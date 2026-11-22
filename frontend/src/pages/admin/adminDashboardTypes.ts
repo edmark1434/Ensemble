@@ -16,6 +16,8 @@ export type PlatformAlert = {
   id: string;
   message: string;
   severity: 'warning' | 'error' | 'info' | 'success';
+  /** Console page the alert opens (e.g. /admin/restricted-work). */
+  to?: string;
 };
 
 export type StaffMember = {
