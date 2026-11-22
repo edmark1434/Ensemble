@@ -9,8 +9,8 @@ The staff "Live work with a restricted party" queue (Jobs, Support, Admin) loads
 ## Acceptance Criteria
 
 - **Loads.** `disputes.status` is the `dispute_status` enum, so `LOWER(COALESCE(d.status, ''))` failed the whole query. `RestrictedWorkRepositories` (list + stale-contract dashboard alert) and `MissedReviewRepositories` compare `d.status <> 'closed'` directly.
-- **Guide.** A hideable "How this queue works" panel (kept per browser): what's listed, what was already done automatically, what staff can do, what each reason means, and the 7-day stale rule.
-- **Rows.** Each contract shows a "Next:" step for its situation (open dispute, nothing in escrow, banned, locked, team leader, suspended with its end date) and a "7+ days, no dispute" marker matching the dashboard alert.
+- **Explanations on demand.** No always-visible panel. Hover shows a popover, click keeps it open, Esc or a click outside closes it: ⓘ by the title ("Why this list exists": what's shown, what happened automatically, what staff can do) and ⓘ after the filters ("What each reason means" + the 7-day stale rule).
+- **Rows.** Each contract has a "What to do" popover with the next step for its situation (open dispute, nothing in escrow, banned, locked, team leader, suspended with its end date) and a "7+ days, no dispute" marker matching the dashboard alert.
 
 # Parallel task: admin badge grant reaches every member
 

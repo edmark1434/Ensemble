@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import { Link } from 'react-router-dom';
-import { AlertTriangle, ArrowRight, Coins, ExternalLink, Info, Loader2, RefreshCw, Scale, Search } from 'lucide-react';
+import { AlertTriangle, Coins, ExternalLink, Info, Loader2, RefreshCw, Scale, Search, X } from 'lucide-react';
 import api from '@/lib/axios';
 import { useStaffLive } from '@/lib/staffLive';
 import { staffPlatformViewHref } from '@/lib/staffRoutes';
@@ -58,62 +59,214 @@ const FILTERS = [
 type FilterId = (typeof FILTERS)[number]['id'];
 type Reason = Exclude<FilterId, 'all'>;
 
-const GUIDE_KEY = 'restrictedWork.guideHidden';
 /** Same rule as the dashboards' red alert (countStaleRestrictedContracts). */
 const STALE_DAYS = 7;
 /** Which restriction decides the next step when both sides are restricted. */
 const REASON_ORDER: Reason[] = ['banned', 'locked', 'team_leader', 'suspended'];
 
-function readPref(key: string) {
-  try {
-    return window.localStorage.getItem(key);
-  } catch {
-    return null;
-  }
-}
-
-function writePref(key: string, value: string) {
-  try {
-    window.localStorage.setItem(key, value);
-  } catch {
-    /* per-browser convenience only */
-  }
-}
-
 const REASON_GUIDE: { id: Reason; label: string; tone: string; text: string }[] = [
   {
     id: 'banned',
     label: 'Banned',
-    tone: 'border-red-500/25 text-red-300',
-    text: 'Will not come back to this contract. Settle the escrow with the side that can still act.',
+    tone: 'text-red-300',
+    text: 'Will not come back. Settle the escrow with the other side.',
   },
   {
     id: 'locked',
     label: 'Locked',
-    tone: 'border-amber-500/25 text-amber-300',
-    text: 'Restricted while staff review the account. Settle if the review will not end soon or the other side cannot wait.',
+    tone: 'text-amber-300',
+    text: 'Frozen while staff review the account. Settle if the review will take a while.',
   },
   {
     id: 'suspended',
     label: 'Suspended',
-    tone: 'border-sky-500/25 text-sky-300',
-    text: 'Ends on its own at a set time. Usually wait, unless the other side asks for it to be settled sooner.',
+    tone: 'text-sky-300',
+    text: 'Ends on its own at a set time. Usually just wait.',
   },
   {
     id: 'team_leader',
     label: 'Team leader',
-    tone: 'border-zinc-500/25 text-zinc-200',
-    text: "The team's leader is banned, locked or missing. Live work goes on, but the team cannot take new work or pay out until Support transfers ownership or the penalty ends.",
+    tone: 'text-zinc-200',
+    text: "The team's leader is banned, locked or missing. The team keeps working but cannot take new work or pay out until Support transfers ownership or the penalty ends.",
   },
 ];
 
-function GuideCard({ title, items }: { title: string; items: ReactNode[] }) {
+const POP_WIDTH = 340;
+const EDGE = 12;
+const GAP = 8;
+
+/**
+ * Explanation that stays out of the way: hovering the button shows it, clicking keeps it open,
+ * Esc or a click elsewhere closes it.
+ */
+function HoverInfo({
+  title,
+  label,
+  width = POP_WIDTH,
+  buttonClassName,
+  children,
+}: {
+  title: string;
+  /** Text beside the ⓘ; without it the button is the icon alone. */
+  label?: string;
+  width?: number;
+  buttonClassName?: string;
+  children: ReactNode;
+}) {
+  const [open, setOpen] = useState(false);
+  const [pinned, setPinned] = useState(false);
+  const [pos, setPos] = useState<{ top: number; left: number; width: number } | null>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const popRef = useRef<HTMLDivElement>(null);
+  const closeTimer = useRef<number | null>(null);
+  const popId = useId();
+
+  const cancelClose = () => {
+    if (closeTimer.current) window.clearTimeout(closeTimer.current);
+    closeTimer.current = null;
+  };
+  const show = () => {
+    cancelClose();
+    setOpen(true);
+  };
+  const hideSoon = () => {
+    if (pinned) return;
+    cancelClose();
+    closeTimer.current = window.setTimeout(() => setOpen(false), 150);
+  };
+  const close = () => {
+    cancelClose();
+    setOpen(false);
+    setPinned(false);
+  };
+
+  const place = useCallback(() => {
+    const button = buttonRef.current;
+    if (!button) return;
+    const rect = button.getBoundingClientRect();
+    const w = Math.min(width, window.innerWidth - EDGE * 2);
+    const height = popRef.current?.offsetHeight ?? 0;
+    const left = Math.min(Math.max(EDGE, rect.left + rect.width / 2 - w / 2), window.innerWidth - w - EDGE);
+    const below = rect.bottom + GAP;
+    const fitsBelow = below + height <= window.innerHeight - EDGE;
+    const above = rect.top - GAP - height;
+    setPos({ top: fitsBelow || above < EDGE ? below : above, left, width: w });
+  }, [width]);
+
+  // Measured after the popover renders (hidden), so it can open above the button near the bottom.
+  useLayoutEffect(() => {
+    if (open) place();
+    else setPos(null);
+  }, [open, place]);
+
+  useEffect(() => {
+    if (!open) return;
+    const onPointer = (event: Event) => {
+      const target = event.target as Node;
+      if (popRef.current?.contains(target) || buttonRef.current?.contains(target)) return;
+      setOpen(false);
+      setPinned(false);
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      setOpen(false);
+      setPinned(false);
+      buttonRef.current?.focus();
+    };
+    document.addEventListener('mousedown', onPointer);
+    document.addEventListener('touchstart', onPointer);
+    window.addEventListener('keydown', onKey);
+    window.addEventListener('scroll', place, true);
+    window.addEventListener('resize', place);
+    return () => {
+      document.removeEventListener('mousedown', onPointer);
+      document.removeEventListener('touchstart', onPointer);
+      window.removeEventListener('keydown', onKey);
+      window.removeEventListener('scroll', place, true);
+      window.removeEventListener('resize', place);
+    };
+  }, [open, place]);
+
+  useEffect(
+    () => () => {
+      if (closeTimer.current) window.clearTimeout(closeTimer.current);
+    },
+    []
+  );
+
   return (
-    <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-3.5 py-3">
-      <p className="text-xs font-semibold text-white">{title}</p>
-      <ul className="mt-2 space-y-1.5 text-[11px] leading-relaxed text-zinc-400">
-        {items.map((item, index) => (
-          <li key={index} className="flex gap-2">
+    <>
+      <button
+        ref={buttonRef}
+        type="button"
+        aria-label={label ? undefined : title}
+        aria-expanded={open}
+        aria-controls={open ? popId : undefined}
+        onMouseEnter={show}
+        onMouseLeave={hideSoon}
+        onClick={() => {
+          if (pinned) close();
+          else {
+            cancelClose();
+            setOpen(true);
+            setPinned(true);
+          }
+        }}
+        className={
+          buttonClassName ||
+          `inline-flex shrink-0 items-center gap-1 rounded-md text-xs transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/20 ${
+            open ? 'text-white' : 'text-zinc-500 hover:text-zinc-200'
+          }`
+        }
+      >
+        <Info className="h-3.5 w-3.5" />
+        {label ? <span>{label}</span> : null}
+      </button>
+      {open &&
+        createPortal(
+          <div
+            ref={popRef}
+            id={popId}
+            role="dialog"
+            aria-label={title}
+            onMouseEnter={cancelClose}
+            onMouseLeave={hideSoon}
+            style={{
+              top: pos?.top ?? 0,
+              left: pos?.left ?? 0,
+              width: pos?.width ?? width,
+              visibility: pos ? 'visible' : 'hidden',
+            }}
+            className="fixed z-[90] max-h-[70vh] overflow-y-auto rounded-xl border border-white/10 bg-[#0f1016] p-4 text-left shadow-2xl shadow-black/60 motion-safe:animate-[console-fade_0.15s_ease-out_backwards]"
+          >
+            <div className="mb-2 flex items-start justify-between gap-3">
+              <p className="text-sm font-semibold text-white">{title}</p>
+              {pinned ? (
+                <button
+                  type="button"
+                  aria-label="Close"
+                  onClick={close}
+                  className="-mr-1 -mt-1 rounded-md p-1 text-zinc-500 hover:bg-white/5 hover:text-white"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              ) : null}
+            </div>
+            {children}
+          </div>,
+          document.body
+        )}
+    </>
+  );
+}
+
+function PopSection({ title, items }: { title: string; items: string[] }) {
+  return (
+    <div className="mt-3">
+      <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-zinc-500">{title}</p>
+      <ul className="space-y-1 text-xs leading-relaxed text-zinc-400">
+        {items.map((item) => (
+          <li key={item} className="flex gap-2">
             <span className="mt-[7px] h-1 w-1 shrink-0 rounded-full bg-zinc-600" />
             <span>{item}</span>
           </li>
@@ -123,81 +276,62 @@ function GuideCard({ title, items }: { title: string; items: ReactNode[] }) {
   );
 }
 
-/** What this queue holds, what already happened on its own, and what staff can do about it. */
-function QueueGuide({ accent, onHide }: { accent: Accent; onHide: () => void }) {
+/** Header ⓘ: why this list exists and what to do with it. */
+function QueueInfo() {
   return (
-    <section className="rounded-2xl border border-white/[0.08] bg-[#0f1016] px-5 py-4">
-      <div className="mb-3 flex items-start justify-between gap-3">
-        <div>
-          <p className="flex items-center gap-1.5 text-sm font-semibold text-white">
-            <Info className={`h-4 w-4 ${accentText(accent)}`} />
-            How this queue works
-          </p>
-          <p className="mt-0.5 max-w-3xl text-xs text-zinc-500">
-            A punishment never moves credits. Whatever a contract still holds in escrow waits here until staff settle
-            it, so the side that can still act is never left with credits stuck on someone who cannot.
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={onHide}
-          className="shrink-0 rounded-lg px-2 py-1 text-[11px] text-zinc-500 transition hover:bg-white/5 hover:text-zinc-200"
-        >
-          Hide
-        </button>
-      </div>
+    <HoverInfo title="Why this list exists" width={380}>
+      <p className="text-xs leading-relaxed text-zinc-300">
+        When someone is punished in the middle of a contract, they can't finish it, and the credits held for it stay
+        stuck in escrow. Punishments never move credits by themselves, so staff use this list to make sure the other
+        side gets the work or their credits back.
+      </p>
+      <PopSection
+        title="Shown here"
+        items={[
+          'Job and gig contracts still running, waiting to start or waiting on a signature.',
+          'One side is suspended, locked or banned, or is a team whose leader is.',
+          'Oldest first, with the credits still in escrow and any open dispute.',
+          'A contract leaves the list on its own once it ends or both sides can act again.',
+        ]}
+      />
+      <PopSection
+        title="Already done automatically"
+        items={[
+          'The other side was told, and is told again when the restricted side is back.',
+          'Automatic refunds, cancellations and missed-review warnings wait or are skipped, so nobody is punished twice.',
+          "An open dispute freezes the contract's escrow.",
+        ]}
+      />
+      <PopSection
+        title="What you can do"
+        items={[
+          'Open contract: see the milestones, escrow and chat.',
+          'Open the dispute: give the escrow to one side or split it, then close the case.',
+          'No dispute yet: the other side can open one from the contract, or contact Support.',
+          'Hover "What to do" on a contract for the next step.',
+        ]}
+      />
+    </HoverInfo>
+  );
+}
 
-      <div className="grid gap-3 lg:grid-cols-3">
-        <GuideCard
-          title="What's listed"
-          items={[
-            'Job and gig contracts that are Active, Waiting or Pending signature.',
-            'At least one side is suspended, locked or banned, or is a team whose leader is banned, locked or missing.',
-            'Oldest restriction first, with the credits the contract still holds in escrow and any open dispute.',
-            'A contract drops off by itself once it ends or both sides can act again.',
-          ]}
-        />
-        <GuideCard
-          title="Already done automatically"
-          items={[
-            'The other side was notified (a team through its Owners and Admins) and is told again when the restricted side can act.',
-            'Automatic abandonment refunds and auto-approved cancellations wait until the penalty ends, plus 48 hours. Missed-review warnings are skipped.',
-            "A ban withdraws unsigned offers on either side, and the banned member's pending proposals and gig orders.",
-            "An open dispute freezes the contract's escrow and stops its clocks.",
-          ]}
-        />
-        <GuideCard
-          title="What you can do"
-          items={[
-            <>
-              <span className="text-zinc-200">Open contract</span> to see milestones, escrow, deadlines and the chat in
-              platform view.
-            </>,
-            <>
-              <span className="text-zinc-200">Open the dispute</span> to settle the escrow: award it or split it, then
-              choose the account action.
-            </>,
-            'No dispute yet? The side that can still act can open one from the contract, or reach Support with a ticket.',
-            'Select a name to open their profile, standing and when it ends.',
-            'Filter by reason, or search by title, member or contract id.',
-          ]}
-        />
-      </div>
-
-      <p className="mb-2 mt-4 text-[11px] font-semibold uppercase tracking-wide text-zinc-500">What each reason means</p>
-      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+/** Filter ⓘ: what each restriction means for the contract. */
+function ReasonInfo() {
+  return (
+    <HoverInfo title="What each reason means" width={320}>
+      <dl className="space-y-2">
         {REASON_GUIDE.map((reason) => (
-          <div key={reason.id} className={`rounded-xl border bg-white/[0.02] px-3.5 py-3 ${reason.tone}`}>
-            <p className="text-xs font-semibold">{reason.label}</p>
-            <p className="mt-1 text-[11px] leading-relaxed text-zinc-400">{reason.text}</p>
+          <div key={reason.id}>
+            <dt className={`text-xs font-semibold ${reason.tone}`}>{reason.label}</dt>
+            <dd className="text-xs leading-relaxed text-zinc-400">{reason.text}</dd>
           </div>
         ))}
-      </div>
-      <p className="mt-3 text-[11px] text-zinc-500">
-        Contracts marked <span className="text-red-300">{STALE_DAYS}+ days, no dispute</span> have had a banned or
-        locked side that long with nothing settling them. The dashboards raise the same red alert.
+      </dl>
+      <p className="mt-3 border-t border-white/[0.06] pt-2 text-[11px] leading-relaxed text-zinc-500">
+        <span className="text-red-300">{STALE_DAYS}+ days, no dispute</span> marks a banned or locked side that long with
+        nothing settling it. The dashboards show the same red alert.
       </p>
-    </section>
+    </HoverInfo>
   );
 }
 
@@ -229,23 +363,23 @@ function formatWhen(value?: string | null) {
 /** One line telling staff what to do with this contract. */
 function nextStep(item: Item) {
   if (item.openDispute) {
-    return `Settle the escrow in ${item.openDispute.number || 'the open dispute'}: award or split it, then close the case.`;
+    return `Settle the escrow in ${item.openDispute.number || 'the open dispute'}: give it to one side or split it, then close the case.`;
   }
   if (item.escrowCredits === 0) {
-    return 'No credits are held, so nothing is stranded. It leaves this list when the contract ends or the penalty lifts.';
+    return 'No credits are held, so nothing is stuck. It leaves this list when the contract ends or the penalty lifts.';
   }
   const parties = restrictedParties(item);
   const reason = REASON_ORDER.find((id) => parties.some((party) => party.reason === id));
   switch (reason) {
     case 'banned':
-      return 'The banned side will not come back to this. Ask the other side to open a dispute from the contract so the escrow can be settled.';
+      return 'The banned side will not come back. Ask the other side to open a dispute from the contract so the escrow can be settled.';
     case 'locked':
-      return 'Locked while staff review the account. If the review will not end soon, the other side can open a dispute to settle the escrow.';
+      return 'Locked while staff review the account. If that will take a while, the other side can open a dispute to settle the escrow.';
     case 'team_leader':
       return "The team keeps working on this contract. Support can transfer the team's ownership, or it resumes when the leader's penalty ends.";
     case 'suspended': {
       const ends = formatWhen(parties.find((party) => party.reason === 'suspended')?.standing?.endsAt);
-      return `${ends ? `Suspension ends ${ends}.` : 'The suspension ends on its own.'} Usually wait; the other side can open a dispute if they cannot.`;
+      return `${ends ? `The suspension ends ${ends}.` : 'The suspension ends on its own.'} Usually just wait; the other side can open a dispute if they can't.`;
     }
     default:
       return 'Open the contract to check where it stands.';
@@ -306,12 +440,7 @@ export default function RestrictedWorkDesk({
   const [data, setData] = useState<Payload | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [guideHidden, setGuideHidden] = useState(() => readPref(GUIDE_KEY) === '1');
   const latest = useRef({ filter, query });
-  const toggleGuide = (hidden: boolean) => {
-    setGuideHidden(hidden);
-    writePref(GUIDE_KEY, hidden ? '1' : '0');
-  };
   latest.current = { filter, query };
 
   const load = useCallback(async (silent = false) => {
@@ -349,38 +478,27 @@ export default function RestrictedWorkDesk({
         <div className="flex flex-col gap-3 px-6 py-4 md:px-8 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <p className={`text-[10px] font-semibold uppercase tracking-[0.2em] ${accentText(accent)}`}>{eyebrow}</p>
-            <h1 className="text-xl font-bold text-white">Live work with a restricted party</h1>
+            <h1 className="flex items-center gap-2 text-xl font-bold text-white">
+              Live work with a restricted party
+              <QueueInfo />
+            </h1>
             <p className="mt-1 max-w-2xl text-xs text-zinc-500">
-              Contracts where one side is suspended, locked or banned and cannot act. The other side has been told.
-              Punishments never move credits, so settle whatever is still in escrow through the dispute tools.
+              Contracts where one side was punished and can't act. Make sure the other side isn't left with stuck credits.
             </p>
           </div>
-          <div className="flex items-center gap-2 self-start">
-            {guideHidden ? (
-              <button
-                type="button"
-                onClick={() => toggleGuide(false)}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 px-3 py-2 text-xs text-zinc-400 transition hover:border-white/20 hover:text-white"
-              >
-                <Info className="h-3.5 w-3.5" /> How this works
-              </button>
-            ) : null}
-            <button
-              type="button"
-              onClick={() => void load()}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs text-zinc-200 transition hover:bg-white/10"
-            >
-              <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} /> Refresh
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={() => void load()}
+            className="inline-flex items-center gap-1.5 self-start rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs text-zinc-200 transition hover:bg-white/10"
+          >
+            <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} /> Refresh
+          </button>
         </div>
       </header>
 
       <div className="space-y-4 px-6 py-6 md:px-8">
-        {!guideHidden ? <QueueGuide accent={accent} onHide={() => toggleGuide(true)} /> : null}
-
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex flex-wrap gap-1.5">
+          <div className="flex flex-wrap items-center gap-1.5">
             {FILTERS.map((item) => (
               <button
                 key={item.id}
@@ -396,6 +514,9 @@ export default function RestrictedWorkDesk({
                 <span className="ml-1.5 text-zinc-500">{countFor(data?.counts, item.id)}</span>
               </button>
             ))}
+            <span className="ml-1">
+              <ReasonInfo />
+            </span>
           </div>
           <label className="relative w-full lg:w-72">
             <Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-zinc-500" />
@@ -457,6 +578,14 @@ export default function RestrictedWorkDesk({
                     ) : (
                       <Pill className="border-zinc-500/30 bg-zinc-500/10 text-zinc-400">No dispute</Pill>
                     )}
+                    <HoverInfo
+                      title="What to do"
+                      label="What to do"
+                      width={300}
+                      buttonClassName="inline-flex items-center gap-1 rounded-lg border border-white/10 bg-white/5 px-2.5 py-1 text-xs text-zinc-200 transition hover:bg-white/10"
+                    >
+                      <p className="text-xs leading-relaxed text-zinc-300">{nextStep(item)}</p>
+                    </HoverInfo>
                     <Link
                       to={staffPlatformViewHref(consoleBase, `/contracts/${item.contractId}`)}
                       className="inline-flex items-center gap-1 rounded-lg border border-white/10 bg-white/5 px-2.5 py-1 text-xs text-zinc-200 hover:bg-white/10"
@@ -469,13 +598,6 @@ export default function RestrictedWorkDesk({
                   <PartyCell party={item.client} role="Client" consoleBase={consoleBase} />
                   <PartyCell party={item.freelancer} role="Freelancer" consoleBase={consoleBase} />
                 </div>
-                <p className="mt-3 flex gap-2 border-t border-white/[0.06] pt-3 text-xs text-zinc-400">
-                  <ArrowRight className={`mt-0.5 h-3.5 w-3.5 shrink-0 ${accentText(accent)}`} />
-                  <span>
-                    <span className="font-medium text-zinc-200">Next: </span>
-                    {nextStep(item)}
-                  </span>
-                </p>
               </li>
             ))}
           </ul>
