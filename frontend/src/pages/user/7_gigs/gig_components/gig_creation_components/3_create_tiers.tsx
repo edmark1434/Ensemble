@@ -817,7 +817,7 @@ export const CreateTiers: React.FC<CreateTiersProps> = ({
                   onClick={() => handleAddPresetAddOn(preset)}
                   className={`group relative p-3 rounded-xl border text-left flex flex-col justify-between transition-all duration-150 shadow-2xs ${
                     isAlreadyAdded
-                      ? "border-zinc-200 dark:border-zinc-800 bg-zinc-100/70 dark:bg-zinc-850/60 opacity-60 cursor-not-allowed"
+                      ? "border-emerald-300/70 dark:border-emerald-500/30 bg-zinc-100 dark:bg-zinc-900/50 opacity-75 cursor-not-allowed"
                       : "border-zinc-200/90 dark:border-zinc-800 bg-white dark:bg-zinc-900 hover:border-blue-500/60 dark:hover:border-blue-500/50 hover:bg-blue-50/20 dark:hover:bg-blue-950/10 active:scale-[0.98] cursor-pointer"
                   }`}
                 >
@@ -842,7 +842,7 @@ export const CreateTiers: React.FC<CreateTiersProps> = ({
                   </div>
 
                   <div className="pt-2 mt-2 border-t border-zinc-100 dark:border-zinc-800/80 flex items-center justify-between text-[10px] font-semibold">
-                    <span className={isAlreadyAdded ? "text-zinc-400 font-medium" : "text-blue-600 dark:text-blue-400 flex items-center gap-1 font-bold"}>
+                    <span className={isAlreadyAdded ? "text-emerald-600 dark:text-emerald-400 font-semibold" : "text-blue-600 dark:text-blue-400 flex items-center gap-1 font-bold"}>
                       {isAlreadyAdded ? "✓ Added" : "+ Add add-on"}
                     </span>
                   </div>

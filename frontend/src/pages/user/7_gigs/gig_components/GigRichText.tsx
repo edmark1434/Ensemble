@@ -110,6 +110,7 @@ export const GigRichText: React.FC<GigRichTextProps> = ({
   const [isQuestionnairesOpen, setIsQuestionnairesOpen] = useState(false);
   const [isScoreOpen, setIsScoreOpen] = useState(false);
   const [reviewFilter, setReviewFilter] = useState<number | null>(null);
+  const [reviewTierFilter, setReviewTierFilter] = useState<string | null>(null);
 
   const formatTimeAgo = (dateStr: string | undefined) => {
     if (!dateStr) return "Just now";
@@ -589,7 +590,14 @@ export const GigRichText: React.FC<GigRichTextProps> = ({
 
     const renderReviews = () => {
     const reviews = gig.reviews || [];
-    const filteredReviews = reviewFilter !== null ? reviews.filter(r => r.stars === reviewFilter) : reviews;
+    const tierOptions = Array.from(
+      new Set(reviews.map((r: any) => r.tierTitle).filter(Boolean))
+    ) as string[];
+    const filteredReviews = reviews.filter((r: any) => {
+      if (reviewFilter !== null && r.stars !== reviewFilter) return false;
+      if (reviewTierFilter !== null && r.tierTitle !== reviewTierFilter) return false;
+      return true;
+    });
 
     return (
       <section className="pt-4 border-t border-gray-200 dark:border-white/5 space-y-4">
@@ -631,6 +639,33 @@ export const GigRichText: React.FC<GigRichTextProps> = ({
                 </button>
               );
             })}
+            {tierOptions.length > 0 && (
+              <div className="flex items-center gap-1.5 ml-auto flex-wrap">
+                <button
+                  onClick={() => setReviewTierFilter(null)}
+                  className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-colors border ${
+                    reviewTierFilter === null
+                      ? "bg-blue-50 dark:bg-blue-500/20 text-blue-700 dark:text-blue-400 border-blue-200 dark:border-blue-500/30"
+                      : "bg-white dark:bg-white/5 text-gray-600 dark:text-zinc-400 border-gray-200 dark:border-white/10 hover:bg-gray-50 dark:hover:bg-white/10"
+                  }`}
+                >
+                  All Tiers
+                </button>
+                {tierOptions.map((tier) => (
+                  <button
+                    key={tier}
+                    onClick={() => setReviewTierFilter(reviewTierFilter === tier ? null : tier)}
+                    className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-colors border ${
+                      reviewTierFilter === tier
+                        ? "bg-blue-50 dark:bg-blue-500/20 text-blue-700 dark:text-blue-400 border-blue-200 dark:border-blue-500/30"
+                        : "bg-white dark:bg-white/5 text-gray-600 dark:text-zinc-400 border-gray-200 dark:border-white/10 hover:bg-gray-50 dark:hover:bg-white/10"
+                    }`}
+                  >
+                    {tier}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
@@ -674,7 +709,14 @@ export const GigRichText: React.FC<GigRichTextProps> = ({
                                         </div>
                                     )}
                                     <div>
-                                        <p className="text-sm font-bold text-gray-900 dark:text-white">{rev.reviewerName}</p>
+                                        <div className="flex items-center gap-2 flex-wrap">
+                                            <p className="text-sm font-bold text-gray-900 dark:text-white">{rev.reviewerName}</p>
+                                            {rev.tierTitle && (
+                                                <span className="px-2 py-0.5 rounded-md text-[10px] font-semibold bg-gray-100 dark:bg-white/10 text-gray-700 dark:text-zinc-300 border border-gray-200 dark:border-white/10">
+                                                    Tier: {rev.tierTitle}
+                                                </span>
+                                            )}
+                                        </div>
                                         <p className="text-[10px] text-gray-500 dark:text-zinc-400">{new Date(rev.createdAt).toLocaleDateString()}</p>
                                     </div>
                                 </div>

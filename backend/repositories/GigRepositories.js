@@ -1747,6 +1747,18 @@ async function getIncomingOrdersRepository(accountIds) {
 
             (SELECT f.path FROM files f WHERE f.file_id = a.avatar_file_id LIMIT 1) as client_avatar,
 
+            (
+                SELECT COALESCE(AVG(rt.stars_out_of_five), 5.0)::float
+                FROM ratings rt
+                WHERE rt.account_id = r.client_account_id AND rt.deleted_at IS NULL
+            ) as client_rating,
+
+            (
+                SELECT COUNT(*)::int
+                FROM ratings rt
+                WHERE rt.account_id = r.client_account_id AND rt.deleted_at IS NULL
+            ) as client_rating_count,
+
             gt.title as tier_title,
             gt.rate_credits as base_price,
             gt.delivery_days as base_delivery_days,
@@ -2151,7 +2163,9 @@ async function getGigByIdRepository(gigId, accountId = null, actorIds = [], affi
 
                       'reviewerName', client_acc.display_name,
 
-                      'reviewerAvatar', f.path
+                      'reviewerAvatar', f.path,
+
+                      'tierTitle', gt.title
 
                   ))
 
@@ -2167,7 +2181,7 @@ async function getGigByIdRepository(gigId, accountId = null, actorIds = [], affi
 
                   JOIN gig_tiers gt ON gr.gig_tier_id = gt.gig_tier_id
 
-                  WHERE gt.gig_id = g.gig_id AND r.account_id = g.freelancer_account_id
+                  WHERE gt.gig_id = g.gig_id AND r.account_id = g.freelancer_account_id AND r.deleted_at IS NULL
 
               ) as reviews,
 
