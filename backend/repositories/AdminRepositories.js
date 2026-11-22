@@ -21,6 +21,15 @@ async function getForumCounts() {
   }
 }
 
+/**
+ * Contract workspaces (`teams.team_type = 'contractual'`) are job/gig scaffolding, not team
+ * accounts: they never verify or wait for approval, so the queue and its counts skip them.
+ */
+const NOT_CONTRACT_WORKSPACE = (accountIdColumn) => `NOT EXISTS (
+  SELECT 1 FROM teams ct
+  WHERE ct.account_id = ${accountIdColumn} AND ct.team_type = 'contractual'
+)`;
+
 async function getDashboardOverview() {
   const [
     ticketCountsResult,
@@ -56,12 +65,15 @@ async function getDashboardOverview() {
         (SELECT COUNT(*)::int FROM accounts WHERE LOWER(COALESCE(status, '')) = 'active') AS active_users,
         (SELECT COUNT(*)::int FROM accounts WHERE type = 'User') AS platform_user_accounts,
         (SELECT COUNT(*)::int FROM accounts WHERE type = 'Staff') AS staff_accounts,
-        (SELECT COUNT(*)::int FROM accounts WHERE LOWER(COALESCE(status, '')) != 'active' OR status IS NULL) AS pending_review,
+        (SELECT COUNT(*)::int FROM accounts a
+         WHERE (LOWER(COALESCE(a.status, '')) != 'active' OR a.status IS NULL)
+           AND ${NOT_CONTRACT_WORKSPACE('a.account_id')}) AS pending_review,
         (SELECT COUNT(*)::int
          FROM verifications v
          LEFT JOIN verification_sessions avs ON avs.verification_session_id = v.verification_session_id
          WHERE COALESCE(v.is_verified, FALSE) = FALSE
-           AND LOWER(COALESCE(avs.verification_status, 'unverified')) IN ('unverified', 'pending', 'pending review')) AS pending_verifications
+           AND LOWER(COALESCE(avs.verification_status, 'unverified')) IN ('unverified', 'pending', 'pending review')
+           AND ${NOT_CONTRACT_WORKSPACE('v.account_id')}) AS pending_verifications
     `),
     pool.query(`
       SELECT
@@ -121,6 +133,7 @@ async function getDashboardOverview() {
       LEFT JOIN verifications v ON v.account_id = a.account_id
       LEFT JOIN verification_sessions avs ON avs.verification_session_id = v.verification_session_id
       WHERE a.deleted_at IS NULL
+        AND ${NOT_CONTRACT_WORKSPACE('a.account_id')}
         AND (
           LOWER(COALESCE(a.status, '')) != 'active'
           OR (

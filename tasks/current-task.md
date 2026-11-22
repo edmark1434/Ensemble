@@ -41,3 +41,14 @@ When staff ban, suspend or lock a team, they choose who else gets the same penal
 - **Lifts.** Only penalties applied together with this team (latest standing change carries `viaTeamAccountId`) are lifted, for members in scope.
 - **Record.** Each member's reason says it came with the team; the team record gets `TEAM_LEADER_STANDING_CHANGED` / `TEAM_MEMBER_STANDING_CHANGED`; the summary lists who changed and who was skipped.
 - **UI.** The team status modal and platform-view dialog show the four choices with a searchable member picker; bulk team actions offer team only / each leader / all members.
+
+# Parallel task: no contract workspaces in verification views
+
+## Objective
+
+Contract workspaces (`teams.team_type = 'contractual'`) are job/gig scaffolding and never verify, so no staff verification view lists or counts them.
+
+## Acceptance Criteria
+
+- **Admin dashboard.** `GET /api/admin/dashboard-overview` leaves contract workspaces out of `verificationQueue`, the `pendingVerifications` KPI / alert and the `pending_review` fallback count (`backend/repositories/AdminRepositories.js`).
+- **Moderation desk.** The identity queue (users only) and business-verification queue keep excluding contract workspaces (`AdminModerationRepositories.js`), as do the Team accounts lists every moderator console reuses (`fetchTeamsFromDatabase`).
