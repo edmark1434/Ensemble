@@ -596,6 +596,8 @@ const PageSubmitATicket: React.FC = () => {
   const [catalogState, setCatalogState] = useState<"loading" | "ready" | "error">("loading");
   const [catalogAttempt, setCatalogAttempt] = useState(0);
   const [pickers, setPickers] = useState<Record<string, PickerOption[]>>({});
+  /** Open tickets per category (`subgroup`) and the per-category cap the server enforces. */
+  const [ticketLimits, setTicketLimits] = useState<{ limit: number; open: Record<string, number> } | null>(null);
 
   const [group, setGroup] = useState("Support");
   const [subgroup, setSubgroup] = useState("");
@@ -647,7 +649,10 @@ const PageSubmitATicket: React.FC = () => {
     api
       .get("/api/users/ticket-context")
       .then((response) => {
-        if (!cancelled && response.data?.success) setPickers(response.data.data || {});
+        if (cancelled || !response.data?.success) return;
+        const { ticketLimits: limits, ...lists } = response.data.data || {};
+        setPickers(lists);
+        setTicketLimits(limits && typeof limits.limit === "number" ? limits : null);
       })
       .catch(() => {});
     void useCaseStore.getState().refresh();
@@ -711,6 +716,10 @@ const PageSubmitATicket: React.FC = () => {
   const selected = catalog.find((item) => item.label === ticketType) || null;
   // Each penalty is appealed on its own from the standing page, where the member picks it.
   const appealType = ticketType === APPEAL_TICKET_TYPE;
+  // Account penalty appeals are not capped (one per penalty already); every other type is.
+  const category = !appealType ? selected?.subgroup || null : null;
+  const openInCategory = category && ticketLimits ? ticketLimits.open[category] || 0 : 0;
+  const categoryFull = Boolean(category && ticketLimits && openInCategory >= ticketLimits.limit);
   const visibleFields = useMemo(
     () => (selected && !appealType ? (selected.fields || []).filter((field) => fieldVisible(field, fieldValues)) : []),
     [selected, appealType, fieldValues]
@@ -886,10 +895,22 @@ const PageSubmitATicket: React.FC = () => {
         id: response.data.data?.ticketId ? String(response.data.data.ticketId) : null,
         number: response.data.data?.ticketNumber || null,
       });
+      if (category) {
+        setTicketLimits((current) =>
+          current ? { ...current, open: { ...current.open, [category]: (current.open[category] || 0) + 1 } } : current
+        );
+      }
       void useCaseStore.getState().refresh();
       window.scrollTo({ top: 0, behavior: "smooth" });
     } catch (err: unknown) {
       const info = readApiError(err);
+      if (info.code === "TICKET_CATEGORY_LIMIT" && info.data && typeof info.data.limit === "number") {
+        const { category: fullCategory, limit, open } = info.data as { category: string; limit: number; open: number };
+        setTicketLimits((current) => ({
+          limit,
+          open: { ...(current?.open || {}), [fullCategory]: open },
+        }));
+      }
       if (info.code === "TICKET_DUPLICATE" && info.data?.ticketId) {
         setDuplicate({
           ticketId: String(info.data.ticketId),
@@ -1350,9 +1371,31 @@ const PageSubmitATicket: React.FC = () => {
                 <p className="mt-2 text-sm leading-relaxed text-gray-800 dark:text-zinc-100">{selected.description}</p>
                 <p className="mt-2 text-xs text-gray-500 dark:text-zinc-400">
                   {[groupLabel(selected.group), selected.subgroup].filter(Boolean).join(" · ")}
+                  {category && ticketLimits
+                    ? ` · ${openInCategory} of ${ticketLimits.limit} open tickets used`
+                    : ""}
                 </p>
               </div>
             )}
+
+            {categoryFull && ticketLimits ? (
+              <div role="status" className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4">
+                <p className="text-sm font-semibold text-gray-900 dark:text-white">
+                  You have {ticketLimits.limit} open {category} tickets
+                </p>
+                <p className="mt-1 text-sm leading-relaxed text-gray-700 dark:text-zinc-300">
+                  That is the most you can have open in one category. Add the new details to one of them, or wait for
+                  one to close, then open another.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => navigate("/support/cases")}
+                  className="mt-2 text-sm font-semibold text-amber-700 underline-offset-2 hover:underline dark:text-amber-300"
+                >
+                  Open your cases
+                </button>
+              </div>
+            ) : null}
 
             {appealType ? (
               <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4">
@@ -1495,7 +1538,7 @@ const PageSubmitATicket: React.FC = () => {
                   </div>
                 ) : null}
 
-                <button type="submit" disabled={submitting || !ticketType} className={SUBMIT_BUTTON}>
+                <button type="submit" disabled={submitting || !ticketType || categoryFull} className={SUBMIT_BUTTON}>
                   {submitting ? progress || "Submitting…" : "Submit ticket"}
                 </button>
               </>

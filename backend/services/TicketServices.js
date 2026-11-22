@@ -3,8 +3,9 @@ const {
     createSupportTicket,
     assertCanFileAppeal,
     findRecentOpenTicketLike,
+    listOpenTicketTypes,
 } = require('../repositories/AdminTicketsRepositories');
-const { isValidTicketType, normalizeTicketType } = require('../lib/TicketEnums');
+const { isValidTicketType, normalizeTicketType, ticketCategoryOf } = require('../lib/TicketEnums');
 const { notifyCaseOpened } = require('./CaseServices');
 
 /**
@@ -17,7 +18,41 @@ const MEMBER_TICKET_LIMITS = Object.freeze({
     description: 5000,
     appealCaseId: 80,
     appealEvidence: 2000,
+    /** Open tickets a member may have per category (Account, Billing, Forum, Marketplace, …). */
+    openPerCategory: 5,
 });
+
+/**
+ * Account penalty appeals are already limited to one open appeal per penalty, and banned or
+ * suspended members can file nothing else, so they neither count toward nor hit the category limit.
+ */
+const CATEGORY_LIMIT_EXEMPT_TYPES = new Set(['Appeal an account penalty']);
+
+/** Open tickets per category for one member: `{ limit, open: { [category]: count } }`. */
+async function getOpenTicketCountsByCategory(accountId) {
+    const open = {};
+    for (const storedType of await listOpenTicketTypes(accountId)) {
+        const type = normalizeTicketType(storedType);
+        if (CATEGORY_LIMIT_EXEMPT_TYPES.has(type)) continue;
+        const category = ticketCategoryOf(type);
+        if (category) open[category] = (open[category] || 0) + 1;
+    }
+    return { limit: MEMBER_TICKET_LIMITS.openPerCategory, open };
+}
+
+async function assertCategoryHasRoom(accountId, ticketType) {
+    if (CATEGORY_LIMIT_EXEMPT_TYPES.has(ticketType)) return;
+    const category = ticketCategoryOf(ticketType);
+    if (!category) return;
+    const { limit, open } = await getOpenTicketCountsByCategory(accountId);
+    if ((open[category] || 0) >= limit) {
+        throw memberTicketError(
+            `You already have ${limit} open ${category} tickets. Add to one of them from Cases, or wait for one to close, before opening another.`,
+            409,
+            { code: 'TICKET_CATEGORY_LIMIT', data: { category, limit, open: open[category] || 0 } }
+        );
+    }
+}
 
 /** The same ticket filed again within this many minutes is treated as a double submit. */
 const DUPLICATE_WINDOW_MINUTES = 10;
@@ -112,6 +147,7 @@ async function createMemberTicket({ session, accountAccess, body: rawBody }) {
                 { code: 'TICKET_DUPLICATE', data: { ticketId: duplicate.id, ticketNumber: duplicate.number } }
             );
         }
+        await assertCategoryHasRoom(requesterAccountId, ticketType);
     }
 
     const clientContext = plainObject(body.context);
@@ -162,5 +198,6 @@ async function createStaffTicketService(payload, session) {
 module.exports = {
     MEMBER_TICKET_LIMITS,
     createMemberTicket,
+    getOpenTicketCountsByCategory,
     createStaffTicketService,
 };

@@ -42,7 +42,11 @@ const {
 } = require('../services/CaseServices');
 const { createReport } = require('../repositories/ModeratorSharedRepositories');
 const { createReportNumber, buildSubjectSnapshot } = require('../lib/ReportSubject');
-const { createStaffTicketService, createMemberTicket } = require('../services/TicketServices');
+const {
+  createStaffTicketService,
+  createMemberTicket,
+  getOpenTicketCountsByCategory,
+} = require('../services/TicketServices');
 const { applyFinancialResolution } = require('../services/DisputeFinancialServices');
 const { ticketInStaffQueue } = require('../lib/TicketQueueScope');
 
@@ -351,8 +355,15 @@ async function getTicketContext(req, res) {
     if (!accountId) {
       return res.status(401).json({ success: false, message: 'Authentication required' });
     }
-    const data = await getTicketPickers(accountId);
-    res.status(200).json({ success: true, data });
+    const [pickers, ticketLimits] = await Promise.all([
+      getTicketPickers(accountId),
+      // The form shows how many tickets are open per category; it never blocks the pickers.
+      getOpenTicketCountsByCategory(accountId).catch((err) => {
+        console.error('Error counting open tickets:', err.message);
+        return null;
+      }),
+    ]);
+    res.status(200).json({ success: true, data: { ...pickers, ticketLimits } });
   } catch (err) {
     console.error('Error loading ticket context:', err);
     res.status(500).json({ success: false, message: 'Failed to load your projects and orders' });

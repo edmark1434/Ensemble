@@ -135,3 +135,15 @@ Marketplace staff can reject a listing for good so the seller can never resubmit
 - **Marketplace Control.** "Reject permanently" in the row menu and the listing modal (pending, scheduled, approved, delisted, rejected), with a warning in the decision dialog; permanently rejected rows show a "Permanently rejected" pill and chip; "Allow resubmission" lifts it.
 - **Locked discussions.** Only forum staff can comment on a locked discussion (423 `DISCUSSION_LOCKED`, checked again at write time). Member pages (feed, group, discussion) show a Locked chip, hide Reply buttons and replace the comment box with a "Replies are locked" notice; a 423 shows that notice and a toast instead of "Failed to post reply".
 - **Pinned discussions.** Pinned posts show a Pinned chip and an emerald edge, and stay on top of a group's feed (except Popular), including after a live pin or unpin.
+
+# Parallel task: ticket form case IDs and per-category ticket limit
+
+## Objective
+
+Members are not asked for a "Case ID" they were never given, and nobody can pile up open tickets in one category.
+
+## Acceptance Criteria
+
+- **Appeal forms.** "Appeal a marketplace action" asks what happened (listing rejected / permanently rejected / delisted, selling restricted, other) and, for a listing decision, the listing (required picker); the case number is optional. Forum and jobs appeals keep their fields but the case number is optional.
+- **Limit.** At most 5 open tickets per category (support area, Forum, Marketplace, Jobs and Gigs); the sixth is 409 `TICKET_CATEGORY_LIMIT`. Account penalty appeals are exempt.
+- **Form.** The type card shows "N of 5 open tickets used"; a full category shows a notice with a link to Cases and disables Submit.

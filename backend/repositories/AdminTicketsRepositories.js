@@ -1242,6 +1242,22 @@ async function resolveTicketAttachments(rawAttachments, session) {
 }
 
 /** An open ticket this account filed with the same type and subject in the last few minutes. */
+/** Types of the account's tickets that are still open (not closed or resolved). */
+async function listOpenTicketTypes(accountId) {
+  if (!accountId) return [];
+  const result = await pool.query(
+    `
+    SELECT type
+    FROM tickets
+    WHERE account_id = $1
+      AND deleted_at IS NULL
+      AND LOWER(status) NOT IN ('closed', 'resolved')
+    `,
+    [accountId]
+  );
+  return result.rows.map((row) => row.type);
+}
+
 async function findRecentOpenTicketLike(accountId, type, reason, minutes = 10) {
   if (!accountId || !type || !reason) return null;
   const result = await pool.query(
@@ -7307,6 +7323,7 @@ module.exports = {
   getTicketCatalog,
   createSupportTicket,
   findRecentOpenTicketLike,
+  listOpenTicketTypes,
   createStaffTicketForAccount,
   findAccountByEmailOrUsername,
   getTicketPickers,

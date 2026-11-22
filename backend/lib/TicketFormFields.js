@@ -43,6 +43,18 @@ function whenOneOf(key, oneOf) {
  * The member may still type a name or link when the record is not listed (not for `team`).
  * The server stores the record's name and id, and refuses an id the member cannot pick.
  */
+/** Marketplace decisions a member can appeal; the listing ones ask which listing. */
+const MARKETPLACE_LISTING_ACTIONS = Object.freeze([
+  'Listing rejected',
+  'Listing permanently rejected',
+  'Listing delisted',
+]);
+const MARKETPLACE_APPEAL_ACTIONS = Object.freeze([
+  ...MARKETPLACE_LISTING_ACTIONS,
+  'Selling restricted',
+  'Other',
+]);
+
 const project = [text('project', 'Project', { picker: 'project' })];
 const listing = [text('listing', 'Listing', { picker: 'listing' })];
 const order = [text('order', 'Order', { picker: 'order' })];
@@ -188,7 +200,7 @@ const TICKET_FORM_FIELDS = Object.freeze({
     area('evidence', 'Evidence', { required: false }),
   ],
   'Appeal a forum action': [
-    text('case_id', 'Case ID'),
+    optionalText('case_id', 'Warning or report number, if you were given one'),
     area('explanation', 'Explanation'),
   ],
   'Seller verification': [
@@ -235,10 +247,16 @@ const TICKET_FORM_FIELDS = Object.freeze({
     select('reason', 'Reason', ['Fake', 'Abusive', 'Unfair']),
     area('explanation', 'Explanation'),
   ],
+  // Members are never given a case ID for marketplace decisions, so the listing names the case.
+  // `case_id` stays an optional lookup for a warning or report number the member was sent.
   'Appeal a marketplace action': [
-    text('case_id', 'Case ID'),
-    optionalText('listing', 'Listing the action was on, if any', { picker: 'listing' }),
-    area('explanation', 'Explanation'),
+    select('action_taken', 'What happened', MARKETPLACE_APPEAL_ACTIONS),
+    text('listing', 'Listing the action was on', {
+      picker: 'listing',
+      ...whenOneOf('action_taken', MARKETPLACE_LISTING_ACTIONS),
+    }),
+    optionalText('case_id', 'Warning or report number, if you were given one'),
+    area('explanation', 'Why it should be reversed'),
   ],
   'Job and gig listings': [
     text('listing', 'Listing', { picker: 'job' }),
@@ -288,7 +306,7 @@ const TICKET_FORM_FIELDS = Object.freeze({
     area('explanation', 'Explanation'),
   ],
   'Appeal a jobs action': [
-    text('case_id', 'Case ID'),
+    optionalText('case_id', 'Warning or report number, if you were given one'),
     optionalText('listing', 'Job or gig the action was on, if any', { picker: 'job' }),
     area('explanation', 'Explanation'),
   ],

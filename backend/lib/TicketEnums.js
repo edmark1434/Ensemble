@@ -448,6 +448,15 @@ const PUBLIC_TICKET_GROUPS = Object.freeze([
   },
 ]);
 
+/**
+ * The category a ticket type is filed under on the member form: the support area for support
+ * types (Account, Billing, …), else Forum, Marketplace or Jobs and Gigs. Open-ticket limits count
+ * per category. Unknown types return null.
+ */
+function ticketCategoryOf(type) {
+  return TYPE_META.get(type)?.subgroup || null;
+}
+
 function getPublicTicketTypeDetails() {
   const { fieldsForType } = require('./TicketFormFields');
   return TICKET_TYPES.map((label) => {
@@ -491,6 +500,7 @@ module.exports = {
   isValidTicketPriority,
   isClosedStatus,
   getPublicTicketTypeDetails,
+  ticketCategoryOf,
   fieldsForType: require('./TicketFormFields').fieldsForType,
   sanitizeTicketFormValues: require('./TicketFormFields').sanitizeTicketFormValues,
 };
