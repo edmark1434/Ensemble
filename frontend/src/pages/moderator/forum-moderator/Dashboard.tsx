@@ -18,7 +18,7 @@ import {
 } from 'lucide-react';
 import useGlobalState from '@/lib/global_state';
 import { peekStaffGet, staffGet } from '@/lib/staffCache';
-import { useStaffCaseEvents } from '@/lib/staffCaseEvents';
+import { useStaffLive } from '@/lib/staffLive';
 import {
   ChartCard,
   DonutChart,
@@ -162,8 +162,13 @@ export default function ForumModeratorDashboard() {
     void load();
   }, [load]);
 
-  // Counts, alerts and the flagged list follow new reports and tickets without a refresh.
-  useStaffCaseEvents(['ticket', 'report'], () => void load(true), { delayMs: 800 });
+  // Counts, alerts and the flagged list follow forum activity, reports, tickets and other
+  // moderators' actions without a refresh.
+  useStaffLive(
+    ['forum', 'tickets', 'reports', 'moderation', 'accounts', 'staff'],
+    () => load(true),
+    { delayMs: 800 },
+  );
 
   const handleAlertClick = (alert: Alert) => {
     const tab = alert.action?.tab;

@@ -1112,6 +1112,26 @@ function resolveCaseRef(caseId, sourceHint) {
   throw new Error('Case source is required (report, dispute, listing, or identity)');
 }
 
+/**
+ * Decision entry on the listing's seller conversation, so a decision made from the pending
+ * case queue reads the same as one from Marketplace Control. Best-effort: the decision is
+ * already saved.
+ */
+async function addListingThreadEntry({ listingId, kind, staffId, body }) {
+  try {
+    const { insertListingMessage } = require('./MarketplaceListingThreadRepositories');
+    await insertListingMessage(pool, {
+      listingId,
+      kind,
+      authorType: 'staff',
+      authorStaffId: staffId || null,
+      body: body ? String(body).slice(0, 2000) : null,
+    });
+  } catch (err) {
+    console.warn('Listing thread entry skipped:', err.message);
+  }
+}
+
 async function updatePendingCase(caseId, body, session) {
   const { source, id } = resolveCaseRef(caseId, body?.source);
   const staffId = await resolveSessionStaffId(session);
@@ -1217,6 +1237,12 @@ async function updatePendingCase(caseId, body, session) {
         id,
       ]
     );
+    await addListingThreadEntry({
+      listingId: id,
+      kind: status === 'pending' ? 'rereview' : status,
+      staffId,
+      body: body.rejectionReason || body.reason || body.moderationNote || null,
+    });
 
     const listingRow = before.rows[0];
     const marketAssetId = listingRow?.market_asset_id;
@@ -1299,6 +1325,12 @@ async function deletePendingCase(caseId, body, session) {
       [body?.reason || null, staffId, id]
     );
     if (!result.rows.length) throw new Error('Pending listing not found');
+    await addListingThreadEntry({
+      listingId: id,
+      kind: 'rejected',
+      staffId,
+      body: body?.reason || 'Removed from pending queue by admin',
+    });
     const listingRow = result.rows[0];
     const marketAssetId = listingRow?.market_asset_id;
     if (marketAssetId) {

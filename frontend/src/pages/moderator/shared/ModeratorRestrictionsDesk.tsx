@@ -3,6 +3,7 @@ import { Ban, Loader2, RefreshCw, Search, ShieldAlert, Activity, AlertTriangle, 
 import api from '@/lib/axios';
 import useGlobalState from '@/lib/global_state';
 import { peekStaffGet, staffGet } from '@/lib/staffCache';
+import { useStaffLive } from '@/lib/staffLive';
 import { showErrorToast, showSuccessToast } from '@/components/utility/toast';
 import { canSuspendTarget } from '@/pages/admin/userTeam/suspendRules';
 import type { AccountActivityItem } from '@/pages/admin/userTeam/userTeamTypes';
@@ -501,22 +502,29 @@ export default function ModeratorRestrictionsDesk({
   const workRef = useRef<HTMLElement>(null);
   const previousAccountId = useRef<string | null>(null);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
+  const load = useCallback(async (silent = false) => {
+    if (!silent) {
+      setLoading(true);
+      setError(null);
+    }
     try {
       const res = await staffGet(endpointBase);
       setData(res.data?.data || { violations: [], restrictedAccounts: [], recentActivity: [] });
+      setError(null);
     } catch (err: unknown) {
-      setError(apiMessage(err, 'Failed to load restrictions'));
+      if (!silent) setError(apiMessage(err, 'Failed to load restrictions'));
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, [endpointBase]);
 
   useEffect(() => {
     void load();
   }, [load]);
+
+  // Live: warnings, holds and the activity feed follow enforcement anywhere (other staff,
+  // reports, automatic merit bands, expiries). The work panel keeps its typed reason.
+  useStaffLive(['accounts', 'teams', 'moderation', 'policy', 'reports'], () => load(true), { delayMs: 1000 });
 
   useEffect(() => {
     setSelected((current) => {

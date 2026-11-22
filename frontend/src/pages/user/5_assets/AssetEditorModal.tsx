@@ -92,6 +92,11 @@ export function AssetListingModal({ open, asset, onClose, onSaved, onQueued, tem
   const [ydocSnapshotId, setYdocSnapshotId] = useState("");
   const [tags, setTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState("");
+  // Saving an unpublished asset (re)submits it; a rejected or delisted one needs a message.
+  const [submissionMessage, setSubmissionMessage] = useState("");
+  const showSubmissionMessage = Boolean(asset) && !isAdminUpload && asset?.status !== "published";
+  const submissionMessageRequired = showSubmissionMessage
+    && (asset?.review_status === "rejected" || asset?.review_status === "delisted");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [openingPreview, setOpeningPreview] = useState(false);
@@ -133,7 +138,7 @@ export function AssetListingModal({ open, asset, onClose, onSaved, onQueued, tem
     setThumbnailSelectionDirty(false);
 
     setYdocSnapshotId(template?.snapshotId || "");
-    setTags(asset?.tags || []); setTagInput(""); setError("");
+    setTags(asset?.tags || []); setTagInput(""); setError(""); setSubmissionMessage("");
   }, [asset, open, template?.snapshotId, template?.name]);
 
 
@@ -308,6 +313,11 @@ export function AssetListingModal({ open, asset, onClose, onSaved, onQueued, tem
     // Proxies and preview thumbnails are made by the server (a worker for video/audio),
     // so only asset files and uploaded showcase images are uploaded.
     if (asset) {
+      const cleanSubmissionMessage = showSubmissionMessage ? submissionMessage.trim() : "";
+      if (submissionMessageRequired && cleanSubmissionMessage.length < 5) {
+        return setError("Tell the review team what you changed (at least 5 characters) before resubmitting.");
+      }
+      if (cleanSubmissionMessage.length > 2000) return setError("Keep the message to the review team under 2,000 characters.");
       const replaceMedia = false;
       const replaceYdoc = isTemplate && snapshotId !== "";
       const finalMediaCount = retainedMediaAssetIds.length + files.length;
@@ -354,6 +364,7 @@ export function AssetListingModal({ open, asset, onClose, onSaved, onQueued, tem
           priceCredits: price,
           status: "published",
           tags: submittedTags,
+          ...(cleanSubmissionMessage ? { submissionMessage: cleanSubmissionMessage } : {}),
           ...(hasContentUpdate ? {
             contentUpdate: {
               type: listingType,
@@ -802,6 +813,35 @@ export function AssetListingModal({ open, asset, onClose, onSaved, onQueued, tem
                     Press Enter or comma to add a tag. At least 3 tags are required to upload.
                   </p>
                 </div>
+
+                {showSubmissionMessage && (
+                  <div>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <label htmlFor="asset-submission-message" className="text-sm font-semibold text-gray-900 dark:text-zinc-200">
+                        Message to the review team {submissionMessageRequired ? <span className="text-red-500">*</span> : <span className="text-xs font-normal text-gray-500 dark:text-zinc-400">(optional)</span>}
+                      </label>
+                      <span className="text-xs text-gray-400 dark:text-zinc-500">{submissionMessage.length}/2000</span>
+                    </div>
+                    {submissionMessageRequired && (asset?.rejection_reason || asset?.review_note) && (
+                      <p className="mb-2 rounded-lg border border-rose-500/20 bg-rose-500/10 px-3 py-2 text-xs text-rose-700 dark:text-rose-300">
+                        <span className="font-semibold">{asset?.review_status === "delisted" ? "Delisted: " : "Feedback: "}</span>
+                        {asset?.review_status === "delisted" ? asset?.review_note : asset?.rejection_reason}
+                      </p>
+                    )}
+                    <textarea
+                      id="asset-submission-message"
+                      value={submissionMessage}
+                      onChange={(event) => setSubmissionMessage(event.target.value)}
+                      maxLength={2000}
+                      rows={3}
+                      className={inputClass}
+                      placeholder={submissionMessageRequired ? "Say what you changed to address the feedback…" : "Anything the reviewer should know about this update"}
+                    />
+                    <p className="mt-1 text-[11px] text-gray-500 dark:text-zinc-400">
+                      Saving sends the asset {submissionMessageRequired ? "back to review" : "to review"}. Your message appears in the review conversation on the asset page.
+                    </p>
+                  </div>
+                )}
               </div>
             </div>
 

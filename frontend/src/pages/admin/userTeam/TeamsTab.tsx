@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Search } from 'lucide-react';
 import { peekStaffGet, staffGet } from '@/lib/staffCache';
+import { useStaffLive } from '@/lib/staffLive';
 import StatCards from './components/StatCards';
 import RowActionsMenu from './components/RowActionsMenu';
 import TableFilterBar, { uniqueOptions } from './components/TableFilterBar';
@@ -341,14 +342,24 @@ export default function TeamsTab({
     if (res.data?.success) {
       setData(res.data.data);
       onStatsLoaded?.(res.data.data.stats.totalPendingVerification);
-      if (selected) {
+      // Functional update: a live refresh must not reopen a modal that closed meanwhile.
+      setSelected((current) => {
+        if (!current) return current;
         const next = res.data.data.teams.find(
-          (t: PlatformTeam) => String(t.accountId) === String(selected.accountId)
+          (t: PlatformTeam) => String(t.accountId) === String(current.accountId)
         );
-        if (next) setSelected(next);
-      }
+        return next || current;
+      });
     }
   };
+
+  // Live: the list and the open team modal follow membership, verification, standing and
+  // wallet changes made anywhere.
+  useStaffLive(
+    ['teams', 'accounts', 'economy', 'moderation', 'marketplace', 'jobs'],
+    () => refreshAfterChange().catch(() => {}),
+    { delayMs: 1500 },
+  );
 
   const handleBulkAction = (actionId: BulkActionId) => {
     if (actionId === 'clear') {
@@ -717,7 +728,7 @@ export default function TeamsTab({
           action={statusModal}
           desk={capabilities.variant}
           openEndedAllowed={capabilities.canBan}
-          team={{ leader: selected.leader ?? null }}
+          team={{ leader: selected.leader ?? null, members: selected.members }}
           onClose={closeModal}
           onConfirm={async (options) => {
             try {
@@ -738,17 +749,11 @@ export default function TeamsTab({
           tone={bulkPending.tone}
           onClose={() => setBulkPending(null)}
           requireReason={bulkPending.kind === 'status'}
-          leaderOption={
+          memberScopeOption={
             bulkPending.kind === 'status' && ['ban', 'suspend', 'lock'].includes(bulkPending.action)
-              ? {
-                  label: `Also ${bulkPending.action} each team's leader`,
-                  hint: 'Leaders already at the same or a stricter standing are left as they are. Teams with no leader change alone.',
-                }
-              : bulkPending.kind === 'status' && bulkPending.action === 'restore'
-                ? {
-                    label: 'Also restore leaders whose penalty was set with their team',
-                    hint: 'Only penalties applied together with the team are lifted; other leader penalties stay.',
-                  }
+              ? { mode: 'apply', verb: bulkPending.action }
+              : bulkPending.kind === 'status' && ['restore', 'unban', 'unsuspend', 'unlock'].includes(bulkPending.action)
+                ? { mode: 'lift', verb: 'restore' }
                 : undefined
           }
           onConfirm={async (reason, options) => {
@@ -759,7 +764,7 @@ export default function TeamsTab({
                 bulkPending.kind,
                 bulkPending.action,
                 reason,
-                { includeLeader: options?.includeLeader }
+                { memberScope: options?.memberScope }
               );
               setSelectedIds(new Set());
               await refreshAfterChange();

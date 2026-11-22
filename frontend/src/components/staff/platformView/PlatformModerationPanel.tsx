@@ -16,6 +16,7 @@ import {
   X,
 } from "lucide-react";
 import { showErrorToast, showSuccessToast } from "@/components/utility/toast";
+import { useStaffLive } from "@/lib/staffLive";
 import { StaffStandingSummary, StatusPill, caseWhen } from "@/pages/moderator/shared/StaffStandingSummary";
 import {
   ACCOUNT_ACTION_LABELS,
@@ -215,6 +216,28 @@ export default function PlatformModerationPanel({
   }, [path, pick]);
 
   const refresh = useCallback(() => setReloadKey((value) => value + 1), []);
+
+  // Live: reports, standing and other staff actions on the shown item update the panel in
+  // place (the expanded state stays). An open action dialog keeps its own copy.
+  useStaffLive(
+    ["forum", "marketplace", "jobs", "accounts", "teams", "reports", "moderation"],
+    async () => {
+      if (!path || dialog) return;
+      const requestId = ++requestRef.current;
+      try {
+        const next = await fetchModerationContext(path, pick);
+        if (requestId === requestRef.current) {
+          setContext(next);
+          setError(null);
+        }
+      } catch {
+        // Keep the panel as it is; the next change or a page switch reads it again.
+      } finally {
+        if (requestId === requestRef.current) setLoading(false);
+      }
+    },
+    { enabled: Boolean(path), delayMs: 1200 },
+  );
 
   const openDialog = (start: ActionDialogStart) => {
     if (!context?.subject) return;

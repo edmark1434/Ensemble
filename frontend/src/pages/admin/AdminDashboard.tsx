@@ -20,6 +20,7 @@ import {
 import { Link } from 'react-router-dom';
 import useGlobalState from '@/lib/global_state';
 import { peekStaffGet, staffGet } from '@/lib/staffCache';
+import { useStaffLive } from '@/lib/staffLive';
 import ConsolePageSkeleton from '@/pages/staff/ConsolePageSkeleton';
 import { useCountUp } from '@/pages/staff/consoleMotion';
 import type { AdminDashboardData, PlatformAlert } from './adminDashboardTypes';
@@ -117,11 +118,15 @@ export default function AdminDashboard() {
 
   useEffect(() => {
     void loadData();
-    const timer = window.setInterval(() => {
-      if (!document.hidden) void loadData();
-    }, AUTO_REFRESH_MS);
-    return () => window.clearInterval(timer);
   }, [loadData]);
+
+  // Live: re-read on any change it summarizes. "Team on duty" moves with staff heartbeats,
+  // which send no event, so a slow poll stays.
+  useStaffLive(
+    ['accounts', 'teams', 'economy', 'marketplace', 'jobs', 'forum', 'moderation', 'staff', 'tickets', 'disputes', 'reports'],
+    () => loadData(),
+    { pollMs: AUTO_REFRESH_MS },
+  );
 
   if (loading && !data) return <ConsolePageSkeleton tiles={6} tabs={false} />;
 

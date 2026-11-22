@@ -21,6 +21,7 @@ import {
   X,
 } from "lucide-react";
 import api from "@/lib/axios";
+import { useStaffLive } from "@/lib/staffLive";
 import { staffPlatformViewHref } from "@/lib/staffRoutes";
 import { showErrorToast, showSuccessToast } from "@/components/utility/toast.ts";
 import type { JobsGigsPostingDetail, UserJobsHistory } from "../shared/moderatorTypes";
@@ -174,23 +175,31 @@ export default function PostingDetailModal({
   const [pendingAction, setPendingAction] = useState<PostingAction | null>(null);
   const [historyAccountId, setHistoryAccountId] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  const load = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
     try {
       const res = await api.get(`${apiBase}/postings/${target.type}/${target.id}`);
       if (res.data?.success) setDetail(res.data.data);
-      else setDetail(null);
+      else if (!silent) setDetail(null);
     } catch {
+      if (silent) return;
       setDetail(null);
       showErrorToast("Failed to load posting detail");
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, [apiBase, target.type, target.id]);
 
   useEffect(() => {
     void load();
   }, [load]);
+
+  // Live: applications, contracts, reports and other moderators' actions update the open
+  // posting; a reason being typed stays.
+  useStaffLive(["jobs", "reports", "moderation", "accounts"], () => load(true), {
+    enabled: !saving,
+    delayMs: 1000,
+  });
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -752,6 +761,16 @@ export function UserHistoryModal({
       active = false;
     };
   }, [accountId, apiBase]);
+
+  // Live: the member's postings, contracts and merit follow changes made anywhere.
+  useStaffLive(["jobs", "accounts", "moderation"], () =>
+    api
+      .get(`${apiBase}/users/${accountId}/history`)
+      .then((res) => {
+        if (res.data?.success) setHistory(res.data.data);
+      })
+      .catch(() => undefined),
+  );
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { AlertTriangle, Download, ExternalLink, X } from 'lucide-react';
 import api from '@/lib/axios';
+import { useStaffLive } from '@/lib/staffLive';
 import { showErrorToast } from '@/components/utility/toast';
 import {
   freezeAccountCredits,
@@ -19,6 +20,7 @@ import type {
   PlatformTeam,
   PlatformUserAccount,
   TeamLeader,
+  TeamMember,
   TeamWalletSummary,
   VerificationDetail,
 } from '../userTeamTypes';
@@ -31,6 +33,15 @@ import { LiftWarningPointsPanel } from './LiftWarningPointsPanel';
 import { MeritPenaltiesPanel } from './MeritPenaltiesPanel';
 import { StaffPunishmentChips, type MeritPenaltyLike } from '@/components/account/MeritStatus';
 import { PunishmentPresetFields } from './PunishmentPresetFields';
+import {
+  TeamMemberScopeFields,
+  defaultTeamScope,
+  teamScopeReady,
+  teamScopeRequest,
+  type TeamMemberScope,
+  type TeamScopeMember,
+  type TeamScopeValue,
+} from '@/components/staff/TeamMemberScopeFields';
 import { punishmentDurationLabel, type PunishmentKind, type PunishmentPreset } from '@/lib/punishmentCatalog';
 import {
   CommunitySection,
@@ -180,6 +191,21 @@ export function UnfreezeAccountModal({
     };
   }, [accountId]);
 
+  // Live: penalties that end elsewhere leave the list (and the picks); the rest stay as picked.
+  useStaffLive(
+    ['accounts', 'moderation'],
+    () =>
+      getAccountMeritPenalties(accountId)
+        .then((data) => {
+          setReady(data.ready);
+          setRows(data.active);
+          const live = new Set(data.active.map((row) => row.id));
+          setPicked((current) => new Set([...current].filter((id) => live.has(id))));
+        })
+        .catch(() => {}),
+    { enabled: rows !== null && !saving, delayMs: 1000 },
+  );
+
   const endable = (rows || []).filter((row) => row.effect !== 'auto_suspend');
   const suspension = (rows || []).find((row) => row.effect === 'auto_suspend') || null;
   const canSubmit = picked.size > 0 && reason.trim().length >= 5 && !saving;
@@ -284,39 +310,26 @@ export function UnfreezeAccountModal({
   );
 }
 
-/** Higher is stricter; a leader already at the same or a stricter standing is left alone. */
-const STANDING_SEVERITY: Record<string, number> = { active: 0, deactivated: 0, suspended: 1, locked: 2, banned: 3 };
-const SANCTION_RESULT: Record<string, string> = { ban: 'banned', suspend: 'suspended', lock: 'locked' };
-const LIFT_FROM: Record<string, string | null> = { unban: 'banned', unsuspend: 'suspended', unlock: 'locked', restore: null };
+const SANCTION_RESULT: Record<string, 'banned' | 'suspended' | 'locked'> = { ban: 'banned', suspend: 'suspended', lock: 'locked' };
+const LIFT_ACTIONS = new Set(['unban', 'unsuspend', 'unlock', 'restore']);
 
-/** What the team leader option does for this action, or null when it does not apply. */
-function teamLeaderOption(
-  action: string,
-  leader: TeamLeader | null | undefined
-): { kind: 'apply' | 'lift' | 'skip' | 'none'; note: string } | null {
-  if (action === 'timeout' || action === 'clear_timeout') return null;
-  const target = SANCTION_RESULT[action];
-  if (target) {
-    if (!leader) return { kind: 'none', note: 'This team has no active leader, so only the team is changed.' };
-    const leaderStatus = String(leader.status || 'Active').toLowerCase();
-    if ((STANDING_SEVERITY[leaderStatus] ?? 0) >= STANDING_SEVERITY[target]) {
-      return { kind: 'skip', note: `${leader.name} is already ${leaderStatus}, so their account stays as it is.` };
-    }
-    return { kind: 'apply', note: '' };
-  }
-  if (action in LIFT_FROM) {
-    if (!leader) return null;
-    const from = LIFT_FROM[action];
-    const leaderStatus = String(leader.status || 'Active').toLowerCase();
-    if (leader.penaltyLinkedToTeam && (!from || leaderStatus === from)) return { kind: 'lift', note: '' };
-    if (leaderStatus !== 'active') {
-      return {
-        kind: 'skip',
-        note: `${leader.name} is ${leaderStatus}, but that was not set together with this team. Change it from the Users tab if it should end too.`,
-      };
-    }
-  }
+/** Whether a team action reaches members (apply / lift), or null (timeouts go to the leader). */
+function teamScopeMode(action: string): 'apply' | 'lift' | null {
+  if (SANCTION_RESULT[action]) return 'apply';
+  if (LIFT_ACTIONS.has(action)) return 'lift';
   return null;
+}
+
+function teamScopeMembers(members: TeamMember[] | undefined): TeamScopeMember[] {
+  return (members || [])
+    .filter((member) => member.accountId)
+    .map((member) => ({
+      accountId: String(member.accountId),
+      name: member.name,
+      handle: member.username || null,
+      role: member.role || null,
+      status: member.accountStatus || 'Active',
+    }));
 }
 
 export function ConfirmStatusModal({
@@ -341,18 +354,21 @@ export function ConfirmStatusModal({
     reason: string;
     punishmentId?: string;
     customDuration?: boolean;
-    includeLeader?: boolean;
+    /** Team targets: who else gets it (or has a team-linked penalty lifted). */
+    memberScope?: TeamMemberScope;
+    memberAccountIds?: string[];
   }) => Promise<void>;
-  /** Team targets: the team acts as one account, its leader carries personal penalties. */
-  team?: { leader: TeamLeader | null };
+  /** Team targets: the team acts as one account; staff pick which members share the penalty. */
+  team?: { leader: TeamLeader | null; members?: TeamMember[] };
 }) {
   const [saving, setSaving] = useState(false);
   const [reason, setReason] = useState('');
   const [reasonError, setReasonError] = useState('');
   const isTeam = Boolean(team);
   const leader = team?.leader ?? null;
-  const leaderOption = isTeam ? teamLeaderOption(action, leader) : null;
-  const [includeLeader, setIncludeLeader] = useState(true);
+  const scopeMode = isTeam ? teamScopeMode(action) : null;
+  const scopeMembers = teamScopeMembers(team?.members);
+  const [memberScope, setMemberScope] = useState<TeamScopeValue>(() => defaultTeamScope(scopeMode || 'apply', leader));
   const teamTimeoutWithoutLeader = isTeam && (action === 'timeout' || action === 'clear_timeout') && !leader;
   const choosesCatalog = action === 'ban' || action === 'suspend' || action === 'timeout';
   const choosesDuration = choosesCatalog || action === 'lock';
@@ -446,7 +462,6 @@ export function ConfirmStatusModal({
       ? `${leader.name} (leader of ${entityName}) will be ${labels.result}`
       : `${entityName} has no active leader`
     : `${entityName} will be set to ${labels.result}`;
-  const sendsLeader = Boolean(leaderOption && (leaderOption.kind === 'apply' || leaderOption.kind === 'lift'));
 
   return (
     <ModalShell
@@ -467,6 +482,7 @@ export function ConfirmStatusModal({
             disabled={
               saving
               || teamTimeoutWithoutLeader
+              || (scopeMode !== null && !teamScopeReady(memberScope))
               || !reason.trim()
               || (choosesCatalog && !punishmentId)
               || (choosesDuration && customDuration && timing.duration === 'temporary' && !timing.endsAt)
@@ -488,7 +504,7 @@ export function ConfirmStatusModal({
                   reason: reason.trim(),
                   punishmentId: choosesCatalog ? punishmentId : undefined,
                   customDuration: choosesCatalog ? customDuration : undefined,
-                  includeLeader: isTeam && !isLeaderTimeout ? sendsLeader && includeLeader : undefined,
+                  ...(scopeMode ? teamScopeRequest(memberScope) : {}),
                 });
                 onClose();
               } catch (err) {
@@ -507,32 +523,17 @@ export function ConfirmStatusModal({
       {isTeam ? (
         <p className="text-sm text-zinc-300">{teamDescriptions[action]}</p>
       ) : null}
-      {isTeam && leaderOption ? (
-        <div className="mt-4 rounded-xl border border-white/[0.08] bg-white/[0.02] p-3">
-          {leaderOption.kind === 'apply' || leaderOption.kind === 'lift' ? (
-            <label className="flex cursor-pointer items-start gap-3 text-sm text-zinc-200">
-              <input
-                type="checkbox"
-                checked={includeLeader}
-                onChange={(event) => setIncludeLeader(event.target.checked)}
-                className="mt-0.5 h-4 w-4 rounded border-white/20 bg-transparent accent-rose-500"
-              />
-              <span>
-                <span className="font-medium text-white">
-                  {leaderOption.kind === 'apply'
-                    ? `Also ${labels.verb} the team leader, ${leader?.name}`
-                    : `Also lift ${leader?.name}'s ${String(leader?.status || '').toLowerCase()} (it was set together with this team)`}
-                </span>
-                <span className="mt-0.5 block text-xs text-zinc-500">
-                  {leaderOption.kind === 'apply'
-                    ? 'The leader answers for the team. Their personal account gets the same penalty and length, and the reason tells them it came with the team.'
-                    : 'Their personal account returns to normal with the team.'}
-                </span>
-              </span>
-            </label>
-          ) : (
-            <p className="text-xs text-zinc-400">{leaderOption.note}</p>
-          )}
+      {scopeMode ? (
+        <div className="mt-4">
+          <TeamMemberScopeFields
+            mode={scopeMode}
+            verb={labels.verb}
+            targetStatus={SANCTION_RESULT[action]}
+            leader={leader}
+            members={scopeMembers}
+            value={memberScope}
+            onChange={setMemberScope}
+          />
         </div>
       ) : null}
       {teamTimeoutWithoutLeader ? (
@@ -627,21 +628,36 @@ export function BulkConfirmModal({
   onClose,
   onConfirm,
   requireReason = false,
-  leaderOption,
+  memberScopeOption,
 }: {
   count: number;
   actionLabel: string;
   resultLabel: string;
   tone?: string;
   onClose: () => void;
-  onConfirm: (reason?: string, options?: { includeLeader?: boolean }) => Promise<void>;
+  onConfirm: (reason?: string, options?: { memberScope?: Exclude<TeamMemberScope, 'selected'> }) => Promise<void>;
   requireReason?: boolean;
-  /** Team bulk actions: offer to apply the same action to each team's leader. */
-  leaderOption?: { label: string; hint: string };
+  /** Team bulk actions: who in each team also gets the action (or has a team-linked penalty lifted). */
+  memberScopeOption?: { mode: 'apply' | 'lift'; verb: string };
 }) {
   const [saving, setSaving] = useState(false);
   const [reason, setReason] = useState('');
-  const [includeLeader, setIncludeLeader] = useState(true);
+  const [bulkScope, setBulkScope] = useState<Exclude<TeamMemberScope, 'selected'>>(
+    memberScopeOption?.mode === 'lift' ? 'all' : 'leader'
+  );
+  const bulkScopeChoices: { id: Exclude<TeamMemberScope, 'selected'>; label: string; hint: string }[] = memberScopeOption
+    ? memberScopeOption.mode === 'apply'
+      ? [
+          { id: 'none', label: 'Teams only', hint: 'Member accounts stay as they are.' },
+          { id: 'leader', label: `Also ${memberScopeOption.verb} each team's leader`, hint: 'Teams with no leader change alone.' },
+          { id: 'all', label: `Also ${memberScopeOption.verb} every member of each team`, hint: 'The leader included. Accounts you may not act on are skipped.' },
+        ]
+      : [
+          { id: 'none', label: 'Teams only', hint: 'Member penalties stay as they are.' },
+          { id: 'leader', label: 'Also lift leaders’ team penalties', hint: 'Only a penalty set together with the team is lifted.' },
+          { id: 'all', label: 'Also lift every member’s team penalty', hint: 'Only penalties set together with the team are lifted; others stay.' },
+        ]
+    : [];
 
   return (
     <ModalShell
@@ -665,7 +681,7 @@ export function BulkConfirmModal({
               setSaving(true);
               try {
                 await onConfirm(requireReason ? reason.trim() : undefined, {
-                  includeLeader: leaderOption ? includeLeader : undefined,
+                  memberScope: memberScopeOption ? bulkScope : undefined,
                 });
                 onClose();
               } catch (err) {
@@ -685,19 +701,27 @@ export function BulkConfirmModal({
         This runs the same action on every highlighted row. Accounts that fail individually will be
         reported without blocking the rest.
       </p>
-      {leaderOption ? (
-        <label className="mt-4 flex cursor-pointer items-start gap-3 rounded-xl border border-white/[0.08] bg-white/[0.02] p-3 text-sm text-zinc-200">
-          <input
-            type="checkbox"
-            checked={includeLeader}
-            onChange={(event) => setIncludeLeader(event.target.checked)}
-            className="mt-0.5 h-4 w-4 rounded border-white/20 bg-transparent accent-rose-500"
-          />
-          <span>
-            <span className="font-medium text-white">{leaderOption.label}</span>
-            <span className="mt-0.5 block text-xs text-zinc-500">{leaderOption.hint}</span>
-          </span>
-        </label>
+      {bulkScopeChoices.length ? (
+        <div className="mt-4 space-y-1.5 rounded-xl border border-white/[0.08] bg-white/[0.02] p-3">
+          {bulkScopeChoices.map((choice) => (
+            <label key={choice.id} className="flex cursor-pointer items-start gap-3 text-sm text-zinc-200">
+              <input
+                type="radio"
+                name="bulk-team-member-scope"
+                checked={bulkScope === choice.id}
+                onChange={() => setBulkScope(choice.id)}
+                className="mt-0.5 h-4 w-4 border-white/20 bg-transparent accent-rose-500"
+              />
+              <span>
+                <span className="font-medium text-white">{choice.label}</span>
+                <span className="mt-0.5 block text-xs text-zinc-500">{choice.hint}</span>
+              </span>
+            </label>
+          ))}
+          <p className="pt-1 text-xs text-zinc-500">
+            Members already at the same or a stricter standing are left as they are. To pick specific members, act on one team at a time.
+          </p>
+        </div>
       ) : null}
       {requireReason ? (
         <label className="mt-4 block text-sm text-zinc-300">
@@ -797,8 +821,8 @@ function TeamLeaderCard({ leader, onTransfer }: { leader: TeamLeader | null | un
         </div>
       ) : null}
       <p className="mt-3 text-xs text-zinc-500">
-        Warnings and forum timeouts aimed at this team go to the leader. Ban, suspend and lock apply to the team and,
-        unless staff untick it, to the leader too.
+        Warnings and forum timeouts aimed at this team go to the leader. Ban, suspend and lock apply to the team and, by
+        default, to the leader too; staff can instead pick the team only, specific members or all members.
       </p>
       {restricted && ['banned', 'locked'].includes(String(leader.status).toLowerCase()) && (
         <p className="mt-2 rounded-lg border border-rose-500/25 bg-rose-500/[0.06] px-3 py-2 text-xs text-rose-200">
@@ -1713,24 +1737,44 @@ export function VerificationModal({
   const [diditError, setDiditError] = useState('');
   const [diditRefreshToken, setDiditRefreshToken] = useState(0);
 
+  // Live: a Didit result (webhook or reconciliation) or another reviewer's decision re-reads
+  // the verification activity without blanking it.
+  const [diditLiveToken, setDiditLiveToken] = useState(0);
+  const diditShown = useRef(false);
+  useStaffLive(['accounts', 'teams'], () => setDiditLiveToken((t) => t + 1), {
+    enabled: loadDiditDetails,
+    delayMs: 1000,
+  });
+
+  useEffect(() => {
+    diditShown.current = false;
+  }, [accountId]);
+
   useEffect(() => {
     if (!loadDiditDetails) return;
     let cancelled = false;
     const load = async () => {
-      setDiditLoading(true);
-      setDiditError('');
+      const silent = diditShown.current;
+      if (!silent) {
+        setDiditLoading(true);
+        setDiditError('');
+      }
       try {
         const response = await api.get(`/api/admin/accounts/${accountId}/verification-details`);
-        if (!cancelled) setDiditDetails(response.data?.data || null);
+        if (!cancelled) {
+          setDiditDetails(response.data?.data || null);
+          setDiditError('');
+          diditShown.current = true;
+        }
       } catch {
-        if (!cancelled) setDiditError('Unable to load verification activity.');
+        if (!cancelled && !silent) setDiditError('Unable to load verification activity.');
       } finally {
         if (!cancelled) setDiditLoading(false);
       }
     };
     void load();
     return () => { cancelled = true; };
-  }, [accountId, diditRefreshToken, loadDiditDetails]);
+  }, [accountId, diditRefreshToken, diditLiveToken, loadDiditDetails]);
 
   const storedValidityLabel = (() => {
     const verifiedAt = diditDetails?.verifiedAt;

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Search } from 'lucide-react';
 import { peekStaffGet, staffGet } from '@/lib/staffCache';
+import { useStaffLive } from '@/lib/staffLive';
 import useGlobalState from '@/lib/global_state';
 import { showErrorToast } from '@/components/utility/toast';
 import StatCards from './components/StatCards';
@@ -272,14 +273,24 @@ export default function UsersTab({
     if (res.data?.success) {
       setData(res.data.data);
       onStatsLoaded?.(res.data.data.stats.totalPendingVerification);
-      if (selected) {
+      // Functional update: a live refresh must not reopen a modal that closed meanwhile.
+      setSelected((current) => {
+        if (!current) return current;
         const next = res.data.data.users.find(
-          (u: PlatformUserAccount) => String(u.accountId) === String(selected.accountId)
+          (u: PlatformUserAccount) => String(u.accountId) === String(current.accountId)
         );
-        if (next) setSelected(next);
-      }
+        return next || current;
+      });
     }
   };
+
+  // Live: the list and the open account modal follow standing, verification, wallet, team and
+  // activity changes made anywhere. The list is large, so bursts wait a little longer.
+  useStaffLive(
+    ['accounts', 'teams', 'economy', 'moderation', 'marketplace', 'jobs', 'forum', 'staff'],
+    () => refreshAfterChange().catch(() => {}),
+    { delayMs: 1500 },
+  );
 
   const handleBulkAction = (actionId: BulkActionId) => {
     if (actionId === 'clear') {

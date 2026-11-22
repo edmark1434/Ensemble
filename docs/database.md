@@ -152,6 +152,8 @@
 ## Marketplace licenses
 
 - Marketplace creator ownership for both media assets and templates comes from `marketplace_listings.submitted_by_account_id`. Queries use the latest linked listing, ordered by creation time and listing ID. Media and showcase owners do not grant listing permissions or determine sale proceeds.
+- `marketplace_listing_messages` (migration `1830400000000_marketplace-listing-review-thread`) is the seller ↔ staff conversation per listing: `kind` (submitted, resubmitted, reply, approved, scheduled, published, rejected, delisted, rereview), `author_type` (seller, staff, system) with the matching `author_account_id` / `author_staff_id`, `body` (≤ 4000 by check, 2000 by the API) and `publish_at` for scheduling entries. Rows cascade with their listing. The migration seeds one entry from each rejected / delisted / sent-back listing's stored reason.
+- `marketplace_listings.publish_at` is the go-live time of a `scheduled` listing (partial index on `status = 'scheduled'`), kept after it goes live. `marketplace_listings.status` is varchar; `scheduled` is the new value next to pending, approved, rejected, delisted and draft.
 - Asset creation saves its marketplace listing and submitter in the same transaction, including drafts and listings that do not require moderation. Existing listing records are used directly; no migration or backfill is required.
 
 - `market_asset_licenses` replaces `user_market_assets`. Each row records one asset/bundle use: buyer, asset, paid price, purchase transaction, purchase date, status, and optional project/assignment date.

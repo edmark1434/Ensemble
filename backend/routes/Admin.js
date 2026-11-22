@@ -169,6 +169,11 @@ router.get('/moderation/marketplace/listings', [checkSession, requireAdmin], Mar
 router.post('/moderation/marketplace/assets', [checkSession, requireAdmin], createAdminAssetController);
 router.get('/moderation/marketplace/listings/:id', [checkSession, requireAdmin], MarketplaceModerator.getListingDetail);
 router.patch('/moderation/marketplace/listings/:id', [checkSession, requireAdmin], MarketplaceModerator.patchListing);
+router.post(
+  '/moderation/marketplace/listings/:id/messages',
+  [checkSession, requireAdmin],
+  MarketplaceModerator.postListingMessage
+);
 router.get(
   '/moderation/marketplace/listings/:id/media/:mediaAssetId/original',
   [checkSession, requireAdmin],

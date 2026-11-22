@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { Link, useLocation } from 'react-router-dom';
 import { Eye } from 'lucide-react';
 import api from '@/lib/axios';
+import { useStaffLive } from '@/lib/staffLive';
 import { staffPlatformViewHref } from '@/lib/staffRoutes';
 import { formatDateTime } from '../formatDateTime';
 import type { AdminAccountProfile, StatusBreakdown, TeamRosterMember } from '../userTeamTypes';
@@ -13,25 +14,30 @@ export function useAccountProfile(accountId: string | null | undefined) {
   const [error, setError] = useState('');
   const requestId = useRef(0);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (silent = false) => {
     if (!accountId) return;
     const id = ++requestId.current;
-    setLoading(true);
-    setError('');
+    if (!silent) {
+      setLoading(true);
+      setError('');
+    }
     try {
       const res = await api.get(`/api/admin/accounts/${accountId}/profile`);
       if (id !== requestId.current) return;
       if (!res.data?.success) throw new Error(res.data?.message || 'Failed to load profile');
       setProfile(res.data.data as AdminAccountProfile);
+      setError('');
     } catch (err) {
       if (id !== requestId.current) return;
+      // A failed live refresh keeps the details on screen.
+      if (silent) return;
       const message =
         (err as { response?: { data?: { message?: string } } })?.response?.data?.message ||
         (err as Error)?.message ||
         'Failed to load profile details';
       setError(message);
     } finally {
-      if (id === requestId.current) setLoading(false);
+      if (id === requestId.current && !silent) setLoading(false);
     }
   }, [accountId]);
 
@@ -42,6 +48,13 @@ export function useAccountProfile(accountId: string | null | undefined) {
       requestId.current += 1;
     };
   }, [load]);
+
+  // Live: work, community, credit and standing sections follow changes made anywhere.
+  useStaffLive(
+    ['accounts', 'teams', 'economy', 'moderation', 'marketplace', 'jobs', 'forum'],
+    () => load(true),
+    { enabled: Boolean(accountId), delayMs: 1000 },
+  );
 
   return { profile, loading, error, reload: load };
 }

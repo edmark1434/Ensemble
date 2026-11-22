@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Gavel, X } from 'lucide-react';
 import api from '@/lib/axios';
+import { useStaffLive } from '@/lib/staffLive';
 import { BTN, FIELD } from '@/pages/moderator/shared/staffCaseUi';
 import { AppealStandingBrief } from './TicketCasePanel';
 import type { TicketCaseContext } from './ticketTypes';
@@ -110,6 +111,10 @@ export default function AppealDecisionDialog({
     return () => window.removeEventListener('keydown', onKey);
   }, [busy, onCancel]);
 
+  // Catalog edits by an admin reach the open dialog; the pick stays while it still exists.
+  const [catalogToken, setCatalogToken] = useState(0);
+  useStaffLive(['policy'], () => setCatalogToken((n) => n + 1), { enabled: action !== 'none' && !busy });
+
   // The named suspensions and bans Support may issue (same catalog as the restriction desks).
   useEffect(() => {
     if (action === 'none') return;
@@ -132,7 +137,7 @@ export default function AppealDecisionDialog({
     return () => {
       cancelled = true;
     };
-  }, [action]);
+  }, [action, catalogToken]);
 
   const picked = useMemo(() => catalog.find((row) => (row.slug || row.id) === punishmentId) || null, [catalog, punishmentId]);
 

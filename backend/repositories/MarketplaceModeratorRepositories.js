@@ -3,6 +3,12 @@ const { QUEUE_SCOPES, MARKETPLACE_TYPES } = require('../lib/TicketEnums');
 const { MARKETPLACE_REPORT_TYPES, CLOSED_REPORT_STATUSES } = require('../lib/ReportEnums');
 const { recordAccountActivity, listActivityForReference } = require('./AccountActivityRepositories');
 const { sendMarketplaceListingNotification } = require('../lib/ModerationPolicy');
+const { resolvePublishSchedule } = require('../lib/ListingPublishSchedule');
+const {
+  insertListingMessage,
+  listListingMessages,
+  LISTING_MESSAGE_MAX_LENGTH,
+} = require('./MarketplaceListingThreadRepositories');
 const { fetchStaffWorkload } = require('./AdminTicketsRepositories');
 const { sumActiveWarningPoints } = require('./WarningBandRepositories');
 const { meritFromWarningPoints } = require('../lib/WarningBands');
@@ -63,6 +69,16 @@ function mapListingRow(row) {
     status: row.status,
     rejectionReason: row.rejection_reason,
     moderationNote: row.moderation_note || null,
+    // Go-live time while `scheduled`; when it went live once `approved`.
+    publishAt: row.publish_at || null,
+    // Newest thread entry, so the queue can flag a seller reply or resubmission.
+    lastMessage: row.last_message_author_type
+      ? {
+          authorType: row.last_message_author_type,
+          kind: row.last_message_kind,
+          createdAt: row.last_message_at,
+        }
+      : null,
     submittedBy: {
       accountId: row.submitted_by_account_id,
       name: row.submitter_name || 'Unknown',
@@ -85,6 +101,9 @@ const LISTING_SELECT = `
     COALESCE(ra.display_name, rs.first_name || ' ' || rs.last_name) AS reviewer_name,
     cover.path AS cover_path,
     cover.mime_type AS cover_mime,
+    last_message.author_type AS last_message_author_type,
+    last_message.kind AS last_message_kind,
+    last_message.created_at AS last_message_at,
     COALESCE(
       (
         SELECT typed_media.type
@@ -139,6 +158,13 @@ const LISTING_SELECT = `
       candidate.position
     LIMIT 1
   ) cover ON TRUE
+  LEFT JOIN LATERAL (
+    SELECT lm.author_type, lm.kind, lm.created_at
+    FROM marketplace_listing_messages lm
+    WHERE lm.listing_id = l.listing_id
+    ORDER BY lm.created_at DESC, lm.message_id DESC
+    LIMIT 1
+  ) last_message ON TRUE
 `;
 
 /** Queue order the desk can ask for. Pending always floats to the top of the default view. */
@@ -185,7 +211,11 @@ async function fetchListings({ status, search, category, sort, limit } = {}) {
   }
 
   const where = clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
-  const orderBy = LISTING_SORTS[String(sort || 'newest')] || LISTING_SORTS.newest;
+  // The scheduled queue reads best in go-live order unless another sort was picked.
+  const orderBy =
+    status === 'scheduled' && (!sort || sort === 'newest')
+      ? 'l.publish_at ASC NULLS LAST, l.created_at DESC'
+      : LISTING_SORTS[String(sort || 'newest')] || LISTING_SORTS.newest;
 
   params.push(listingLimit(limit));
 
@@ -595,15 +625,17 @@ async function getMarketplaceListingDetail(listingId) {
   );
   if (!result.rows[0]) return null;
   const listing = mapListingRow(result.rows[0]);
-  const [asset, seller, reports, history] = await Promise.all([
+  const [asset, seller, reports, history, threadMessages] = await Promise.all([
     getListingLinkedAsset(listing.marketAssetId),
     getListingSellerContext(listing.submittedBy.accountId),
     getListingReports(listing.id, listing.marketAssetId),
     listActivityForReference('marketplace_listings', listing.id, { limit: 25 }).catch(() => []),
+    listListingMessages(listing.id, { viewer: 'staff' }),
   ]);
   listing.asset = asset;
   listing.seller = seller;
   listing.reports = reports;
+  listing.thread = threadMessages;
   listing.reviewHistory = history.map((entry) => ({
     id: entry.id,
     action: entry.action,
@@ -768,14 +800,21 @@ async function getSellerMarketplaceListings(accountId) {
 /**
  * Review one listing.
  *
+ * `approved` takes a go-live time (`publishMode` now | 24h | 7d | date + `publishAt`, see
+ * lib/ListingPublishSchedule): anything but now stores `scheduled` with `publish_at`, and the
+ * asset stays out of the catalog until the go-live job publishes it. A scheduled listing can be
+ * approved again to publish it now or move its time. `message` (or `reason`) is an optional
+ * note to the seller on approval.
+ *
  * `pending` re-opens an already reviewed listing (the copyright / re-approval path): the
  * market asset goes back to draft so it leaves the live catalog while it is re-checked.
  * A rejection stores its reason in `rejection_reason`; delist and re-approval store theirs
- * in `moderation_note`, so the two trails never overwrite each other.
+ * in `moderation_note`, so the two trails never overwrite each other. Every decision is also
+ * an entry in the listing thread (`marketplace_listing_messages`), which the seller reads.
  */
 async function reviewMarketplaceListing(
   listingId,
-  { status, rejectionReason, moderationNote, reason },
+  { status, rejectionReason, moderationNote, reason, publishMode, publishAt, message },
   staffSession,
   audit = {}
 ) {
@@ -784,81 +823,133 @@ async function reviewMarketplaceListing(
     throw new Error(`Invalid listing status: ${status}`);
   }
 
-  const rejectReason = status === 'rejected' ? (rejectionReason || reason || null) : null;
+  const clientError = (text, statusCode = 400) => {
+    const err = new Error(text);
+    err.statusCode = statusCode;
+    return err;
+  };
+  const clip = (value) => {
+    const text = String(value || '').trim();
+    if (text.length > LISTING_MESSAGE_MAX_LENGTH) {
+      throw clientError(`The message must not exceed ${LISTING_MESSAGE_MAX_LENGTH} characters.`);
+    }
+    return text || null;
+  };
+
+  const rejectReason = status === 'rejected' ? clip(rejectionReason || reason) : null;
   const note =
     status === 'delisted' || status === 'pending'
-      ? (moderationNote || reason || rejectionReason || null)
+      ? clip(moderationNote || reason || rejectionReason)
       : null;
-  if ((status === 'delisted' || status === 'pending') && !String(note || '').trim()) {
-    const err = new Error(
+  const approvalNote = status === 'approved' ? clip(message || reason) : null;
+  if (status === 'rejected' && !rejectReason) {
+    throw clientError('A message to the seller is required when rejecting a listing');
+  }
+  if ((status === 'delisted' || status === 'pending') && !note) {
+    throw clientError(
       status === 'pending'
         ? 'A reason is required when sending a listing back for re-approval'
         : 'A reason is required when delisting a listing'
     );
-    err.statusCode = 400;
-    throw err;
   }
+  const schedule =
+    status === 'approved' ? resolvePublishSchedule({ publishMode, publishAt }) : { mode: 'now', publishAt: null };
+  const nextStatus = schedule.publishAt ? 'scheduled' : status;
 
   const rawStaffId = staffSession?.staff_id || staffSession?.staffId || null;
   const staffId = rawStaffId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(rawStaffId)
     ? rawStaffId
     : null;
   const before = await pool.query(
-    `SELECT listing_id, listing_number, title, submitted_by_account_id, market_asset_id, status
+    `SELECT listing_id, listing_number, title, submitted_by_account_id, market_asset_id, status, publish_at
      FROM marketplace_listings WHERE listing_id = $1`,
     [listingId]
   );
   if (!before.rows.length) throw new Error('Listing not found');
-  const previousStatus = String(before.rows[0].status || '').toLowerCase();
-  // Re-applying the current status used to re-stamp the review and send the seller the same
-  // notice again (a double click on Delist did both).
-  if (previousStatus === status) {
-    const err = new Error(`This listing is already ${status === 'pending' ? 'waiting for review' : status}.`);
-    err.statusCode = 409;
-    throw err;
-  }
-
-  // Only from the status read above: when two moderators act at once, the second gets a
-  // conflict instead of silently overwriting the first decision and its note.
-  const updated = await pool.query(
-    `UPDATE marketplace_listings
-     SET status = $1,
-         rejection_reason = $2,
-         moderation_note = $3,
-         reviewed_by_staff_id = $4,
-         reviewed_at = NOW(),
-         updated_at = NOW()
-     WHERE listing_id = $5 AND status IS NOT DISTINCT FROM $6`,
-    [status, rejectReason, note, staffId, listingId, before.rows[0].status]
-  );
-  if (!updated.rowCount) {
-    const err = new Error('This listing changed while you were reviewing it. Reload and try again.');
-    err.statusCode = 409;
-    throw err;
-  }
-
   const row = before.rows[0];
-  if (row.market_asset_id) {
-    if (status === 'approved') {
-      await pool.query(
-        `UPDATE market_assets
-         SET status = 'published', updated_at = NOW()
-         WHERE market_asset_id = $1 AND deleted_at IS NULL`,
-        [row.market_asset_id]
+  const previousStatus = String(row.status || '').toLowerCase();
+  if (previousStatus === 'approved' && status === 'approved') {
+    throw clientError('This listing is already live.', 409);
+  }
+  // Re-applying the current status used to re-stamp the review and send the seller the same
+  // notice again (a double click on Delist did both). Moving a scheduled listing to a new
+  // time is the one repeat that is a real change.
+  if (previousStatus === nextStatus) {
+    const sameTime =
+      nextStatus === 'scheduled' &&
+      row.publish_at &&
+      Math.abs(new Date(row.publish_at).getTime() - schedule.publishAt.getTime()) < 60 * 1000;
+    if (nextStatus !== 'scheduled' || sameTime) {
+      throw clientError(
+        nextStatus === 'scheduled'
+          ? 'This listing is already scheduled for that time.'
+          : `This listing is already ${status === 'pending' ? 'waiting for review' : status}.`,
+        409
       );
-      try {
-        require('../services/BadgeServices').scheduleBadgeEvaluation(row.submitted_by_account_id);
-      } catch (badgeErr) {
-        console.error('Badge evaluation after listing approve failed:', badgeErr.message);
-      }
-    } else {
-      // rejected, delisted and re-review all pull the asset out of the live catalog.
-      await pool.query(
+    }
+  }
+
+  // Live now: record the go-live time. Scheduled: the chosen time. Anything else clears it.
+  const publishAtValue = nextStatus === 'scheduled' ? schedule.publishAt : nextStatus === 'approved' ? new Date() : null;
+  const threadKind =
+    nextStatus === 'scheduled'
+      ? 'scheduled'
+      : status === 'approved'
+        ? 'approved'
+        : status === 'pending'
+          ? 'rereview'
+          : status;
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    // Only from the status read above: when two moderators act at once, the second gets a
+    // conflict instead of silently overwriting the first decision and its note.
+    const updated = await client.query(
+      `UPDATE marketplace_listings
+       SET status = $1,
+           rejection_reason = $2,
+           moderation_note = $3,
+           reviewed_by_staff_id = $4,
+           reviewed_at = NOW(),
+           publish_at = $7,
+           updated_at = NOW()
+       WHERE listing_id = $5 AND status IS NOT DISTINCT FROM $6`,
+      [nextStatus, rejectReason, note, staffId, listingId, row.status, publishAtValue]
+    );
+    if (!updated.rowCount) {
+      throw clientError('This listing changed while you were reviewing it. Reload and try again.', 409);
+    }
+    if (row.market_asset_id) {
+      // Only an approval for now publishes. Scheduled, rejected, delisted and re-review all
+      // keep (or pull) the asset out of the live catalog.
+      await client.query(
         `UPDATE market_assets
-         SET status = 'draft', updated_at = NOW()
+         SET status = $2, updated_at = NOW()
          WHERE market_asset_id = $1 AND deleted_at IS NULL`,
-        [row.market_asset_id]
+        [row.market_asset_id, nextStatus === 'approved' ? 'published' : 'draft']
       );
+    }
+    await insertListingMessage(client, {
+      listingId,
+      kind: threadKind,
+      authorType: 'staff',
+      authorStaffId: staffId,
+      body: status === 'approved' ? approvalNote : status === 'rejected' ? rejectReason : note,
+      publishAt: nextStatus === 'scheduled' ? schedule.publishAt : null,
+    });
+    await client.query('COMMIT');
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    throw err;
+  } finally {
+    client.release();
+  }
+
+  if (nextStatus === 'approved' && row.market_asset_id) {
+    try {
+      require('../services/BadgeServices').scheduleBadgeEvaluation(row.submitted_by_account_id);
+    } catch (badgeErr) {
+      console.error('Badge evaluation after listing approve failed:', badgeErr.message);
     }
   }
 
@@ -867,32 +958,44 @@ async function reviewMarketplaceListing(
     marketAssetId: row.market_asset_id,
     listingId,
     title: row.title || 'Untitled Asset',
-    status,
+    status: nextStatus,
     rejectionReason: rejectReason,
     moderationNote: note,
+    publishAt: nextStatus === 'scheduled' ? schedule.publishAt : null,
+    messageBody: approvalNote,
   });
 
+  const listingLabel = row.listing_number || row.title || listingId;
   await recordAccountActivity({
     accountId: row.submitted_by_account_id,
     action:
-      status === 'pending'
-        ? `Listing ${row.listing_number || row.title || listingId} sent back for re-approval`
-        : `Listing ${row.listing_number || row.title || listingId} ${status}`,
+      nextStatus === 'pending'
+        ? `Listing ${listingLabel} sent back for re-approval`
+        : nextStatus === 'scheduled'
+          ? `Listing ${listingLabel} approved, scheduled to go live`
+          : `Listing ${listingLabel} ${nextStatus}`,
     eventCode: 'LISTING_REVIEWED',
     referenceTable: 'marketplace_listings',
     referencePrefix: 'LST',
     referenceId: listingId,
     actorStaffId: staffId,
     metadata: {
-      status,
+      status: nextStatus,
       previousStatus,
       title: row.title,
       rejectionReason: rejectReason,
-      moderationNote: note,
+      moderationNote: note || approvalNote,
+      publishAt: nextStatus === 'scheduled' ? schedule.publishAt.toISOString() : null,
       // Server-side callers only (platform view evidence); never read from the request body.
       ...(audit && typeof audit === 'object' && !Array.isArray(audit) ? audit : {}),
     },
   });
+
+  try {
+    require('../lib/WebSocket').emitStaffDataChange(['marketplace']);
+  } catch {
+    /* Desks refresh on their own as well. */
+  }
 
   return getMarketplaceListingDetail(listingId);
 }
@@ -1269,6 +1372,7 @@ async function getMarketplaceOverview() {
       SELECT
         COUNT(*)::int AS total,
         COUNT(*) FILTER (WHERE status = 'pending')::int AS pending,
+        COUNT(*) FILTER (WHERE status = 'scheduled')::int AS scheduled,
         COUNT(*) FILTER (WHERE status = 'approved')::int AS approved,
         COUNT(*) FILTER (WHERE status = 'rejected')::int AS rejected,
         COUNT(*) FILTER (WHERE status = 'delisted')::int AS delisted,
@@ -1304,6 +1408,7 @@ async function getMarketplaceOverview() {
 
   const listingStatusMix = [
     { label: 'Pending', value: Number(lc.pending), color: '#fbbf24' },
+    { label: 'Scheduled', value: Number(lc.scheduled), color: '#38bdf8' },
     { label: 'Approved', value: Number(lc.approved), color: '#34d399' },
     { label: 'Rejected', value: Number(lc.rejected), color: '#f87171' },
     { label: 'Delisted', value: Number(lc.delisted), color: '#a1a1aa' },
@@ -1333,6 +1438,7 @@ async function getMarketplaceOverview() {
     summary: {
       totalListings: Number(lc.total),
       pendingListings: Number(lc.pending),
+      scheduledListings: Number(lc.scheduled),
       approvedListings: Number(lc.approved),
       rejectedListings: Number(lc.rejected),
       delistedListings: Number(lc.delisted),

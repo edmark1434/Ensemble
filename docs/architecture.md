@@ -45,6 +45,8 @@ Do not introduce reverse dependencies, SQL in React/controller files, or Express
 
 Socket.IO is initialized once in `backend/lib/WebSocket.js`. Persist authoritative state before emitting. Events should contain stable IDs, timestamps, and enough normalized data for clients to update without guessing. Reconnects must recover state through an API query rather than depending solely on missed events.
 
+Staff consoles are live end to end. Every staff socket joins `staff:cases` and hears `staffCaseChanged` (one ticket, dispute or report) and `staffDataChanged` (which areas changed). The second comes from one place for HTTP writes (`middleware/StaffLiveUpdates.js`, after the response) and from `announceJobChange` in `lib/BackgroundJob.js` for jobs. Neither carries content: pages re-read over HTTP with their own access rules. A separate media worker process (`MEDIA_WORKER_EMBEDDED=false`) has no Socket.IO server, so its preview completions reach consoles on the next event or resync.
+
 ## Cross-cutting changes
 
 For features spanning UI, API, persistence, and realtime updates:

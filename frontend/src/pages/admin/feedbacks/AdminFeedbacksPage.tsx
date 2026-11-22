@@ -1,7 +1,8 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Navigate } from 'react-router-dom';
 import { MessageSquare, Loader2, Calendar, Tag, Star, Filter } from 'lucide-react';
 import { peekStaffGet, staffGet } from '@/lib/staffCache';
+import { useStaffLive } from '@/lib/staffLive';
 
 interface Feedback {
   id: string;
@@ -66,24 +67,28 @@ export function AdminFeedbacksPanel() {
   const [isLoading, setIsLoading] = useState(() => !cachedFeedbacks());
   const [activeCategory, setActiveCategory] = useState('All');
 
-  useEffect(() => {
-    const fetchFeedbacks = async () => {
-      try {
-        const res = await staffGet(FEEDBACKS_URL);
-        if (res.data?.data?.feedbacks) {
-          setFeedbacks(res.data.data.feedbacks);
-          setRatings(res.data.data.ratings || []);
-        } else {
-          setFeedbacks(Array.isArray(res.data?.data) ? res.data.data : []);
-        }
-      } catch (error) {
-        console.error('Error fetching feedbacks:', error);
-      } finally {
-        setIsLoading(false);
+  const fetchFeedbacks = useCallback(async () => {
+    try {
+      const res = await staffGet(FEEDBACKS_URL);
+      if (res.data?.data?.feedbacks) {
+        setFeedbacks(res.data.data.feedbacks);
+        setRatings(res.data.data.ratings || []);
+      } else {
+        setFeedbacks(Array.isArray(res.data?.data) ? res.data.data : []);
       }
-    };
-    void fetchFeedbacks();
+    } catch (error) {
+      console.error('Error fetching feedbacks:', error);
+    } finally {
+      setIsLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    void fetchFeedbacks();
+  }, [fetchFeedbacks]);
+
+  // New feedback and ratings appear without a reload.
+  useStaffLive(['feedback'], () => fetchFeedbacks());
 
   const filteredFeedbacks = useMemo(() => {
     if (activeCategory === 'All') return feedbacks;

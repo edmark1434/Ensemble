@@ -3,6 +3,7 @@ import { AlertTriangle, Award, Coins, Globe, RefreshCw, Shield, type LucideIcon 
 import { Link, useSearchParams } from 'react-router-dom';
 import api from '@/lib/axios';
 import { peekStaffGet, staffGet } from '@/lib/staffCache';
+import { useStaffLive } from '@/lib/staffLive';
 import { prefetchStaffRoute, prefetchStaffTab } from '@/lib/staffPrefetch';
 import { showErrorToast, showSuccessToast } from '@/components/utility/toast.ts';
 import ConsolePageSkeleton from '@/pages/staff/ConsolePageSkeleton';
@@ -136,6 +137,11 @@ export default function SystemSettingsPage() {
     void load();
   }, [load]);
 
+  // Live: another admin's save and the live status strip reach this page without Reload.
+  // Sections with unsaved edits keep their draft and base version (`applyData`), so a save
+  // still meets the 409 prompt; the notice below says so as soon as it happens.
+  useStaffLive(['settings', 'economy', 'staff'], () => load(), { enabled: !saving, delayMs: 1500 });
+
   useEffect(() => {
     if (paramTab && VALID_TABS.includes(paramTab)) setTab(paramTab);
     if (paramTab === 'badges') {
@@ -243,6 +249,11 @@ export default function SystemSettingsPage() {
   const rules = rulesOf(data);
   const section = tab === 'badges' ? null : tab;
   const tabAlerts = section ? data.alerts.filter((a) => !a.tab || a.tab === section) : [];
+  // Someone saved this section after this admin started editing it.
+  const staleDraft =
+    section !== null &&
+    changeCounts[section] > 0 &&
+    (baseVersions[section] ?? null) !== (data.sections[section]?.version ?? null);
   const lastSaved = SECTIONS.map((s) => data.sections[s]?.updatedAt)
     .filter(Boolean)
     .sort()
@@ -307,6 +318,25 @@ export default function SystemSettingsPage() {
       {section ? (
         <div className="mx-auto w-full max-w-5xl space-y-6 px-4 py-6 sm:px-6 md:px-8 md:py-8">
           <LiveStatusStrip data={data} onOpen={switchTab} />
+          {staleDraft && (
+            <div
+              role="status"
+              className="flex flex-col gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-xs text-amber-100 sm:flex-row sm:items-center sm:justify-between"
+            >
+              <p className="flex items-start gap-2">
+                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                Another admin saved {SECTION_LABELS[section]} settings while you were editing. Your edits are kept; saving
+                them will ask you to reload first.
+              </p>
+              <button
+                type="button"
+                onClick={() => discard(section)}
+                className="shrink-0 rounded-lg border border-amber-400/30 px-3 py-1.5 font-medium text-amber-100 hover:bg-amber-500/10"
+              >
+                Discard mine and load theirs
+              </button>
+            </div>
+          )}
           <AlertList alerts={tabAlerts} />
 
           {section === 'platform' && (

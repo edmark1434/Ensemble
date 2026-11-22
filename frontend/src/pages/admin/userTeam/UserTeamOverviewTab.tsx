@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { AlertTriangle, CheckCircle2, UserCircle, Users } from 'lucide-react';
 import { peekStaffGet, staffGet } from '@/lib/staffCache';
+import { useStaffLive } from '@/lib/staffLive';
 import StatCards from './components/StatCards';
 import { formatDateTime } from './formatDateTime';
 
@@ -81,26 +82,33 @@ export default function UserTeamOverviewTab({
     return cached?.data?.success ? cached.data.data : null;
   });
   const [loading, setLoading] = useState(() => !data);
+  const hasData = useRef(Boolean(data));
+
+  const load = useCallback(async () => {
+    // Refreshes keep the shown overview until the new one arrives.
+    if (!hasData.current) setLoading(true);
+    try {
+      const res = await staffGet(OVERVIEW_URL);
+      if (res.data?.success) {
+        setData(res.data.data);
+        hasData.current = true;
+        onStatsLoaded?.(
+          showTeams
+            ? res.data.data.totals.combinedPending
+            : res.data.data.userStats.totalPendingVerification
+        );
+      }
+    } finally {
+      setLoading(false);
+    }
+  }, [onStatsLoaded, showTeams]);
 
   useEffect(() => {
-    const load = async () => {
-      if (!peekStaffGet(OVERVIEW_URL)) setLoading(true);
-      try {
-        const res = await staffGet(OVERVIEW_URL);
-        if (res.data?.success) {
-          setData(res.data.data);
-          onStatsLoaded?.(
-            showTeams
-              ? res.data.data.totals.combinedPending
-              : res.data.data.userStats.totalPendingVerification
-          );
-        }
-      } finally {
-        setLoading(false);
-      }
-    };
     void load();
-  }, [refreshToken, onStatsLoaded, showTeams]);
+  }, [refreshToken, load]);
+
+  // Live: counts, queues and alerts follow account, team and enforcement changes.
+  useStaffLive(['accounts', 'teams', 'moderation', 'economy'], () => load().catch(() => {}), { delayMs: 1200 });
 
   if (loading) {
     return <p className="py-12 text-center text-sm text-zinc-500">Loading overview…</p>;

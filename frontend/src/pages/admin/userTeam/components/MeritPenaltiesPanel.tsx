@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { ChevronDown, Clock, Loader2, ShieldAlert, Snowflake, VolumeX } from 'lucide-react';
+import { useStaffLive } from '@/lib/staffLive';
 import {
   endMeritPenaltyEarly,
   getAccountMeritPenalties,
@@ -169,14 +170,14 @@ export function MeritPenaltiesPanel({
   const [unfreezeReason, setUnfreezeReason] = useState('');
   const [unfreezeSaving, setUnfreezeSaving] = useState(false);
 
-  const load = async () => {
-    setLoading(true);
+  const load = async (silent = false) => {
+    if (!silent) setLoading(true);
     try {
       setData(await getAccountMeritPenalties(accountId));
     } catch {
-      setData(null);
+      if (!silent) setData(null);
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
 
@@ -184,6 +185,9 @@ export function MeritPenaltiesPanel({
     void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [accountId, refreshKey]);
+
+  // Live: penalties that start, end or expire elsewhere update in place.
+  useStaffLive(['accounts', 'moderation', 'policy'], () => load(true), { delayMs: 1000 });
 
   const end = async (row: MeritPenaltyRow, reason: string) => {
     try {

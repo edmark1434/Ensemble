@@ -15,6 +15,7 @@ import {
   X,
 } from "lucide-react";
 import api from "@/lib/axios";
+import { useStaffLive } from "@/lib/staffLive";
 import socket from "@/lib/socket";
 import { showErrorToast, showSuccessToast } from "@/components/utility/toast.ts";
 import type { DisputeCaseMilestone, DisputeCaseTransaction, DisputeDetail } from "./moderatorTypes";
@@ -636,6 +637,35 @@ export default function ModeratorDisputeDetailModal({
   detailRef.current = detail;
   const onUpdatedRef = useRef(onUpdated);
   onUpdatedRef.current = onUpdated;
+  /** Read the case back without touching unsaved Case form edits or replies still sending. */
+  const readBackLive = async () => {
+    const res = await api.get(`${endpointBase}/${disputeId}`);
+    if (!res.data?.success) return false;
+    const previous = detailRef.current?.dispute;
+    const form = formRef.current;
+    const dirty = Boolean(
+      previous &&
+        (form.status !== toApiToken(previous.status) ||
+          form.priority !== toApiToken(previous.priority) ||
+          (form.resolutionNotes || "") !== (previous.resolutionNotes || ""))
+    );
+    const next = res.data.data as DisputeDetail;
+    // A reply this staff member is still sending stays on screen until its POST returns.
+    const sending = (detailRef.current?.messages || []).filter((m) => String(m.id).startsWith("pending-"));
+    applyDetail(sending.length ? { ...next, messages: [...(next.messages || []), ...sending] } : next, {
+      syncForm: !dirty,
+    });
+    return true;
+  };
+  const readBackLiveRef = useRef(readBackLive);
+  readBackLiveRef.current = readBackLive;
+  // Live: the case file (both parties' standing, the contract, milestones, escrow and payouts)
+  // also changes outside this dispute; follow it while the case is open.
+  useStaffLive(
+    ["accounts", "moderation", "jobs", "economy", "marketplace"],
+    () => readBackLive().catch(() => false),
+    { enabled: Boolean(detail), delayMs: 1500 },
+  );
   useEffect(() => {
     let timer: number | undefined;
     let fallbackTimer: number | undefined;
@@ -645,23 +675,8 @@ export default function ModeratorDisputeDetailModal({
       const tellParent = notifyParent;
       notifyParent = false;
       try {
-        const res = await api.get(`${endpointBase}/${disputeId}`);
-        if (!res.data?.success) return;
-        const previous = detailRef.current?.dispute;
-        const form = formRef.current;
-        const dirty = Boolean(
-          previous &&
-            (form.status !== toApiToken(previous.status) ||
-              form.priority !== toApiToken(previous.priority) ||
-              (form.resolutionNotes || "") !== (previous.resolutionNotes || ""))
-        );
-        const next = res.data.data as DisputeDetail;
-        // A reply this staff member is still sending stays on screen until its POST returns.
-        const sending = (detailRef.current?.messages || []).filter((m) => String(m.id).startsWith("pending-"));
-        applyDetail(sending.length ? { ...next, messages: [...(next.messages || []), ...sending] } : next, {
-          syncForm: !dirty,
-        });
-        if (tellParent) onUpdatedRef.current?.();
+        const read = await readBackLiveRef.current();
+        if (read && tellParent) onUpdatedRef.current?.();
       } catch {
         // Keep showing what we have; the next event or a manual action reloads it.
       }

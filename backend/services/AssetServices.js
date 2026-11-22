@@ -360,6 +360,9 @@ function publicAsset(asset, feePercent = DEFAULT_MARKETPLACE_ASSET_TRANSACTION_F
     owner_account_id: _ownerAccountId,
     review_status: safeAsset.is_owner ? (safeAsset.review_status || null) : undefined,
     rejection_reason: safeAsset.is_owner ? (safeAsset.rejection_reason || null) : undefined,
+    // Delist / re-review reason and the go-live time of a scheduled listing: owner only.
+    review_note: safeAsset.is_owner ? (safeAsset.review_note || null) : undefined,
+    review_publish_at: safeAsset.is_owner ? (safeAsset.review_publish_at || null) : undefined,
     like_count: Number(safeAsset.like_count || 0),
     save_count: Number(safeAsset.save_count || 0),
     review_count: Number(safeAsset.review_count || 0),
@@ -494,6 +497,11 @@ async function getAssetServices(assetId, accountId) {
 
 async function createAssetServices(accountId, payload, { isAdminAsset = false, staffId = null } = {}) {
   const data = validateAssetPayload(payload, { creating: true });
+  const { cleanListingMessage, recordSellerSubmissionServices } = require('./MarketplaceListingReviewServices');
+  // Optional note to the review team with a first submission.
+  const submissionMessage = isAdminAsset
+    ? null
+    : cleanListingMessage(payload?.submissionMessage, { required: false, label: 'Message to the review team' });
   try {
     const { resolveMarketplacePublishStatus } = require('../lib/ModerationPolicy');
     const { assertWarningAllows } = require('./WarningBandServices');
@@ -548,6 +556,7 @@ async function createAssetServices(accountId, payload, { isAdminAsset = false, s
     }
 
     if (reviewInfo.queued) {
+      await recordSellerSubmissionServices({ listingId: reviewInfo.listingId, accountId, body: submissionMessage });
       return { ...asset, reviewQueued: true, reviewMessage: reviewInfo.message };
     }
     if (!isAdminAsset && String(asset?.status).toLowerCase() === 'published') {
@@ -705,6 +714,24 @@ async function updateAssetServices(assetId, accountId, payload) {
   const data = validateAssetPayload(payload);
   try {
     const currentAsset = await getAssetServices(assetId, accountId);
+    // Checked before the listing row is touched: a buyer, or anyone on a published asset,
+    // reaches this point too, and the listing sync below runs before the asset update's own
+    // ownership check.
+    if (!currentAsset?.is_owner) {
+      throw new AssetError('Asset not found or you cannot edit it.', 404, 'ASSET_NOT_FOUND');
+    }
+    // Saving a rejected or delisted asset resubmits it, and the review team needs to know
+    // what changed: a message is required then, optional while it is pending or scheduled.
+    const { cleanListingMessage, recordSellerSubmissionServices } = require('./MarketplaceListingReviewServices');
+    const resubmitting =
+      String(data.status).toLowerCase() === 'published' && String(currentAsset.status) !== 'published';
+    const messageRequired =
+      resubmitting && ['rejected', 'delisted'].includes(String(currentAsset.review_status || '').toLowerCase());
+    const submissionMessage = cleanListingMessage(payload?.submissionMessage, {
+      required: messageRequired,
+      min: messageRequired ? 5 : 1,
+      label: 'A message to the review team',
+    });
     const { resolveMarketplacePublishStatus } = require('../lib/ModerationPolicy');
     const publish = await resolveMarketplacePublishStatus({
       accountId,
@@ -720,6 +747,9 @@ async function updateAssetServices(assetId, accountId, payload) {
     data.status = publish.status;
     const updated = await updateAssetRepository(assetId, accountId, data);
     if (!updated) throw new AssetError('Asset not found or you cannot edit it.', 404, 'ASSET_NOT_FOUND');
+    if (publish.queued) {
+      await recordSellerSubmissionServices({ listingId: publish.listingId, accountId, body: submissionMessage });
+    }
     const asset = await getAssetServices(assetId, accountId);
     if (publish.queued) {
       return { ...asset, reviewQueued: true, reviewMessage: publish.message };

@@ -25,6 +25,7 @@ import {
 } from 'lucide-react';
 import api from '@/lib/axios';
 import { peekStaffGet, staffGet } from '@/lib/staffCache';
+import { useStaffLive } from '@/lib/staffLive';
 import { showErrorToast, showSuccessToast } from '@/components/utility/toast.ts';
 import TableFilterBar from '../userTeam/components/TableFilterBar';
 import {
@@ -406,6 +407,38 @@ export default function ForumModerationDesk({
     setDiscussionDetail(null);
     setReason('');
   };
+
+  // Live: new posts, comments, members, reports and other staff actions update the list and
+  // the open group or discussion. Filters, sort and the typed reason stay.
+  useStaffLive(
+    ['forum', 'reports', 'moderation', 'accounts'],
+    async () => {
+      const openGroupId = groupDetail?.id;
+      const openDiscussionId = discussionDetail?.id;
+      await Promise.all([
+        load(view, query, status),
+        openGroupId
+          ? api
+              .get(`${FORUM_GROUPS_URL}/${openGroupId}`)
+              .then((res) => {
+                const next = res.data?.data;
+                if (next) setGroupDetail((current) => (current?.id === openGroupId ? next : current));
+              })
+              .catch(() => undefined)
+          : null,
+        openDiscussionId
+          ? api
+              .get(`${FORUM_DISCUSSIONS_URL}/${openDiscussionId}`)
+              .then((res) => {
+                const next = res.data?.data;
+                if (next) setDiscussionDetail((current) => (current?.id === openDiscussionId ? next : current));
+              })
+              .catch(() => undefined)
+          : null,
+      ]);
+    },
+    { enabled: !saving, delayMs: 1200 },
+  );
 
   const saveGroupStatus = async (next: 'active' | 'inactive') => {
     if (!groupDetail) return;

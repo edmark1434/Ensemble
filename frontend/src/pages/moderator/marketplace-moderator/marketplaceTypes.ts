@@ -89,6 +89,30 @@ export type ListingSellerContext = {
   listings: { total: number; approved: number; rejected: number; delisted: number; pending: number };
 };
 
+/** `scheduled` = approved, waiting for its go-live time (`publishAt`). */
+export type ListingStatus = 'pending' | 'scheduled' | 'approved' | 'rejected' | 'delisted';
+
+/** One entry in a listing's conversation with the seller (`marketplace_listing_messages`). */
+export type ListingThreadMessage = {
+  id: string;
+  kind:
+    | 'submitted'
+    | 'resubmitted'
+    | 'reply'
+    | 'approved'
+    | 'scheduled'
+    | 'published'
+    | 'rejected'
+    | 'delisted'
+    | 'rereview';
+  authorType: 'seller' | 'staff' | 'system';
+  authorName: string;
+  authorRole: string | null;
+  body: string | null;
+  publishAt: string | null;
+  createdAt: string;
+};
+
 export type ListingReviewEvent = {
   id: string;
   action: string;
@@ -142,10 +166,16 @@ export type MarketplaceListing = {
   assetType?: string | null;
   marketAssetId?: string | null;
   asset?: ListingLinkedAsset | null;
-  status: 'pending' | 'approved' | 'rejected' | 'delisted';
+  status: ListingStatus;
   rejectionReason: string | null;
   /** Reason recorded for a delist or a send-back-for-re-approval. */
   moderationNote: string | null;
+  /** Go-live time while `scheduled`; when it went live once `approved`. */
+  publishAt?: string | null;
+  /** Newest thread entry: a seller reply or resubmission is waiting on staff. */
+  lastMessage?: { authorType: ListingThreadMessage['authorType']; kind: ListingThreadMessage['kind']; createdAt: string } | null;
+  /** Detail only: the conversation with the seller, oldest first. */
+  thread?: ListingThreadMessage[];
   submittedBy: ListingPerson;
   reviewedBy: { staffId: number; name: string } | null;
   reviewedAt: string | null;
@@ -259,6 +289,7 @@ export type MarketplaceQueueHealth = {
 export type MarketplaceSummary = MarketplaceQueueHealth & {
   totalListings: number;
   pendingListings: number;
+  scheduledListings?: number;
   approvedListings: number;
   rejectedListings: number;
   delistedListings: number;

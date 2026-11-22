@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { Check, ChevronLeft, ChevronRight, Copy } from 'lucide-react';
 import api from '@/lib/axios';
 import { peekStaffGet, staffGet } from '@/lib/staffCache';
+import { useStaffLive } from '@/lib/staffLive';
 import type { EconomyVariant, LedgerBalance, LedgerEntry, LedgerParty, Page } from './creditEconomyTypes';
 
 export const ECONOMY_API = {
@@ -376,20 +377,24 @@ export function usePagedList<T>(url: string, params: Params, refreshToken = 0) {
   const [error, setError] = useState('');
   const seq = useRef(0);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (silent = false) => {
     const id = ++seq.current;
     const parsed = JSON.parse(key) as Record<string, string | number>;
-    const hit = peekStaffGet(url, parsed)?.data;
-    if (hit?.success) setPage(hit.data);
-    setLoading(true);
-    setError('');
+    if (!silent) {
+      const hit = peekStaffGet(url, parsed)?.data;
+      if (hit?.success) setPage(hit.data);
+      setLoading(true);
+      setError('');
+    }
     try {
       const res = await staffGet(url, parsed);
       if (id !== seq.current) return;
-      if (res.data?.success) setPage(res.data.data);
-      else setError(res.data?.message || 'Failed to load');
+      if (res.data?.success) {
+        setPage(res.data.data);
+        setError('');
+      } else if (!silent) setError(res.data?.message || 'Failed to load');
     } catch (err) {
-      if (id !== seq.current) return;
+      if (id !== seq.current || silent) return;
       const message = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
       setError(message || 'Failed to load');
     } finally {
@@ -400,6 +405,10 @@ export function usePagedList<T>(url: string, params: Params, refreshToken = 0) {
   useEffect(() => {
     void load();
   }, [load, refreshToken]);
+
+  // Live: top-ups, purchases, payouts, holds and staff adjustments re-read the page shown,
+  // keeping its rows on screen until the new page arrives.
+  useStaffLive(['economy', 'accounts', 'teams', 'disputes', 'jobs'], () => load(true), { delayMs: 1000 });
 
   return { page, loading, error, reload: load };
 }

@@ -405,6 +405,7 @@ async function reconcileCashoutsServices() {
             console.error(`Cashout reconciliation failed for ${cashout.cashout_id}:`, error.response?.data || error.message);
         }
     }
+    return { checked: cashouts.length };
 }
 
 async function transferCreditsServices({ senderAccountId, recipientAccountId, amountCredits, notes }) {

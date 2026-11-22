@@ -8,6 +8,7 @@ const {
   getListingDetail,
   getSellerListings,
   patchListing,
+  postListingMessage,
   getListingFileOriginal,
   getTickets,
   getTicket,
@@ -53,6 +54,7 @@ router.get('/marketplace/overview', [checkSession, marketplaceModerator], getOve
 router.get('/marketplace/listings', [checkSession, marketplaceModerator], getListings);
 router.get('/marketplace/listings/:id', [checkSession, marketplaceModerator], getListingDetail);
 router.patch('/marketplace/listings/:id', [checkSession, marketplaceModerator], patchListing);
+router.post('/marketplace/listings/:id/messages', [checkSession, marketplaceModerator], postListingMessage);
 router.get(
   '/marketplace/listings/:id/media/:mediaAssetId/original',
   [checkSession, marketplaceModerator],

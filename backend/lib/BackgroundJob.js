@@ -37,6 +37,16 @@ const {
     reconcileExpiredCancellationRequestsServices,
 } = require('../services/MilestoneServices');
 
+/** Open staff consoles re-read the areas a job changed (`staffDataChanged`). Never throws. */
+function announceJobChange(topics, changed = true) {
+    if (!changed) return;
+    try {
+        require('./WebSocket').emitStaffDataChange(topics);
+    } catch (error) {
+        console.warn('Staff live update skipped:', error.message);
+    }
+}
+
 const config = {
     auth: {
         username: process.env.XENDIT_API_KEY,
@@ -122,6 +132,7 @@ async function reconcilePayment(payment) {
                             user_id: payment.user_id
                         });
                         io.to(notification.account_id).emit("notification", notification);
+                        announceJobChange(['economy']);
                     }
                     return;
 
@@ -201,6 +212,7 @@ async function reconcilePayment(payment) {
                 savePaymentMethod(paymentRequest).catch((error) => {
                     console.error(`Failed to save payment method for ${payment.reference_id}:`, error.message);
                 });
+                announceJobChange(['economy']);
             }
             return;
         }
@@ -234,7 +246,7 @@ async function reconcilePayment(payment) {
                 payload.payment_id,
                 payload.channel_code
             );
-
+            announceJobChange(['economy']);
         }
     } catch (err) {
         console.error("Reconciliation error details:",err);
@@ -288,6 +300,7 @@ async function reconcileCancelledSubscriptions() {
         await Promise.all(
             cancelledSubscriptions.map(cancelledSubscriptionReconciliation)
         );
+        announceJobChange(['economy']);
     } catch (err) {
         console.error(
             "Failed to reconcile cancelled subscriptions:",
@@ -332,7 +345,8 @@ function startPaymentReconciliationJob() {
             mediaJobRunning = true;
             try {
                 const { processNextMediaJob } = require('../services/MediaJobServices');
-                await processNextMediaJob();
+                // A finished preview moves its listing out of processing.
+                announceJobChange(['marketplace'], await processNextMediaJob());
             } catch (error) {
                 console.error('Media preview worker failed:', error.message);
             } finally {
@@ -401,7 +415,8 @@ function startPaymentReconciliationJob() {
         }
         isCashoutJobRunning = true;
         try {
-            await reconcileCashoutsServices();
+            const result = await reconcileCashoutsServices();
+            announceJobChange(['economy'], result?.checked);
         } catch (err) {
             console.error("Cashout reconciliation failed:", err);
         } finally {
@@ -423,6 +438,7 @@ function startPaymentReconciliationJob() {
             if (result.checked) {
                 console.log(`Reconciled ${result.checked} Didit verification session(s); updated ${result.updated}.`);
             }
+            announceJobChange(['accounts', 'teams'], result.updated);
         } catch (err) {
             console.error("Didit verification reconciliation failed:", err.message);
         } finally {
@@ -479,6 +495,7 @@ function startPaymentReconciliationJob() {
         try {
             const result = await reconcileOverdueMilestonesServices();
             if (result.flagged) console.log(`Milestone overdue: flagged ${result.flagged}`);
+            announceJobChange(['jobs'], result.flagged);
         } catch (err) {
             console.error("Milestone overdue reconciliation failed:", err.message);
         } finally {
@@ -493,6 +510,7 @@ function startPaymentReconciliationJob() {
         try {
             const result = await reconcileStalledMilestonesServices();
             if (result.escalated) console.log(`Milestone stalled: escalated ${result.escalated}`);
+            announceJobChange(['jobs', 'disputes'], result.escalated);
         } catch (err) {
             console.error("Milestone stalled escalation failed:", err.message);
         } finally {
@@ -507,6 +525,7 @@ function startPaymentReconciliationJob() {
         try {
             const result = await reconcileAutoApprovalServices();
             if (result.approved) console.log(`Milestone auto-approve: released ${result.approved}`);
+            announceJobChange(['jobs', 'economy'], result.approved);
         } catch (err) {
             console.error("Milestone auto-approval failed:", err.message);
         } finally {
@@ -533,6 +552,7 @@ function startPaymentReconciliationJob() {
         try {
             const result = await reconcileAbandonedMilestonesServices();
             if (result.abandoned) console.log(`Milestone abandoned: marked ${result.abandoned}`);
+            announceJobChange(['jobs'], result.abandoned);
         } catch (err) {
             console.error("Milestone abandoned marking failed:", err.message);
         }
@@ -546,6 +566,7 @@ function startPaymentReconciliationJob() {
             const { closeScheduledTickets } = require("../repositories/AdminTicketsRepositories");
             const result = await closeScheduledTickets();
             if (result.closed) console.log(`Ticket scheduled close: closed ${result.closed}`);
+            announceJobChange(['tickets'], result.closed);
         } catch (err) {
             console.error("Ticket scheduled close failed:", err.message);
         } finally {
@@ -561,6 +582,7 @@ function startPaymentReconciliationJob() {
             const { autoCloseInactiveTickets } = require("../repositories/AdminTicketsRepositories");
             const result = await autoCloseInactiveTickets();
             if (result.closed) console.log(`Ticket auto-close: closed ${result.closed}`);
+            announceJobChange(['tickets'], result.closed);
         } catch (err) {
             console.error("Ticket auto-close failed:", err.message);
         } finally {
@@ -576,6 +598,7 @@ function startPaymentReconciliationJob() {
         try {
             const result = await reconcileExpiredCancellationRequestsServices();
             if (result.processed) console.log(`Contract cancellation auto-approval: processed ${result.processed}`);
+            announceJobChange(['jobs', 'economy'], result.processed);
         } catch (err) {
             console.error("Contract cancellation auto-approval failed:", err.message);
         } finally {
@@ -594,6 +617,7 @@ function startPaymentReconciliationJob() {
             if (result && result.count > 0) {
                 console.log(`Job application window auto-expire: processed ${result.count} expired job(s)`);
             }
+            announceJobChange(['jobs', 'economy'], result?.count > 0);
         } catch (err) {
             console.error("Job application window auto-expire failed:", err.message);
         } finally {
@@ -614,6 +638,7 @@ function startPaymentReconciliationJob() {
             if (result.lifted || result.warningsExpired) {
                 console.log(`Standing expiry: lifted ${result.lifted}, warnings expired ${result.warningsExpired}`);
             }
+            announceJobChange(['accounts', 'moderation'], result.lifted || result.warningsExpired);
         } catch (err) {
             console.error("Standing expiry failed:", err.message);
         } finally {
@@ -632,6 +657,7 @@ function startPaymentReconciliationJob() {
             if (result.reminded || result.warned) {
                 console.log(`Missed reviews: reminded ${result.reminded}, warned ${result.warned}`);
             }
+            announceJobChange(['accounts', 'moderation', 'jobs'], result.warned);
         } catch (err) {
             // The obligations table arrives with a migration; stay quiet until it exists.
             if (err.code !== '42P01') console.error("Missed review reconciliation failed:", err.message);
@@ -652,6 +678,7 @@ function startPaymentReconciliationJob() {
             if (result.released || result.failed) {
                 console.log(`Dispute payouts: released ${result.released}, failed ${result.failed}`);
             }
+            announceJobChange(['disputes', 'economy'], result.released || result.failed);
         } catch (err) {
             // The payouts table arrives with a migration; stay quiet until it exists.
             if (err.code !== '42P01') console.error("Dispute payout release failed:", err.message);
@@ -677,6 +704,7 @@ function startPaymentReconciliationJob() {
                     `auto-continued ${result.continued}, extended ${result.extended}, reminded ${result.reminded}`
                 );
             }
+            announceJobChange(['jobs', 'disputes'], result.ended || result.synced || result.continued || result.extended);
         } catch (err) {
             // The hold columns and decisions table arrive with migrations 1829900000000 and
             // 1830000000000; stay quiet until they run.
@@ -685,6 +713,27 @@ function startPaymentReconciliationJob() {
             }
         } finally {
             isContractDisputeHoldJobRunning = false;
+        }
+    });
+
+    // Marketplace go-live: publish approved listings whose scheduled time has come (approved
+    // "in 24 hours", "in 7 days" or for a date) and tell each seller — runs every minute.
+    let isScheduledListingJobRunning = false;
+    cron.schedule("* * * * *", async () => {
+        if (isScheduledListingJobRunning) return;
+        isScheduledListingJobRunning = true;
+        try {
+            const { publishDueScheduledListingsServices } = require('../services/MarketplaceListingReviewServices');
+            const result = await publishDueScheduledListingsServices();
+            if (result.published) console.log(`Scheduled listings: published ${result.published}`);
+            announceJobChange(['marketplace'], result.published);
+        } catch (err) {
+            // publish_at and the thread table arrive with migration 1830400000000; stay quiet until it runs.
+            if (err.code !== '42703' && err.code !== '42P01') {
+                console.error("Scheduled listing publish failed:", err.message);
+            }
+        } finally {
+            isScheduledListingJobRunning = false;
         }
     });
 
@@ -699,6 +748,7 @@ function startPaymentReconciliationJob() {
             if (result && (result.remindedCount > 0 || result.expiredCount > 0)) {
                 console.log(`Accepted gig orders reconciled: ${result.remindedCount} reminder(s), ${result.expiredCount} expired`);
             }
+            announceJobChange(['jobs', 'economy'], result?.expiredCount > 0);
         } catch (err) {
             console.error("Accepted gig order reconciliation failed:", err.message);
         } finally {
@@ -729,6 +779,7 @@ async function reconcileUnassignedDisputesServices() {
     if (result?.assigned > 0) {
         console.log(`Auto-assigned ${result.assigned} unassigned dispute(s) to staff.`);
     }
+    announceJobChange(['disputes'], result?.assigned > 0);
     return result;
 }
 

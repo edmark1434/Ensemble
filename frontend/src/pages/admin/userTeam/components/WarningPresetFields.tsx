@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import api from '@/lib/axios';
+import { useStaffLive } from '@/lib/staffLive';
 import { groupedWarnings, groupWarningRows, warningsForDesk, type WarningDesk, type WarningPreset } from '@/lib/warningCatalog';
 import { warningLadderSummary } from '@/lib/warningLadder';
 
@@ -32,6 +33,9 @@ export function WarningPresetFields({
 }) {
   const [rows, setRows] = useState<WarningPreset[]>(() => warningsForDesk(desk));
   const [live, setLive] = useState(false);
+  // Catalog edits by an admin reach open pickers; the chosen warning and reason stay.
+  const [catalogToken, setCatalogToken] = useState(0);
+  useStaffLive(['policy'], () => setCatalogToken((t) => t + 1));
 
   useEffect(() => {
     let cancelled = false;
@@ -59,7 +63,7 @@ export function WarningPresetFields({
     return () => {
       cancelled = true;
     };
-  }, [desk]);
+  }, [desk, catalogToken]);
 
   const groups = useMemo(
     () => (live ? groupWarningRows(rows) : groupedWarnings(desk)),

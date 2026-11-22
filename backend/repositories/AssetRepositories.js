@@ -469,6 +469,8 @@ const ASSET_SELECT = `
          ma.created_at, ma.updated_at,
          latest_listing.status AS review_status,
          latest_listing.rejection_reason,
+         latest_listing.moderation_note AS review_note,
+         latest_listing.publish_at AS review_publish_at,
          media.media_asset_id, media.type, media.width, media.height,
          media.duration_seconds, media.proxy_path,
          media.thumbnail_path, media.mime_type, media.size_bytes,
@@ -748,7 +750,7 @@ const ASSET_SELECT = `
      LIMIT 1) AS used_license_project_id
   ) purchase_access ON TRUE
   LEFT JOIN LATERAL (
-    SELECT ml.status, ml.rejection_reason
+    SELECT ml.status, ml.rejection_reason, ml.moderation_note, ml.publish_at
     FROM marketplace_listings ml
     WHERE ml.market_asset_id = ma.market_asset_id
     ORDER BY ml.created_at DESC
@@ -846,9 +848,9 @@ async function listAssetsRepository({ accountId, search, type, status, view, cre
        AND (
          $4 = '' OR $4 = 'all'
          OR ($4 = 'published' AND ma.status = 'published')
-         OR ($4 = 'pending' AND ma.status = 'draft' AND latest_listing.status = 'pending')
-         OR ($4 = 'rejected' AND ma.status = 'draft' AND latest_listing.status = 'rejected')
-         OR ($4 = 'draft' AND ma.status = 'draft' AND (latest_listing.status IS NULL OR latest_listing.status NOT IN ('pending', 'rejected')))
+         OR ($4 = 'pending' AND ma.status = 'draft' AND latest_listing.status IN ('pending', 'scheduled'))
+         OR ($4 = 'rejected' AND ma.status = 'draft' AND latest_listing.status IN ('rejected', 'delisted'))
+         OR ($4 = 'draft' AND ma.status = 'draft' AND (latest_listing.status IS NULL OR latest_listing.status NOT IN ('pending', 'scheduled', 'rejected', 'delisted')))
          OR (ma.status = $4)
        )
        AND ($7::text IS NULL OR $7::text IS NOT NULL)

@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import api from "@/lib/axios";
 import { peekStaffGet, staffGet } from "@/lib/staffCache";
+import { useStaffLive } from "@/lib/staffLive";
 import { showErrorToast, showSuccessToast } from "@/components/utility/toast.ts";
 import RowActionsMenu, { type MenuItem } from "@/pages/admin/userTeam/components/RowActionsMenu";
 import type { JobsGigsPosting, JobsOverview } from "../shared/moderatorTypes";
@@ -215,7 +216,7 @@ export default function JobsGigsControl({
     }
   };
 
-  const load = async () => {
+  const load = async (quiet = false) => {
     const next = postingParams(typeFilter, statusFilter, search, sort, limit);
     const key = JSON.stringify(next);
     const cached = peekStaffGet(postingsUrl, next);
@@ -232,7 +233,7 @@ export default function JobsGigsControl({
         setPostings(res.data.data);
       }
     } catch {
-      showErrorToast("Failed to load postings");
+      if (!quiet) showErrorToast("Failed to load postings");
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -242,6 +243,14 @@ export default function JobsGigsControl({
   const refreshAll = async () => {
     await Promise.all([load(), loadOverview()]);
   };
+
+  // Live: new and edited postings, applications, reports and other moderators' actions update
+  // the list and counts with the current filters and page size.
+  useStaffLive(
+    ["jobs", "reports", "moderation", "accounts"],
+    () => Promise.all([load(true), loadOverview()]),
+    { enabled: !savingKey, delayMs: 1000 },
+  );
 
   useEffect(() => {
     void loadOverview();

@@ -34,7 +34,7 @@ const MINE_STATUS_OPTIONS: { id: MineStatus; label: string }[] = [
   { id: "all", label: "All" },
   { id: "uploaded", label: "Published" },
   { id: "in_review", label: "Under Review" },
-  { id: "rejected", label: "Rejected" },
+  { id: "rejected", label: "Rejected & Delisted" },
   { id: "draft", label: "Drafts" },
 ];
 
@@ -664,7 +664,7 @@ export default function AssetsLibrary() {
                           : mineStatus === "in_review"
                             ? "No assets are currently under review."
                             : mineStatus === "rejected"
-                              ? "No assets have been rejected."
+                              ? "No assets have been rejected or delisted."
                               : "You don't have any draft assets.")
                     : view === "purchased"
                       ? "You haven't purchased any assets yet."
@@ -685,9 +685,9 @@ export default function AssetsLibrary() {
                           : mineStatus === "uploaded"
                             ? "Assets that have been approved by moderators will appear here."
                             : mineStatus === "in_review"
-                              ? "Assets currently in the moderation review queue will appear here."
+                              ? "Assets in the moderation review queue, or approved and scheduled to go live, appear here."
                               : mineStatus === "rejected"
-                                ? "Assets rejected by moderators will appear here for revision."
+                                ? "Assets rejected or delisted by moderators appear here. Open one to read why and resubmit it."
                                 : "Assets saved as drafts will appear here.")
                       : view === "purchased"
                         ? "Assets you purchase will appear here."

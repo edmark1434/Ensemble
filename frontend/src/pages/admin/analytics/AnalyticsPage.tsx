@@ -15,6 +15,7 @@ import {
 import { useSearchParams } from 'react-router-dom';
 import api from '@/lib/axios';
 import { peekStaffGet, staffGet } from '@/lib/staffCache';
+import { useStaffLive } from '@/lib/staffLive';
 import { prefetchStaffRoute } from '@/lib/staffPrefetch';
 import { showErrorToast } from '@/components/utility/toast.ts';
 import ConsolePageSkeleton from '@/pages/staff/ConsolePageSkeleton';
@@ -134,6 +135,11 @@ export default function AnalyticsPage() {
       cancelled = true;
     };
   }, [standalone, requestKey, requestParams, reloadToken]);
+
+  // Live: the overview is computed from the whole platform and cached on the server for 60
+  // seconds, so it re-reads on that cadence while visible (and after a reconnect) rather than
+  // on every event. The numbers stay on screen while it does.
+  useStaffLive([], () => setReloadToken((n) => n + 1), { enabled: !standalone, pollMs: 60_000 });
 
   // Data for the selected range if we have it; otherwise keep showing the last range (dimmed).
   const current = loaded?.key === requestKey ? loaded.data : null;

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { ChevronDown, Hand, Loader2, Scale, Search, SlidersHorizontal, X } from 'lucide-react';
 import socket from '@/lib/socket';
+import { useStaffLive } from '@/lib/staffLive';
 import ModeratorDisputeDetailModal from '@/pages/moderator/shared/ModeratorDisputeDetailModal';
 import type { Dispute } from '@/pages/admin/ticketManagement/ticketTypes';
 
@@ -251,6 +252,17 @@ export default function DisputeDesk({
       socket.off('staffCaseChanged', onStaffCase);
     };
   }, []);
+
+  // Changes that name no single dispute (a reconnect, the auto-assign or payout jobs, a bulk
+  // staff action) re-read the queue too, after the open modal closes like the rest.
+  useStaffLive(['disputes'], (batch) => {
+    if (!batch.resync && batch.cases.length > 0) return; // handled by the case listener above
+    if (openIdRef.current != null) {
+      staleOpenRef.current = true;
+      return;
+    }
+    onUpdatedRef.current();
+  });
 
   const handlerOptions = useMemo(() => {
     const byId = new Map<string, DisputeHandlerOption>();
