@@ -1,6 +1,7 @@
 import { useEffect, useId, useState, type FormEvent } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { AlertTriangle, CheckCircle2, Flag, X } from "lucide-react";
+import { personReportReasonGroups, type ReportReasonGroup } from "@/lib/reportReasons";
 
 export type ForumReportSubject = "discussion" | "comment" | "group" | "member";
 
@@ -32,15 +33,14 @@ const REASONS: Record<ForumReportSubject, string[]> = {
     "Impersonation",
     "Other",
   ],
-  member: [
-    "Harassment or bullying",
-    "Spam or advertising",
-    "Hate speech or discrimination",
-    "Impersonation",
-    "Inappropriate behavior",
-    "Other",
-  ],
+  member: [],
 };
+
+/** A member report uses the full person-report list; content reports keep one ungrouped list. */
+function reasonGroups(subject: ForumReportSubject): ReportReasonGroup[] {
+  if (subject === "member") return personReportReasonGroups("forum");
+  return [{ label: "", reasons: REASONS[subject] }];
+}
 
 const TITLES: Record<ForumReportSubject, string> = {
   discussion: "Report discussion",
@@ -215,8 +215,16 @@ export default function ForumReportModal({
                       <legend className="mb-1.5 block text-[9px] font-bold uppercase tracking-wider text-gray-500 dark:text-zinc-400">
                         Select reason
                       </legend>
+                      <div className="max-h-72 space-y-2 overflow-y-auto pr-0.5">
+                        {reasonGroups(subject).map((group) => (
+                          <div key={group.label || "reasons"}>
+                            {group.label && (
+                              <p className="mb-1 text-[10px] font-semibold text-gray-400 dark:text-zinc-500">
+                                {group.label}
+                              </p>
+                            )}
                       <div className="grid grid-cols-1 gap-1 sm:grid-cols-2">
-                        {REASONS[subject].map((item) => {
+                        {group.reasons.map((item) => {
                           const selected = reason === item;
                           return (
                             <button
@@ -238,6 +246,9 @@ export default function ForumReportModal({
                             </button>
                           );
                         })}
+                      </div>
+                          </div>
+                        ))}
                       </div>
                     </fieldset>
 

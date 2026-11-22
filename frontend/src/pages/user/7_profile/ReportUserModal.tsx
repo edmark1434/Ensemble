@@ -2,14 +2,9 @@ import { useState } from "react";
 import { AlertCircle, Flag, X } from "lucide-react";
 import api from "@/lib/axios";
 import { showSuccessToast } from "@/components/utility/toast";
+import { personReportReasonGroups } from "@/lib/reportReasons";
 
-const reportReasons = [
-  "Harassment or bullying",
-  "Spam or scam",
-  "Impersonation",
-  "Inappropriate content",
-  "Other",
-];
+const reportReasonGroups = personReportReasonGroups("profile");
 
 export function ReportUserModal({
   isOpen,
@@ -89,8 +84,12 @@ export function ReportUserModal({
           className="mb-4 w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 dark:border-white/10 dark:bg-zinc-950 dark:text-white"
         >
           <option value="">Select a reason</option>
-          {reportReasons.map((item) => (
-            <option key={item} value={item}>{item}</option>
+          {reportReasonGroups.map((group) => (
+            <optgroup key={group.label} label={group.label}>
+              {group.reasons.map((item) => (
+                <option key={item} value={item}>{item}</option>
+              ))}
+            </optgroup>
           ))}
         </select>
         <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-500">Description</label>

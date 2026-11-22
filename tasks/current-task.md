@@ -1,5 +1,16 @@
 # Current Task
 
+# Parallel task: every reason for reporting a person
+
+## Objective
+
+When a member reports a person, the reasons cover everything staff can warn a person for (docs/warning-system.md §6).
+
+## Acceptance Criteria
+
+- **One list.** `frontend/src/lib/reportReasons.ts` `personReportReasonGroups(context)` returns grouped reasons (Behavior, Content, Identity, Scams and payments, Jobs gigs and contracts, Other), plus team-project reasons for `team` and forum reasons for `forum`. Every reason is ≤ 50 characters (`reports.type`).
+- **Used everywhere a person is reported.** Profile `ReportUserModal`, team project `ReportMemberModal` (grouped `<optgroup>`s) and forum `ForumReportModal` subject `member` (grouped, scrollable chips). Content reports (discussion, comment, group, job, gig, message, team) keep their own lists.
+
 # Parallel task: what happens to a restricted member's work and resources
 
 ## Objective

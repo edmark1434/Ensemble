@@ -1,6 +1,7 @@
 // src/components/modals/ReportMemberModal.tsx
 import { useState } from "react";
 import { X, Flag } from "lucide-react";
+import { personReportReasonGroups } from "@/lib/reportReasons";
 
 interface ReportMemberModalProps {
   isOpen: boolean;
@@ -9,14 +10,7 @@ interface ReportMemberModalProps {
   onSubmit: (reason: string, description: string) => void | Promise<void>;
 }
 
-const reportReasons = [
-  "Harassment or Bullying",
-  "Inappropriate Content",
-  "Spam or Misleading",
-  "Fake Profile",
-  "Impersonation",
-  "Other",
-];
+const reportReasonGroups = personReportReasonGroups("team");
 
 const ReportMemberModal: React.FC<ReportMemberModalProps> = ({
   isOpen,
@@ -84,8 +78,12 @@ const ReportMemberModal: React.FC<ReportMemberModalProps> = ({
             className="w-full rounded-lg border border-white/20 bg-dark-surface px-4 py-2 text-sm text-white focus:border-blue-500/50 focus:outline-none focus:ring-1 focus:ring-blue-500/50"
           >
             <option value="" className="bg-dark-surface text-zinc-400">Select a reason</option>
-            {reportReasons.map((reason) => (
-              <option key={reason} value={reason} className="bg-dark-surface text-white">{reason}</option>
+            {reportReasonGroups.map((group) => (
+              <optgroup key={group.label} label={group.label} className="bg-dark-surface text-zinc-400">
+                {group.reasons.map((reason) => (
+                  <option key={reason} value={reason} className="bg-dark-surface text-white">{reason}</option>
+                ))}
+              </optgroup>
             ))}
           </select>
         </div>
