@@ -1259,9 +1259,9 @@ export default function SelectedTeam() {
         isOpen={showReport}
         onClose={() => setShowReport(false)}
         teamName={team.display_name}
-        onSubmit={(category, description) =>
-          void mutate("/reports", "post", { category, description })
-        }
+        onSubmit={async (category, description) => {
+          await api.post(`/api/teams/${id}/reports`, { category, description });
+        }}
       />
       <AddTeamReviewModal
         isOpen={showReviewModal}

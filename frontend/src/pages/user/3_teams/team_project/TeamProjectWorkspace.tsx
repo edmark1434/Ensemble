@@ -526,7 +526,6 @@ export const TeamProjectWorkspace: React.FC = () => {
         category: reason,
         description,
       });
-      showSuccessToast('Report submitted to moderation');
     } catch (err: any) {
       throw new Error(err?.response?.data?.message || err?.message || 'Failed to submit report');
     }
@@ -1276,6 +1275,7 @@ export const TeamProjectWorkspace: React.FC = () => {
         isOpen={isReportModalOpen}
         onClose={() => setIsReportModalOpen(false)}
         teamName={project.project_title || 'Team Project'}
+        title="Report team project"
         onSubmit={handleReportTeam}
       />
 

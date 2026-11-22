@@ -1,5 +1,29 @@
 # Current Task
 
+# Parallel task: one report dialog for members
+
+## Objective
+
+Every place a member reports something looks and behaves the same.
+
+## Acceptance Criteria
+
+- **One dialog.** `components/report/ReportDialog` (portaled): flag header with the subject name, optional quoted preview, reason chips (grouped when the list is grouped), description with a counter and minimum, "Reports go to the … for review" note, inline server error, then a "Report submitted" confirmation that closes itself.
+- **Used everywhere.** Forum (discussion, comment, group, member), job, gig, asset, profile, team, team project, team project member and chat message reports. Each keeps its own reason strings (the server checks some of them). Message reports keep the description optional.
+- **No double feedback.** Callers no longer show their own success toast; the team page report surfaces the server's error in the dialog instead of a generic toast.
+
+# Parallel task: ticket close now / in / on date
+
+## Objective
+
+Staff close a ticket from one place in the ticket modal: right away, after a chosen delay, or at a chosen date and time.
+
+## Acceptance Criteria
+
+- **Sidebar.** The Ticket → Closing box has "Close now" (hidden for an undecided appeal) and "Close later" / "Change time", plus Cancel while a close is scheduled.
+- **Dialog.** Three modes: Now (closes at once through the existing status PATCH), In… (any number of minutes / hours / days, with 30 min, 1 h, 6 h, 1 d, 3 d, 7 d quick picks), On date (date and time). The scheduled modes use `POST …/schedule-close`.
+- **Window.** The dialog shows the resulting close time, or the problem when it is under 5 minutes or over 90 days away (same limits as the server).
+
 # Parallel task: view listing files from the ticket case file
 
 ## Objective

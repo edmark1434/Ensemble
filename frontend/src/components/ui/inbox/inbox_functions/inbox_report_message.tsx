@@ -1,8 +1,8 @@
-// src/components/ui/inbox/inbox_functions/inbox_report_message.tsx
-import React, { useState } from "react";
-import { Flag, X, AlertTriangle, CheckCircle2 } from "lucide-react";
+import React from "react";
+import ReportDialog from "@/components/report/ReportDialog";
 import type { Message } from "../inbox_dataset";
 
+/** Must match `CHAT_REPORT_REASONS` on the server. */
 const REPORT_REASONS = [
   "Harassment or Bullying",
   "Spam or Scam",
@@ -26,146 +26,25 @@ export const InboxReportModal: React.FC<InboxReportModalProps> = ({
   onClose,
   onSubmitReport,
 }) => {
-  const [selectedReason, setSelectedReason] = useState(REPORT_REASONS[0]);
-  const [details, setDetails] = useState("");
-  const [submitted, setSubmitted] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [submitError, setSubmitError] = useState("");
-
-  if (!messageToReport) return null;
-
-  const quotedText =
-    messageToReport.message_content ||
-    (messageToReport.attachments?.length ? "[Image Attachment]" : "Message");
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (isSubmitting) return;
-    setIsSubmitting(true);
-    setSubmitError("");
-    try {
-      await onSubmitReport({
-        messageId: messageToReport._id,
-        reason: selectedReason,
-        details,
-      });
-      setSubmitted(true);
-      setTimeout(() => {
-        setSubmitted(false);
-        onClose();
-      }, 1500);
-    } catch (error) {
-      const message =
-        (error as { response?: { data?: { error?: string } } })?.response?.data
-          ?.error || "Failed to submit the report. Please try again.";
-      setSubmitError(message);
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
+  const quotedText = messageToReport
+    ? messageToReport.message_content ||
+      (messageToReport.attachments?.length ? "[Image Attachment]" : "Message")
+    : null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-      <div
-        className="w-full max-w-md rounded-2xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-dark-base p-5 shadow-2xl transition-all"
-        style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
-      >
-        {/* Header */}
-        <div className="flex items-center justify-between border-b border-gray-200 dark:border-white/10 pb-3">
-          <div className="flex items-center gap-2 text-red-400">
-            <Flag className="h-5 w-5" />
-            <h3 className="font-semibold text-gray-900 dark:text-white text-base">Report Message</h3>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-full p-1 text-gray-500 dark:text-zinc-400 hover:bg-gray-100 dark:hover:bg-white/10 hover:text-gray-900 dark:text-white dark:hover:text-white transition"
-          >
-            <X className="h-4 w-4" />
-          </button>
-        </div>
-
-        {submitted ? (
-          <div className="py-8 flex flex-col items-center justify-center text-center">
-            <CheckCircle2 className="h-12 w-12 text-emerald-400 mb-2 animate-bounce" />
-            <p className="font-medium text-gray-900 dark:text-white text-sm">Report Submitted</p>
-            <p className="text-xs text-gray-500 dark:text-zinc-400 mt-1">
-              Thank you for helping keep the community safe.
-            </p>
-          </div>
-        ) : (
-          <form onSubmit={handleSubmit} className="mt-4 space-y-4">
-            {/* Quoted Reported Message */}
-            <div className="rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/5 p-3 text-xs text-gray-600 dark:text-zinc-300">
-              <span className="text-[10px] uppercase font-semibold text-gray-500 dark:text-zinc-500 block mb-1">
-                Reporting this message:
-              </span>
-              <p className="italic text-gray-900 dark:text-zinc-200 truncate">"{quotedText}"</p>
-            </div>
-
-            {/* Select Reason */}
-            <div>
-              <label className="block text-xs font-medium text-gray-500 dark:text-zinc-400 mb-1.5">
-                Reason for report
-              </label>
-              <select
-                value={selectedReason}
-                onChange={(e) => setSelectedReason(e.target.value)}
-                className="w-full rounded-xl border border-gray-300 dark:border-white/15 bg-white dark:bg-dark-surface px-3 py-2 text-xs text-gray-900 dark:text-white outline-none focus:border-blue-500 transition"
-              >
-                {REPORT_REASONS.map((reason) => (
-                  <option key={reason} value={reason}>
-                    {reason}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Additional Details */}
-            <div>
-              <label className="block text-xs font-medium text-gray-500 dark:text-zinc-400 mb-1.5">
-                Additional Details (Optional)
-              </label>
-              <textarea
-                rows={3}
-                placeholder="Provide additional context..."
-                value={details}
-                onChange={(e) => setDetails(e.target.value)}
-                className="w-full rounded-xl border border-gray-300 dark:border-white/15 bg-white dark:bg-dark-surface p-3 text-xs text-gray-900 dark:text-white outline-none resize-none placeholder:text-gray-500 dark:text-zinc-400 focus:border-blue-500 transition inbox-scroll-thin"
-              />
-            </div>
-
-            {/* Disclaimer & Actions */}
-            <div className="flex items-center gap-1.5 text-[11px] text-gray-500 dark:text-zinc-500">
-              <AlertTriangle className="h-3.5 w-3.5 text-yellow-500 flex-shrink-0" />
-              <span>Misuse of reports may lead to account penalties.</span>
-            </div>
-
-            {submitError && (
-              <p className="text-xs text-red-400" role="alert">
-                {submitError}
-              </p>
-            )}
-
-            <div className="flex items-center justify-end gap-2 pt-2">
-              <button
-                type="button"
-                onClick={onClose}
-                className="rounded-xl px-4 py-2 text-xs font-medium text-gray-500 dark:text-zinc-400 hover:bg-gray-50 dark:hover:bg-white/10 transition"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={isSubmitting}
-                className="rounded-xl bg-red-600/80 hover:bg-red-600 px-4 py-2 text-xs font-medium text-gray-900 dark:text-white transition shadow-lg shadow-red-500/20 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {isSubmitting ? "Submitting..." : "Submit Report"}
-              </button>
-            </div>
-          </form>
-        )}
-      </div>
-    </div>
+    <ReportDialog
+      isOpen={Boolean(messageToReport)}
+      title="Report message"
+      subjectPreview={quotedText}
+      reasons={REPORT_REASONS}
+      subjectWord="message"
+      reviewer="Ensemble moderation team"
+      minDetails={0}
+      onClose={onClose}
+      onSubmit={async (reason, details) => {
+        if (!messageToReport) return;
+        await onSubmitReport({ messageId: messageToReport._id, reason, details });
+      }}
+    />
   );
 };

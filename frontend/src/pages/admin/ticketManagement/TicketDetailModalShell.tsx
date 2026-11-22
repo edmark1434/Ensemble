@@ -546,7 +546,9 @@ export default function TicketDetailModalShell({
   const [showTranscript, setShowTranscript] = useState(false);
   const [savingTranscript, setSavingTranscript] = useState(false);
   const [confirmSchedule, setConfirmSchedule] = useState(false);
-  const [scheduleChoice, setScheduleChoice] = useState('24');
+  const [closeMode, setCloseMode] = useState<'now' | 'in' | 'at'>('in');
+  const [closeInAmount, setCloseInAmount] = useState('24');
+  const [closeInUnit, setCloseInUnit] = useState<'minutes' | 'hours' | 'days'>('hours');
   const [customCloseAt, setCustomCloseAt] = useState('');
   const [schedulingClose, setSchedulingClose] = useState(false);
   const [appealChoice, setAppealChoice] = useState<AppealChoice | null>(null);
@@ -1207,27 +1209,63 @@ export default function TicketDetailModalShell({
     return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
   };
 
+  const CLOSE_UNIT_MS = { minutes: 60 * 1000, hours: 60 * 60 * 1000, days: 24 * 60 * 60 * 1000 } as const;
+
   const chosenCloseIso = () => {
-    if (scheduleChoice === 'custom') {
+    if (closeMode === 'at') {
       const parsed = new Date(customCloseAt);
       return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
     }
-    const hours = Number(scheduleChoice);
-    if (!Number.isFinite(hours) || hours <= 0) return null;
-    return new Date(Date.now() + hours * 60 * 60 * 1000).toISOString();
+    if (closeMode === 'in') {
+      const amount = Number(closeInAmount);
+      if (!Number.isFinite(amount) || amount <= 0) return null;
+      return new Date(Date.now() + amount * CLOSE_UNIT_MS[closeInUnit]).toISOString();
+    }
+    return null;
   };
 
-  const openSchedule = () => {
+  // Same window the server enforces (5 minutes to 90 days ahead).
+  const closeTimeProblem = (iso: string | null) => {
+    if (!iso) return closeMode === 'in' ? 'Enter how long until it closes' : 'Choose a date and time';
+    const delta = new Date(iso).getTime() - Date.now();
+    if (delta < 5 * 60 * 1000) return 'Choose a time at least 5 minutes from now';
+    if (delta > 90 * 24 * 60 * 60 * 1000) return 'Choose a time within 90 days';
+    return null;
+  };
+
+  const openSchedule = (mode: 'now' | 'in' | 'at' = 'in') => {
     const existing = detail?.scheduledCloseAt ? new Date(detail.scheduledCloseAt) : new Date(Date.now() + 24 * 60 * 60 * 1000);
     setCustomCloseAt(toDatetimeLocal(existing));
-    setScheduleChoice(detail?.scheduledCloseAt ? 'custom' : '24');
+    setCloseInAmount('24');
+    setCloseInUnit('hours');
+    setCloseMode(mode === 'in' && detail?.scheduledCloseAt ? 'at' : mode);
     setConfirmSchedule(true);
   };
 
+  const closeTicketNow = async () => {
+    setSchedulingClose(true);
+    try {
+      await api.patch(`${endpointBase}/${ticketId}`, { status: 'Closed' });
+      setConfirmSchedule(false);
+      showSuccessToast('Ticket closed');
+      await load();
+      onUpdated();
+    } catch (err: unknown) {
+      showErrorToast(apiErrorMessage(err, 'Failed to close ticket'));
+    } finally {
+      setSchedulingClose(false);
+    }
+  };
+
   const scheduleClose = async (cancel = false) => {
+    if (!cancel && closeMode === 'now') {
+      await closeTicketNow();
+      return;
+    }
     const closesAt = cancel ? null : chosenCloseIso();
-    if (!cancel && !closesAt) {
-      showErrorToast('Choose when this ticket should close');
+    const problem = cancel ? null : closeTimeProblem(closesAt);
+    if (problem) {
+      showErrorToast(problem);
       return;
     }
     setSchedulingClose(true);
@@ -2000,8 +2038,13 @@ export default function TicketDetailModalShell({
                         <p className="text-[11px] text-zinc-500">No close is scheduled.</p>
                       )}
                       <div className="flex flex-wrap gap-1.5">
-                        <button type="button" disabled={schedulingClose} onClick={openSchedule} className={BTN.warn}>
-                          {detail.scheduledCloseAt ? 'Change time' : 'Schedule close'}
+                        {!(isAppeal && !detail.appealDecision) ? (
+                          <button type="button" disabled={schedulingClose} onClick={() => openSchedule('now')} className={BTN.warn}>
+                            Close now
+                          </button>
+                        ) : null}
+                        <button type="button" disabled={schedulingClose} onClick={() => openSchedule('in')} className={BTN.neutral}>
+                          {detail.scheduledCloseAt ? 'Change time' : 'Close later'}
                         </button>
                         {detail.scheduledCloseAt ? (
                           <button
@@ -2593,48 +2636,122 @@ export default function TicketDetailModalShell({
 
         {confirmSchedule && (
           <ConfirmDialog
-            title="When should this ticket close?"
-            description="Everyone on the ticket is notified now and again when it closes. A transcript is saved on close."
-            confirmLabel="Set close time"
-            busyLabel="Scheduling…"
+            title="Close this ticket"
+            description={
+              closeMode === 'now'
+                ? 'The ticket closes right away. Everyone on it is notified and a transcript is saved.'
+                : 'Everyone on the ticket is notified now and again when it closes. A transcript is saved on close.'
+            }
+            confirmLabel={closeMode === 'now' ? 'Close now' : 'Set close time'}
+            busyLabel={closeMode === 'now' ? 'Closing…' : 'Scheduling…'}
             busy={schedulingClose}
             confirmClassName={BTN.warn}
             onCancel={() => setConfirmSchedule(false)}
             onConfirm={() => void scheduleClose(false)}
           >
-            <div className="grid grid-cols-3 gap-1.5">
-              {[
-                ['1', '1 hour'],
-                ['6', '6 hours'],
-                ['24', '1 day'],
-                ['72', '3 days'],
-                ['168', '7 days'],
-                ['custom', 'Custom'],
-              ].map(([value, label]) => (
-                <button
-                  key={value}
-                  type="button"
-                  onClick={() => setScheduleChoice(value)}
-                  aria-pressed={scheduleChoice === value}
-                  className={`rounded-lg border px-2.5 py-1.5 text-xs transition ${
-                    scheduleChoice === value
-                      ? 'border-amber-500/40 bg-amber-500/15 text-amber-100'
-                      : 'border-white/10 text-zinc-300 hover:bg-white/5'
-                  }`}
-                >
-                  {label}
-                </button>
-              ))}
+            <div className="grid grid-cols-3 gap-1.5" role="group" aria-label="When to close">
+              {(
+                [
+                  ['now', 'Now'],
+                  ['in', 'In…'],
+                  ['at', 'On date'],
+                ] as const
+              )
+                .filter(([value]) => value !== 'now' || !(isAppeal && !detail?.appealDecision))
+                .map(([value, label]) => (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => setCloseMode(value)}
+                    aria-pressed={closeMode === value}
+                    className={`rounded-lg border px-2.5 py-1.5 text-xs font-medium transition ${
+                      closeMode === value
+                        ? 'border-amber-500/40 bg-amber-500/15 text-amber-100'
+                        : 'border-white/10 text-zinc-300 hover:bg-white/5'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
             </div>
-            {scheduleChoice === 'custom' ? (
+            {closeMode === 'in' ? (
+              <div className="space-y-2">
+                <div className="flex gap-1.5">
+                  <input
+                    type="number"
+                    min={1}
+                    step={1}
+                    inputMode="numeric"
+                    value={closeInAmount}
+                    onChange={(event) => setCloseInAmount(event.target.value)}
+                    className={`${FIELD} w-24`}
+                    aria-label="Amount"
+                  />
+                  <select
+                    value={closeInUnit}
+                    onChange={(event) => setCloseInUnit(event.target.value as 'minutes' | 'hours' | 'days')}
+                    className={FIELD}
+                    aria-label="Unit"
+                  >
+                    <option value="minutes">minutes</option>
+                    <option value="hours">hours</option>
+                    <option value="days">days</option>
+                  </select>
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {(
+                    [
+                      ['30', 'minutes', '30 min'],
+                      ['1', 'hours', '1 hour'],
+                      ['6', 'hours', '6 hours'],
+                      ['1', 'days', '1 day'],
+                      ['3', 'days', '3 days'],
+                      ['7', 'days', '7 days'],
+                    ] as const
+                  ).map(([amount, unit, label]) => {
+                    const active = closeInAmount === amount && closeInUnit === unit;
+                    return (
+                      <button
+                        key={label}
+                        type="button"
+                        onClick={() => {
+                          setCloseInAmount(amount);
+                          setCloseInUnit(unit);
+                        }}
+                        aria-pressed={active}
+                        className={`rounded-md border px-2 py-1 text-[11px] transition ${
+                          active
+                            ? 'border-amber-500/40 bg-amber-500/15 text-amber-100'
+                            : 'border-white/10 text-zinc-400 hover:bg-white/5'
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : null}
+            {closeMode === 'at' ? (
               <input
                 type="datetime-local"
                 value={customCloseAt}
+                min={toDatetimeLocal(new Date(Date.now() + 5 * 60 * 1000))}
                 onChange={(event) => setCustomCloseAt(event.target.value)}
                 className={FIELD}
               />
             ) : null}
-            <p className="text-xs text-zinc-400">Closes {formatDateTime(chosenCloseIso())}</p>
+            {closeMode !== 'now'
+              ? (() => {
+                  const iso = chosenCloseIso();
+                  const problem = closeTimeProblem(iso);
+                  return problem ? (
+                    <p className="text-xs text-rose-300">{problem}</p>
+                  ) : (
+                    <p className="text-xs text-zinc-400">Closes {formatDateTime(iso)}</p>
+                  );
+                })()
+              : null}
           </ConfirmDialog>
         )}
 
