@@ -60,6 +60,13 @@ import useGlobalState from "@/lib/global_state";
 import { useForumTimeout, isRestrictionErrorHandled } from "@/pages/user/4_forums/useForumTimeout";
 import { FORUM_LOCKED_CLASS, ForumTimeoutComposerLock, ForumTimeoutPill } from "@/pages/user/4_forums/ForumTimeoutLock";
 import {
+  DiscussionStateBadges,
+  LockedRepliesNotice,
+  PINNED_CARD_CLASS,
+  isDiscussionLockedError,
+  showDiscussionLockedToast,
+} from "@/pages/user/4_forums/ForumThreadState";
+import {
   buildForumCommentTree,
   uploadForumCommentImage,
 } from "@/pages/user/4_forums/forumCommentUtils";
@@ -133,6 +140,10 @@ type Post = {
   }[];
   comments: Comment[];
   author_identity?: PublicForumIdentity | null;
+  /** Replies locked by moderators. */
+  is_locked?: boolean;
+  /** Pinned by moderators. */
+  is_sticky?: boolean;
 };
 
 type FeedResponse = {
@@ -653,7 +664,10 @@ const CommentItem = ({
   currentUserAvatar,
   isLastInThread = false,
   onReportComment,
+  repliesLocked = false,
 }: {
+  /** The discussion is locked: no Reply button or reply box. */
+  repliesLocked?: boolean;
   comment: Comment;
   postId: string;
   membersDetails: Record<string, { name: string; avatar: string; accountId?: string | null }>;
@@ -875,15 +889,17 @@ const CommentItem = ({
                 <Heart className={`h-3 w-3 ${isLiked ? "fill-red-400" : ""}`} />
                 <span>{comment.likes?.length || 0}</span>
               </button>
-              <button
-                onClick={() => onReply(postId, comment.comment_id, commentAuthor.name, comment.user_id)}
-                disabled={forumTimedOut}
-                title={forumTimedOut ? forumTimeoutMessage : undefined}
-                className={`inline-flex items-center gap-1 text-xs text-gray-500 dark:text-zinc-500 transition hover:text-gray-900 dark:text-white ${forumTimedOut ? FORUM_LOCKED_CLASS : ""}`}
-              >
-                <Reply className="h-3 w-3" />
-                <span>Reply</span>
-              </button>
+              {!repliesLocked && (
+                <button
+                  onClick={() => onReply(postId, comment.comment_id, commentAuthor.name, comment.user_id)}
+                  disabled={forumTimedOut}
+                  title={forumTimedOut ? forumTimeoutMessage : undefined}
+                  className={`inline-flex items-center gap-1 text-xs text-gray-500 dark:text-zinc-500 transition hover:text-gray-900 dark:text-white ${forumTimedOut ? FORUM_LOCKED_CLASS : ""}`}
+                >
+                  <Reply className="h-3 w-3" />
+                  <span>Reply</span>
+                </button>
+              )}
               {hasChildren && (
                 <button
                   onClick={() => setShowChildren((visible) => !visible)}
@@ -908,7 +924,7 @@ const CommentItem = ({
             </div>
           )}
 
-          {replyingTo?.commentId === comment.comment_id && (
+          {replyingTo?.commentId === comment.comment_id && !repliesLocked && (
             <div className="mt-3">
               <div className="flex items-center gap-2 mb-2">
                 <span className="text-xs text-blue-400">Replying to @{replyingTo.authorName}</span>
@@ -958,6 +974,7 @@ const CommentItem = ({
                   currentUserAvatar={currentUserAvatar}
                   isLastInThread={index === comment.children!.length - 1}
                   onReportComment={onReportComment}
+                  repliesLocked={repliesLocked}
                 />
               ))}
             </div>
@@ -1225,8 +1242,17 @@ const SelectedGroup = () => {
       });
     }
 
+    // Pinned discussions stay on top (the server orders them first on every sort but Popular);
+    // this keeps a pin or unpin made while the page is open in the right place.
+    if (sortBy !== "popular") {
+      filtered = [
+        ...filtered.filter((post) => post.is_sticky),
+        ...filtered.filter((post) => !post.is_sticky),
+      ];
+    }
+
     return filtered;
-  }, [posts, searchQuery, selectedTagFilter]);
+  }, [posts, searchQuery, selectedTagFilter, sortBy]);
 
   const displayPosts = filteredAndSortedPosts.map((post, index) => {
     const authorDetails = getMemberDetails(post.user_id);
@@ -1383,6 +1409,14 @@ const SelectedGroup = () => {
       setReplyImages(prev => ({ ...prev, [postId]: [] }));
       showSuccessToast("Reply posted successfully!");
     } catch (error) {
+      if (isDiscussionLockedError(error)) {
+        // Locked after the page loaded: show the lock on the card instead of a failure.
+        setPosts((currentPosts) => currentPosts.map((post) =>
+          String(post._id) === postId ? { ...post, is_locked: true } : post
+        ));
+        showDiscussionLockedToast();
+        return;
+      }
       console.error("Error posting reply:", error);
       // A timeout, suspension or low-merit refusal already got its own toast.
       if (!isRestrictionErrorHandled(error)) showErrorToast("Failed to post reply. Please try again.");
@@ -1436,6 +1470,14 @@ const SelectedGroup = () => {
       setReplyingTo(null);
       showSuccessToast("Reply posted successfully!");
     } catch (error) {
+      if (isDiscussionLockedError(error)) {
+        setPosts((currentPosts) => currentPosts.map((post) =>
+          String(post._id) === postId ? { ...post, is_locked: true } : post
+        ));
+        setReplyingTo(null);
+        showDiscussionLockedToast();
+        return;
+      }
       console.error("Error posting reply:", error);
       // A timeout, suspension or low-merit refusal already got its own toast.
       if (!isRestrictionErrorHandled(error)) showErrorToast("Failed to post reply. Please try again.");
@@ -2400,7 +2442,7 @@ const SelectedGroup = () => {
                     const isAuthor = post.user_id === currentUserId;
 
                     return (
-                      <div key={post.id} data-moderation-subject={`forum_discussion:${post.id}`} className="rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface p-4 shadow-sm dark:shadow-none transition hover:border-gray-300 dark:hover:border-white/20">
+                      <div key={post.id} data-moderation-subject={`forum_discussion:${post.id}`} className={`rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface p-4 shadow-sm dark:shadow-none transition hover:border-gray-300 dark:hover:border-white/20 ${post.is_sticky ? PINNED_CARD_CLASS : ""}`}>
                         <div className="flex gap-3">
                           {post.authorAccountId ? (
                             <button
@@ -2509,7 +2551,8 @@ const SelectedGroup = () => {
                           </div>
                         </div>
 
-                        <h3 className="mt-3 text-base font-semibold text-gray-900 dark:text-white">{post.title}</h3>
+                        <DiscussionStateBadges discussion={post} className="mt-3" />
+                        <h3 className={`${post.is_sticky || post.is_locked ? "mt-1.5" : "mt-3"} text-base font-semibold text-gray-900 dark:text-white`}>{post.title}</h3>
 
                         <div className="mt-2 text-sm text-gray-600 dark:text-zinc-300 prose prose-invert prose-sm max-w-none break-words">
                           <ReactMarkdown remarkPlugins={[remarkGfm]} components={MarkdownComponents}>
@@ -2594,6 +2637,7 @@ const SelectedGroup = () => {
                                         onReportComment={(postId, target, authorName) =>
                                           setReportingComment({ postId, comment: target, authorName })
                                         }
+                                        repliesLocked={Boolean(post.is_locked)}
                                       />
                                     ))
                                   ) : (
@@ -2602,17 +2646,21 @@ const SelectedGroup = () => {
                                 </div>
 
                                 <div className="mt-4 pt-4 border-t border-gray-200 dark:border-white/10">
-                                  <ReplyInput
-                                    replyText={replyText[post.id] || ""}
-                                    updateReplyText={(text) => updateReplyText(post.id, text)}
-                                    handleReply={() => handleReply(post.id)}
-                                    uploadImages={(files) => handleReplyImageUpload(post.id, files)}
-                                    images={replyImages[post.id] || []}
-                                    removeImage={(imageId) => removeReplyImage(post.id, imageId)}
-                                    isUploading={replyUploading[post.id] || false}
-                                    currentUserAvatar={currentUserAvatar}
-                                    placeholder="Write a comment..."
-                                  />
+                                  {post.is_locked ? (
+                                    <LockedRepliesNotice />
+                                  ) : (
+                                    <ReplyInput
+                                      replyText={replyText[post.id] || ""}
+                                      updateReplyText={(text) => updateReplyText(post.id, text)}
+                                      handleReply={() => handleReply(post.id)}
+                                      uploadImages={(files) => handleReplyImageUpload(post.id, files)}
+                                      images={replyImages[post.id] || []}
+                                      removeImage={(imageId) => removeReplyImage(post.id, imageId)}
+                                      isUploading={replyUploading[post.id] || false}
+                                      currentUserAvatar={currentUserAvatar}
+                                      placeholder="Write a comment..."
+                                    />
+                                  )}
                                 </div>
                               </div>
                             )}

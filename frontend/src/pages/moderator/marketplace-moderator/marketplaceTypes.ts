@@ -103,6 +103,7 @@ export type ListingThreadMessage = {
     | 'scheduled'
     | 'published'
     | 'rejected'
+    | 'rejected_final'
     | 'delisted'
     | 'rereview';
   authorType: 'seller' | 'staff' | 'system';
@@ -168,6 +169,9 @@ export type MarketplaceListing = {
   asset?: ListingLinkedAsset | null;
   status: ListingStatus;
   rejectionReason: string | null;
+  /** Rejected for good: the seller cannot resubmit until staff approve or plain-reject it. */
+  permanentlyRejected?: boolean;
+  permanentlyRejectedAt?: string | null;
   /** Reason recorded for a delist or a send-back-for-re-approval. */
   moderationNote: string | null;
   /** Go-live time while `scheduled`; when it went live once `approved`. */

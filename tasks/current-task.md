@@ -121,3 +121,17 @@ Forum moderators see the forum close to how members do (avatars, group pictures,
 - **Detail dialogs.** The discussion dialog shows the post as members see it (formatted body with a plain-text toggle, images with a viewer, likes / replies / saves) and a threaded comment list with avatars; the group dialog shows the banner, owner and roster with avatars and role chips. All existing actions, guards and reasons are unchanged.
 - **Deep links.** `/moderator/forum/forum-control?group=<id>` and `?discussion=<id>` open that review; closing clears the param. Dashboard recent lists and busiest groups link there.
 - **Trends.** `GET /api/moderator/forum/trends?range=7d|30d|90d|12m` (default 30d, anything else 400) returns per-bucket discussions, replies, members posting, new groups, content taken down, forum reports, forum tickets and staff forum actions, totals against the period before, status / target / action-kind mixes for the range, and the busiest groups and members. Either store failing leaves its half empty with a note. The dashboard has a 7D / 30D / 90D / 12M picker kept in `?range=`, keeps the last range on screen while a new one loads, and re-reads live.
+
+# Parallel task: marketplace permanent reject, forum lock and pin indicators
+
+## Objective
+
+Marketplace staff can reject a listing for good so the seller can never resubmit it, and members see clearly when a forum discussion is locked or pinned instead of a generic "Failed to post reply" error. See docs/api.md "Marketplace submission review" and "Forum content moderation".
+
+## Acceptance Criteria
+
+- **Permanent reject.** Migration `1830700000000_marketplace-listing-permanent-reject` adds `marketplace_listings.permanently_rejected_at` and the `rejected_final` thread kind. `PATCH …/listings/:id` `{ status: "rejected", permanent: true }` (message required) sets it, also on an already rejected listing; a plain reject lifts it, approval clears it.
+- **Seller blocked.** Resubmitting from the asset page or by saving edits returns 409 `LISTING_PERMANENTLY_REJECTED`; the seller's review panel shows "Permanently rejected" and no composer; the notification says it cannot be resubmitted.
+- **Marketplace Control.** "Reject permanently" in the row menu and the listing modal (pending, scheduled, approved, delisted, rejected), with a warning in the decision dialog; permanently rejected rows show a "Permanently rejected" pill and chip; "Allow resubmission" lifts it.
+- **Locked discussions.** Only forum staff can comment on a locked discussion (423 `DISCUSSION_LOCKED`, checked again at write time). Member pages (feed, group, discussion) show a Locked chip, hide Reply buttons and replace the comment box with a "Replies are locked" notice; a 423 shows that notice and a toast instead of "Failed to post reply".
+- **Pinned discussions.** Pinned posts show a Pinned chip and an emerald edge, and stay on top of a group's feed (except Popular), including after a live pin or unpin.

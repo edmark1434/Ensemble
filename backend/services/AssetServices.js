@@ -784,6 +784,9 @@ async function updateAssetServices(assetId, accountId, payload) {
       throw new AssetError('Asset files, thumbnails, and the template snapshot cannot be changed after a purchase.', 409, error.code);
     }
     if (error.code === 'ASSET_FILE_LOCKED') throw assetFileLockedError();
+    if (error.code === 'LISTING_PERMANENTLY_REJECTED') {
+      throw new AssetError(error.message, 409, error.code);
+    }
     if (error.code === 'ASSET_TYPE_IMMUTABLE') {
       throw new AssetError('An existing asset type cannot be changed.', 409, error.code);
     }

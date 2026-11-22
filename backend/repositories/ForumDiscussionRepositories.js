@@ -304,11 +304,14 @@ async function updateForumDiscussionComments({ discussionId, commentId, updateFi
     }
 }
 
-async function addForumDiscussionCommentRepository(discussionId, commentPayload = {}) {
+/** `allowLocked: false` (members) only writes while the discussion is still unlocked. */
+async function addForumDiscussionCommentRepository(discussionId, commentPayload = {}, { allowLocked = false } = {}) {
     try {
         const forumDiscussionsCollection = db.collection('forum_discussions');
+        const filter = { _id: new ObjectId(discussionId) };
+        if (!allowLocked) filter.is_locked = { $ne: true };
         const result = await forumDiscussionsCollection.updateOne(
-            activeDiscussionFilter({ _id: new ObjectId(discussionId) }),
+            activeDiscussionFilter(filter),
             {
                 $push: { comments: commentPayload },
                 $set: { updated_at: new Date() },
