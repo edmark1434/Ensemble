@@ -2051,6 +2051,24 @@ async function updateAccountStatus(accountId, actionOrStatus, staffId = null, op
     }
   }
 
+  // The other side of each live contract hears that this side cannot act (or can again), so
+  // nobody waits on a contract without knowing why. A suspended team keeps working its live
+  // contracts (TeamStandingServices), so its clients are not told.
+  {
+    const before = String(account.status || 'Active').toLowerCase();
+    const after = String(savedStatus || '').toLowerCase();
+    const RESTRICTED = new Set(['suspended', 'locked', 'banned']);
+    const isTeam = String(account.type || '').toLowerCase() === 'team';
+    const { notifyLiveWorkCounterparties } = require('../services/RestrictedWorkServices');
+    if (RESTRICTED.has(after) && after !== before && !(isTeam && after === 'suspended')) {
+      await notifyLiveWorkCounterparties(accountId, savedStatus, {
+        endsAt: suspensionEndsAt || lockEndsAt || banEndsAt || null,
+      });
+    } else if (after === 'active' && RESTRICTED.has(before) && !(isTeam && before === 'suspended')) {
+      await notifyLiveWorkCounterparties(accountId, 'Active');
+    }
+  }
+
   // A banned account's open jobs, gigs and listings close, so no one keeps applying to,
   // ordering from or buying from it. Every ban path (Users desk, dispute ban, report ban)
   // comes through here. The ban is already saved; clean-up problems are reported, not fatal.
@@ -2058,14 +2076,31 @@ async function updateAccountStatus(accountId, actionOrStatus, staffId = null, op
   if (status === 'Banned') {
     try {
       const { closeBannedAccountListings } = require('../services/BanCleanupServices');
-      banCleanup = await closeBannedAccountListings(accountId, { staffId });
+      banCleanup = await closeBannedAccountListings(accountId, { staffId, permanent: !banEndsAt });
     } catch (cleanupErr) {
       console.error('Ban clean-up failed:', cleanupErr.message);
       banCleanup = { failures: [{ step: 'all', id: null, message: cleanupErr.message }] };
     }
   }
 
-  return { accountId, status: savedStatus, previousStatus: account.status, suspensionEndsAt, banCleanup };
+  // Lifting a ban can put back what it closed, when staff ask (`restoreBanItems`). An accepted
+  // appeal restores through PenaltyAppealServices instead. Problems never undo the lift.
+  let banRestore = null;
+  if (
+    options.restoreBanItems === true &&
+    String(account.status || '').toLowerCase() === 'banned' &&
+    String(savedStatus || '').toLowerCase() !== 'banned'
+  ) {
+    try {
+      const { restoreBanClosedItems } = require('../services/BanRestoreServices');
+      banRestore = await restoreBanClosedItems(accountId, { source: 'staff', staffId });
+    } catch (restoreErr) {
+      console.error('Ban restore after lift failed:', restoreErr.message);
+      banRestore = { restored: [], skipped: [], error: restoreErr.message };
+    }
+  }
+
+  return { accountId, status: savedStatus, previousStatus: account.status, suspensionEndsAt, banCleanup, banRestore };
 }
 
 async function updateAccountVerification(accountId, action, staffId, _options = {}) {

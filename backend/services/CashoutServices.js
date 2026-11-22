@@ -421,12 +421,27 @@ async function transferCreditsServices({ senderAccountId, recipientAccountId, am
 
     const trimmedNotes = notes ? String(notes).trim().slice(0, 255) : null;
 
-    const result = await transferAccountCredits({
-        senderAccountId,
-        recipientAccountId,
-        amountCredits: amount,
-        notes: trimmedNotes,
-    });
+    let result;
+    try {
+        result = await transferAccountCredits({
+            senderAccountId,
+            recipientAccountId,
+            amountCredits: amount,
+            notes: trimmedNotes,
+        });
+    } catch (error) {
+        // Repository codes reach the member as their own status, not a generic 500.
+        const statusByCode = {
+            SENDER_WALLET_NOT_FOUND: 404,
+            SENDER_WALLET_INACTIVE: 403,
+            RECIPIENT_WALLET_NOT_FOUND: 404,
+            RECIPIENT_WALLET_INACTIVE: 409,
+            RECIPIENT_UNAVAILABLE: 409,
+            INSUFFICIENT_BALANCE: 409,
+        };
+        if (statusByCode[error.code]) throw new CashoutError(error.message, statusByCode[error.code], error.code);
+        throw error;
+    }
 
     const io = getIo();
     try {

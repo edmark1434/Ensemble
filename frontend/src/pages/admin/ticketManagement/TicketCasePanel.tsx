@@ -1,5 +1,7 @@
 import type { ReactNode } from 'react';
-import { AlertTriangle, FileWarning, Gavel, Info, Loader2 } from 'lucide-react';
+import { Link, useLocation } from 'react-router-dom';
+import { AlertTriangle, ExternalLink, FileWarning, Gavel, Info, Loader2, Star } from 'lucide-react';
+import { staffPlatformViewHref } from '@/lib/staffRoutes';
 import { BTN, EmptyNote, Fact, PanelSection, Pill } from '@/pages/moderator/shared/staffCaseUi';
 import GigOrderSummary from '@/pages/moderator/shared/GigOrderSummary';
 import { StaffPunishmentChips } from '@/components/account/MeritStatus';
@@ -14,15 +16,21 @@ import type {
   CaseAccountSummary,
   CaseAppeal,
   CaseAppealTarget,
+  CaseAssetReviews,
   CaseBilling,
   CaseContract,
   CaseForum,
+  CaseForumPost,
   CaseJobs,
   CaseListing,
   CaseMarketplace,
+  CaseNamedPerson,
   CasePenaltyEvidence,
+  CasePersonRef,
   CasePosting,
+  CaseProposal,
   CaseReportRef,
+  CaseTeamMembership,
   CaseTicketRef,
   TicketCaseContext,
 } from './ticketTypes';
@@ -110,6 +118,83 @@ function credits(n: number | null | undefined) {
   return `${Number(n || 0).toLocaleString()} credits`;
 }
 
+/**
+ * Opens a member page in this console's platform view, in a new tab so the ticket stays open.
+ * The main site has no staff session, so it is never linked directly.
+ */
+export function CaseOpenLink({ path, label = 'Open', title }: { path: string | null | undefined; label?: string; title?: string }) {
+  const { pathname } = useLocation();
+  if (!path) return null;
+  return (
+    <Link
+      to={staffPlatformViewHref(pathname, path)}
+      target="_blank"
+      rel="noreferrer"
+      title={title || 'See this page the way members do (opens platform view)'}
+      className="inline-flex shrink-0 items-center gap-1 rounded-md border border-white/10 px-2 py-0.5 text-[11px] text-zinc-300 transition hover:border-white/20 hover:text-white"
+    >
+      <ExternalLink className="h-3 w-3" />
+      {label}
+    </Link>
+  );
+}
+
+/** Member pages platform view can show; contracts and projects are members-only. */
+export function staffViewablePath(path: string | null | undefined) {
+  return path && /^\/(?:assets|jobs|gigs|teams|forums|profile|disputes)\//.test(path) ? path : null;
+}
+
+/** A person by name and @handle, linked to their profile in platform view. */
+function PersonLink({ person }: { person: CasePersonRef | null | undefined }) {
+  const { pathname } = useLocation();
+  if (!person) return <>—</>;
+  const text = (
+    <>
+      {person.name || 'Unknown'}
+      {person.handle ? <span className="text-zinc-500"> @{person.handle}</span> : null}
+    </>
+  );
+  if (!person.accountId) return text;
+  return (
+    <Link
+      to={staffPlatformViewHref(pathname, `/profile/${person.accountId}`)}
+      target="_blank"
+      rel="noreferrer"
+      title="Open their profile in platform view (new tab)"
+      className="hover:underline"
+    >
+      {text}
+    </Link>
+  );
+}
+
+function profilePath(account: { accountId: string; type?: string | null } | null | undefined) {
+  // Team accounts have a team page, not a profile; their id here is the account, not the team.
+  if (!account?.accountId || String(account.type || '').toLowerCase() === 'team') return null;
+  return `/profile/${account.accountId}`;
+}
+
+function Stars({ value }: { value: number }) {
+  return (
+    <span className="inline-flex items-center gap-0.5 text-amber-300" aria-label={`${value} of 5 stars`}>
+      {Array.from({ length: 5 }, (_, i) => (
+        <Star key={i} className={`h-3 w-3 ${i < value ? 'fill-current' : 'opacity-30'}`} />
+      ))}
+    </span>
+  );
+}
+
+function membershipLine(m: CaseTeamMembership | null | undefined) {
+  if (!m) return 'Never on this team';
+  return [
+    `${m.role} · ${m.status}`,
+    m.joinedAt ? `joined ${caseDay(m.joinedAt)}` : null,
+    m.status === 'Removed' && m.changedAt ? `removed ${caseDay(m.changedAt)}` : null,
+  ]
+    .filter(Boolean)
+    .join(' · ');
+}
+
 function TicketRefs({ title, items, empty }: { title: string; items: CaseTicketRef[]; empty: string }) {
   return (
     <PanelSection title={title} count={items.length}>
@@ -151,11 +236,17 @@ function ReportRefs({ title, items, empty }: { title: string; items: CaseReportR
 }
 
 function MemberSection({ title, account, empty }: { title: string; account: CaseAccountSummary | null | undefined; empty: string }) {
+  const profile = profilePath(account);
   return (
     <PanelSection title={title}>
       {account ? (
         <Card>
           <StaffStandingSummary account={account} />
+          {profile ? (
+            <div className="mt-2.5 flex justify-end">
+              <CaseOpenLink path={profile} label="Profile" />
+            </div>
+          ) : null}
         </Card>
       ) : (
         <EmptyNote>{empty}</EmptyNote>
@@ -331,6 +422,7 @@ function AppealCase({ appeal, requester }: { appeal: CaseAppeal; requester: Case
             }
           />
           <Fact label="Merit now" value={requester?.merit ?? '—'} />
+          {appeal.actionTaken ? <Fact label="What happened (member)" value={appeal.actionTaken} /> : null}
         </dl>
 
         {appeal.reasonGiven ? <Quote label="Why the member says it should be reversed">{appeal.reasonGiven}</Quote> : null}
@@ -370,6 +462,9 @@ function AppealCase({ appeal, requester }: { appeal: CaseAppeal; requester: Case
         <PanelSection title="Job or gig the member picked">
           <PostingCard posting={appeal.posting} />
         </PanelSection>
+      ) : null}
+      {appeal.relatedTickets ? (
+        <TicketRefs title="Other tickets about this item" items={appeal.relatedTickets} empty="No other tickets name this item." />
       ) : null}
 
       {appeal.decidable && !appeal.decision && target ? (
@@ -600,8 +695,53 @@ function AppealCase({ appeal, requester }: { appeal: CaseAppeal; requester: Case
 /* Marketplace                                                       */
 /* ---------------------------------------------------------------- */
 
+const THREAD_KIND_LABEL: Record<string, string> = {
+  submitted: 'Submitted',
+  resubmitted: 'Resubmitted',
+  reply: 'Reply',
+  approved: 'Approved',
+  scheduled: 'Approved for later',
+  published: 'Went live',
+  rejected: 'Rejected',
+  rejected_final: 'Rejected permanently',
+  delisted: 'Delisted',
+  rereview: 'Sent back for review',
+};
+
+function ListingThread({ thread }: { thread: NonNullable<CaseListing['thread']> }) {
+  if (!thread.total) return null;
+  return (
+    <div className="mt-3">
+      <p className="text-[10px] uppercase tracking-wide text-zinc-500">
+        Review conversation ({thread.total}){thread.total > thread.items.length ? ` · latest ${thread.items.length}` : ''}
+      </p>
+      <ul className="mt-1 space-y-1.5">
+        {thread.items.map((entry) => (
+          <li
+            key={entry.id}
+            className={`rounded-lg border px-2.5 py-1.5 text-xs ${
+              entry.authorType === 'seller' ? 'border-sky-500/20 bg-sky-500/[0.04]' : 'border-white/[0.06] bg-white/[0.02]'
+            }`}
+          >
+            <p className="text-[11px] text-zinc-400">
+              <span className="font-medium text-zinc-200">{THREAD_KIND_LABEL[entry.kind] || caseLabel(entry.kind)}</span>
+              {' · '}
+              {entry.authorType === 'seller' ? 'Seller' : entry.authorType === 'system' ? 'System' : entry.authorName || 'Staff'}
+              {entry.authorRole ? ` (${entry.authorRole})` : ''} · {caseWhen(entry.createdAt)}
+              {entry.publishAt && (entry.kind === 'scheduled' || entry.kind === 'published') ? ` · go-live ${caseWhen(entry.publishAt)}` : ''}
+            </p>
+            {entry.body ? <p className="mt-0.5 whitespace-pre-wrap break-words text-zinc-300">{entry.body}</p> : null}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 function ListingCard({ listing }: { listing: CaseListing }) {
   const brokenFiles = listing.asset?.files.filter((f) => f.processingError || /fail|error/i.test(f.processingStatus || '')) || [];
+  const sellerStatus = listing.seller.status && !/^active$/i.test(listing.seller.status) ? listing.seller.status : null;
+  const assetPath = listing.marketAssetId ? `/assets/${listing.marketAssetId}` : null;
   return (
     <Card tone={/reject|delist/i.test(listing.status) ? 'warn' : 'default'}>
       <div className="flex flex-wrap items-start justify-between gap-2">
@@ -613,13 +753,31 @@ function ListingCard({ listing }: { listing: CaseListing }) {
               .join(' · ')}
           </p>
         </div>
-        <StatusPill status={listing.status} />
+        <span className="flex flex-wrap items-center gap-1.5">
+          {listing.permanentlyRejected ? (
+            <Pill className="border-red-500/30 bg-red-500/10 text-red-200">Permanently rejected</Pill>
+          ) : null}
+          <StatusPill status={listing.status} />
+          <CaseOpenLink path={assetPath} label="Asset page" title="Open the asset page in platform view (new tab). Assets not live yet may not show to members." />
+        </span>
       </div>
 
+      {listing.status === 'scheduled' && listing.publishAt ? (
+        <p className="mt-2 text-xs text-sky-200">Approved · goes live {caseWhen(listing.publishAt)}</p>
+      ) : null}
+      {listing.status === 'approved' && listing.publishAt ? (
+        <p className="mt-2 text-xs text-zinc-400">Went live {caseWhen(listing.publishAt)}</p>
+      ) : null}
       {listing.rejectionReason || listing.moderationNote ? (
         <p className="mt-2 text-xs text-amber-100">
           {listing.rejectionReason ? `Rejected: ${listing.rejectionReason}` : `Staff note: ${listing.moderationNote}`}
           {listing.reviewedBy ? <span className="text-zinc-500"> · {listing.reviewedBy}, {caseDay(listing.reviewedAt)}</span> : null}
+        </p>
+      ) : null}
+      {listing.permanentlyRejected ? (
+        <p className="mt-1 text-[11px] text-red-200/80">
+          The seller cannot resubmit it{listing.permanentlyRejectedAt ? ` (since ${caseDay(listing.permanentlyRejectedAt)})` : ''}. Lift it from
+          Marketplace Control with “Allow resubmission”.
         </p>
       ) : null}
 
@@ -627,10 +785,10 @@ function ListingCard({ listing }: { listing: CaseListing }) {
         <Fact
           label="Seller"
           value={
-            <>
-              {listing.seller.name}
-              {listing.seller.handle ? <span className="text-zinc-500"> @{listing.seller.handle}</span> : null}
-            </>
+            <span className="flex flex-wrap items-center gap-1.5">
+              <PersonLink person={listing.seller} />
+              {sellerStatus ? <StatusPill status={sellerStatus} /> : null}
+            </span>
           }
         />
         <Fact label="Seller merit" value={listing.seller.merit ?? '—'} />
@@ -688,6 +846,18 @@ function ListingCard({ listing }: { listing: CaseListing }) {
         </div>
       ) : null}
 
+      {listing.asset?.tags?.length ? (
+        <p className="mt-3 flex flex-wrap gap-1">
+          {listing.asset.tags.map((tag) => (
+            <span key={tag} className="rounded-md border border-white/10 px-1.5 py-px text-[10px] text-zinc-400">
+              #{tag}
+            </span>
+          ))}
+        </p>
+      ) : null}
+
+      {listing.thread ? <ListingThread thread={listing.thread} /> : null}
+
       {listing.history.length ? (
         <div className="mt-3">
           <p className="text-[10px] uppercase tracking-wide text-zinc-500">Review history</p>
@@ -709,12 +879,96 @@ function ListingCard({ listing }: { listing: CaseListing }) {
   );
 }
 
+function AssetReviewsSection({ reviews }: { reviews: CaseAssetReviews }) {
+  return (
+    <PanelSection title="Reviews on this asset" count={reviews.total}>
+      {reviews.items.length ? (
+        <>
+          {reviews.averageRating != null ? (
+            <p className="text-[11px] text-zinc-500">
+              Average {reviews.averageRating.toFixed(1)} of 5 across {reviews.total} live review{reviews.total === 1 ? '' : 's'}
+              {reviews.items.length < reviews.total ? ` · latest ${reviews.items.length} shown` : ''}
+            </p>
+          ) : null}
+          <ul className="space-y-1.5">
+            {reviews.items.map((r) => (
+              <li
+                key={r.id}
+                className={`rounded-lg border px-3 py-2.5 ${
+                  r.byNamedReviewer ? 'border-amber-500/30 bg-amber-500/[0.05]' : 'border-white/[0.06]'
+                }`}
+              >
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="flex flex-wrap items-center gap-2 text-sm text-zinc-200">
+                    <Stars value={r.rating} />
+                    <PersonLink person={r.author} />
+                  </p>
+                  <span className="flex flex-wrap items-center gap-1.5">
+                    {r.byNamedReviewer ? <Pill className="border-amber-500/30 bg-amber-500/10 text-amber-200">Named in ticket</Pill> : null}
+                    {r.removed ? <Pill className="border-red-500/30 bg-red-500/10 text-red-200">Removed</Pill> : null}
+                    {r.edited ? <Pill className="border-white/15 text-zinc-400">Edited</Pill> : null}
+                  </span>
+                </div>
+                <p className="mt-1 whitespace-pre-wrap break-words text-xs text-zinc-300">{r.text}</p>
+                <p className="mt-1 text-[11px] text-zinc-500">{caseWhen(r.createdAt)}</p>
+              </li>
+            ))}
+          </ul>
+        </>
+      ) : (
+        <EmptyNote>This asset has no reviews.</EmptyNote>
+      )}
+    </PanelSection>
+  );
+}
+
+const SELLING_BLOCK_LABEL: Record<string, string> = {
+  ASSET_VERIFICATION_REQUIRED: 'Identity not verified: they cannot list until it is.',
+  ASSET_POST_LIMIT_REACHED: 'Listing limit reached for their plan.',
+  ASSET_POSTING_UNAVAILABLE: 'Their plan does not include marketplace listings.',
+};
+
+function SellingEligibilitySection({ data }: { data: NonNullable<CaseMarketplace['sellingEligibility']> }) {
+  const identity = data.identity;
+  return (
+    <PanelSection title="Selling eligibility">
+      <Card tone={data.allowed ? 'default' : 'warn'}>
+        <p className={`text-sm ${data.allowed ? 'text-emerald-200' : 'text-amber-100'}`}>
+          {data.allowed ? 'Can list on the marketplace now.' : SELLING_BLOCK_LABEL[data.code || ''] || 'Cannot list right now.'}
+        </p>
+        <dl className="mt-3 grid gap-2 sm:grid-cols-4">
+          <Fact label="Identity" value={<StatusPill status={data.isVerified ? 'verified' : identity?.status || 'not verified'} />} />
+          <Fact label="Provider status" value={caseLabel(identity?.kycStatus)} />
+          <Fact label="Plan" value={data.planName} />
+          <Fact
+            label="Listings used"
+            value={data.unlimited ? `${data.used} · no limit` : `${data.used} of ${data.limit ?? '—'}${data.remaining != null ? ` · ${data.remaining} left` : ''}`}
+          />
+        </dl>
+        {identity?.submittedAt ? (
+          <p className="mt-2 text-[11px] text-zinc-500">
+            Check started {caseDay(identity.submittedAt)}
+            {identity.updatedAt ? ` · last update ${caseWhen(identity.updatedAt)}` : ''}
+            {identity.verifiedAt ? ` · verified ${caseDay(identity.verifiedAt)}` : ''}
+          </p>
+        ) : null}
+      </Card>
+    </PanelSection>
+  );
+}
+
 function MarketplaceCase({ data }: { data: CaseMarketplace }) {
   return (
     <>
-      <PanelSection title="Listing">
-        {data.listing ? <ListingCard listing={data.listing} /> : <EmptyNote>No listing or asset could be matched from this ticket.</EmptyNote>}
-      </PanelSection>
+      {data.sellingEligibility ? <SellingEligibilitySection data={data.sellingEligibility} /> : null}
+
+      {data.listing || (data.asksListing !== false && !data.reportedText) ? (
+        <PanelSection title="Listing">
+          {data.listing ? <ListingCard listing={data.listing} /> : <EmptyNote>No listing or asset could be matched from this ticket.</EmptyNote>}
+        </PanelSection>
+      ) : null}
+
+      {data.reviews ? <AssetReviewsSection reviews={data.reviews} /> : null}
 
       {data.purchase ? (
         <PanelSection title={`Requester's purchases${data.purchase.assetName ? ` of ${data.purchase.assetName}` : ''}`} count={data.purchase.licenses.length}>
@@ -764,11 +1018,11 @@ function MarketplaceCase({ data }: { data: CaseMarketplace }) {
         </PanelSection>
       ) : null}
 
-      {data.reportedText ? (
+      {data.reportedText || data.reportedSeller ? (
         <MemberSection
           title="Reported seller"
           account={data.reportedSeller}
-          empty={`No seller matches “${data.reportedText.slice(0, 60)}”.`}
+          empty={`No seller matches “${(data.reportedText || '').slice(0, 60)}”.`}
         />
       ) : null}
 
@@ -794,6 +1048,12 @@ function ContractCard({ contract }: { contract: CaseContract }) {
         </div>
         <StatusPill status={contract.status} />
       </div>
+      {contract.disputeHoldSince ? (
+        <p className="mt-2 text-xs text-amber-200">
+          On dispute hold since {caseWhen(contract.disputeHoldSince)}: escrow and deadlines are frozen.
+        </p>
+      ) : null}
+
       <dl className="mt-3 grid gap-2 sm:grid-cols-4">
         <Fact
           label="Requester is"
@@ -806,7 +1066,7 @@ function ContractCard({ contract }: { contract: CaseContract }) {
           }
         />
         <Fact label="Started" value={caseDay(contract.startsAt)} />
-        <Fact label="Deadline" value={caseDay(contract.deadlineAt)} />
+        <Fact label={contract.endedAt ? 'Ended' : 'Deadline'} value={caseDay(contract.endedAt || contract.deadlineAt)} />
         <Fact
           label="Milestones"
           value={`${contract.milestoneTotals.completed}/${contract.milestoneTotals.count} done · ${credits(contract.milestoneTotals.credits)}`}
@@ -814,12 +1074,19 @@ function ContractCard({ contract }: { contract: CaseContract }) {
       </dl>
 
       <div className="mt-3 grid gap-3 lg:grid-cols-2">
-        <div className="rounded-lg border border-white/[0.06] p-3">
-          <StaffStandingSummary account={contract.client} label="Client" compact />
-        </div>
-        <div className="rounded-lg border border-white/[0.06] p-3">
-          <StaffStandingSummary account={contract.freelancer} label="Freelancer" compact />
-        </div>
+        {([
+          ['Client', contract.client],
+          ['Freelancer', contract.freelancer],
+        ] as const).map(([label, party]) => (
+          <div key={label} className="rounded-lg border border-white/[0.06] p-3">
+            <StaffStandingSummary account={party} label={label} compact />
+            {profilePath(party) ? (
+              <div className="mt-2 flex justify-end">
+                <CaseOpenLink path={profilePath(party)} label="Profile" />
+              </div>
+            ) : null}
+          </div>
+        ))}
       </div>
 
       {contract.gigOrder ? (
@@ -859,7 +1126,10 @@ function ContractCard({ contract }: { contract: CaseContract }) {
                     {caseDay(d.openedAt)}
                   </span>
                 </span>
-                <StatusPill status={d.status} />
+                <span className="flex items-center gap-1.5">
+                  <StatusPill status={d.status} />
+                  <CaseOpenLink path={d.publicPath} label="Case page" />
+                </span>
               </li>
             ))}
           </ul>
@@ -867,6 +1137,29 @@ function ContractCard({ contract }: { contract: CaseContract }) {
           <p className="mt-1 text-xs text-zinc-500">None. Delivery disagreements may need a dispute opened from the contract.</p>
         )}
       </div>
+
+      {contract.ratings?.length ? (
+        <div className="mt-3">
+          <p className="text-[10px] uppercase tracking-wide text-zinc-500">Reviews left on this contract</p>
+          <ul className="mt-1 space-y-1.5">
+            {contract.ratings.map((r) => (
+              <li key={r.id} className="rounded-lg border border-white/[0.06] px-2.5 py-1.5 text-xs">
+                <p className="flex flex-wrap items-center gap-2 text-zinc-300">
+                  <Stars value={r.stars} />
+                  <span>
+                    {r.authorRole ? `${caseLabel(r.authorRole)}: ` : ''}
+                    <PersonLink person={r.author} />
+                  </span>
+                  {r.byRequester ? <Pill className="border-sky-500/30 bg-sky-500/10 text-sky-200">Requester</Pill> : null}
+                  {r.removed ? <Pill className="border-red-500/30 bg-red-500/10 text-red-200">Removed</Pill> : null}
+                  <span className="text-zinc-500">{caseDay(r.createdAt)}</span>
+                </p>
+                {r.feedback ? <p className="mt-0.5 whitespace-pre-wrap break-words text-zinc-300">{r.feedback}</p> : null}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
 
       {contract.transactions.length ? (
         <div className="mt-3">
@@ -889,20 +1182,34 @@ function ContractCard({ contract }: { contract: CaseContract }) {
 }
 
 function PostingCard({ posting }: { posting: CasePosting }) {
+  const page = posting.deletedAt
+    ? null
+    : posting.kind === 'gig'
+      ? `/gigs/services/${posting.id}/page`
+      : `/jobs/${posting.id}/page`;
   return (
-    <Card tone={posting.reports.some((r) => !/closed|resolved|dismiss/i.test(r.status)) ? 'warn' : 'default'}>
+    <Card tone={posting.staffHoldAt || posting.reports.some((r) => !/closed|resolved|dismiss/i.test(r.status)) ? 'warn' : 'default'}>
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div className="min-w-0">
           <p className="text-sm font-semibold text-white">
             {posting.kind === 'gig' ? 'Gig' : 'Job'}: {posting.title}
           </p>
           <p className="text-[11px] text-zinc-500">
-            {posting.owner.name}
-            {posting.owner.handle ? ` @${posting.owner.handle}` : ''} · posted {caseDay(posting.createdAt)}
+            <PersonLink person={posting.owner} /> · posted {caseDay(posting.createdAt)}
+            {posting.deletedAt ? ` · archived ${caseDay(posting.deletedAt)}` : ''}
           </p>
         </div>
-        <StatusPill status={posting.status} />
+        <span className="flex flex-wrap items-center gap-1.5">
+          {posting.staffHoldAt ? <Pill className="border-amber-500/30 bg-amber-500/10 text-amber-200">Staff hold</Pill> : null}
+          <StatusPill status={posting.status} />
+          <CaseOpenLink path={page} label="Posting" />
+        </span>
       </div>
+      {posting.staffHoldAt ? (
+        <p className="mt-2 text-xs text-amber-100">
+          On staff hold since {caseWhen(posting.staffHoldAt)}. The owner cannot reopen it themselves; staff reopening it lifts the hold.
+        </p>
+      ) : null}
       {posting.history.length ? (
         <ul className="mt-2 space-y-1">
           {posting.history.map((h) => (
@@ -929,12 +1236,70 @@ function PostingCard({ posting }: { posting: CasePosting }) {
   );
 }
 
+function ProposalRow({ proposal }: { proposal: CaseProposal }) {
+  return (
+    <Row
+      title={
+        <>
+          <PersonLink person={proposal.freelancer} /> · {credits(proposal.rateCredits)}
+        </>
+      }
+      meta={[
+        `Sent ${caseWhen(proposal.createdAt)}`,
+        proposal.byRequester ? 'by the requester' : null,
+        proposal.onThisJob ? null : 'on a different job',
+      ]
+        .filter(Boolean)
+        .join(' · ')}
+      detail={proposal.rejectReason ? `Declined: ${proposal.rejectReason}` : null}
+      right={<StatusPill status={proposal.status} />}
+    />
+  );
+}
+
+function ProposalsSection({ proposals }: { proposals: NonNullable<CaseJobs['proposals']> }) {
+  const counts = Object.entries(proposals.byStatus);
+  return (
+    <PanelSection title="Proposals on this job" count={proposals.total}>
+      {counts.length ? (
+        <p className="flex flex-wrap gap-1.5">
+          {counts.map(([status, count]) => (
+            <Pill key={status} className="border-white/15 text-zinc-300">
+              {caseLabel(status)} · {count}
+            </Pill>
+          ))}
+        </p>
+      ) : null}
+      {proposals.named ? (
+        <div>
+          <p className="mb-1 text-[10px] uppercase tracking-wide text-zinc-500">Proposal named in the ticket</p>
+          <ul>
+            <ProposalRow proposal={proposals.named} />
+          </ul>
+        </div>
+      ) : null}
+      <div>
+        <p className="mb-1 text-[10px] uppercase tracking-wide text-zinc-500">
+          {proposals.requesterOwnsJob ? 'The requester posted this job' : "Requester's proposals"}
+        </p>
+        <List
+          items={proposals.requesterOwnsJob ? proposals.latest : proposals.mine}
+          empty={proposals.requesterOwnsJob ? 'No proposals yet.' : 'The requester has not sent a proposal on this job.'}
+          render={(p) => <ProposalRow key={p.id} proposal={p} />}
+        />
+      </div>
+    </PanelSection>
+  );
+}
+
 function JobsCase({ data }: { data: CaseJobs }) {
   return (
     <>
-      <PanelSection title="Contract or order">
-        {data.contract ? <ContractCard contract={data.contract} /> : <EmptyNote>No contract or gig order is named on this ticket.</EmptyNote>}
-      </PanelSection>
+      {data.contract || data.asksContract !== false ? (
+        <PanelSection title="Contract or order">
+          {data.contract ? <ContractCard contract={data.contract} /> : <EmptyNote>No contract or gig order is named on this ticket.</EmptyNote>}
+        </PanelSection>
+      ) : null}
       {data.desiredOutcome || data.proposalId ? (
         <dl className="grid gap-2 sm:grid-cols-2">
           {data.desiredOutcome ? <Fact label="Member wants" value={data.desiredOutcome} /> : null}
@@ -946,6 +1311,7 @@ function JobsCase({ data }: { data: CaseJobs }) {
           <PostingCard posting={data.posting} />
         </PanelSection>
       ) : null}
+      {data.proposals ? <ProposalsSection proposals={data.proposals} /> : null}
       {data.reportedMember ? <MemberSection title="Reported member" account={data.reportedMember} empty="" /> : null}
       {data.activity ? (
         <PanelSection title="Requester on Jobs & Gigs">
@@ -965,47 +1331,104 @@ function JobsCase({ data }: { data: CaseJobs }) {
 /* Forum, billing, account, editor, safety                           */
 /* ---------------------------------------------------------------- */
 
+function ForumPostCard({ post }: { post: CaseForumPost }) {
+  const removed = post.status === 'removed';
+  return (
+    <Card tone={removed ? 'warn' : 'default'}>
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div className="min-w-0">
+          <p className="text-sm font-semibold text-white">{post.title}</p>
+          <p className="text-[11px] text-zinc-500">
+            {post.author ? (
+              <>
+                by <PersonLink person={{ accountId: post.authorAccountId || null, name: post.author, handle: post.authorHandle || null }} />
+                {' · '}
+              </>
+            ) : null}
+            {[post.groupName ? `in ${post.groupName}` : null, caseDay(post.createdAt)].filter(Boolean).join(' · ')}
+          </p>
+        </div>
+        <span className="flex flex-wrap items-center gap-1.5">
+          {post.isLocked ? <Pill className="border-white/15 text-zinc-300">Locked</Pill> : null}
+          {post.isSticky ? <Pill className="border-white/15 text-zinc-300">Pinned</Pill> : null}
+          <StatusPill status={post.status} />
+          <CaseOpenLink
+            path={`/forums/discussion/${post.id}`}
+            label="Discussion"
+            title={removed ? 'Removed: members cannot open it, but platform view shows what is left.' : undefined}
+          />
+        </span>
+      </div>
+      {post.excerpt ? (
+        <p className="mt-2 line-clamp-6 whitespace-pre-wrap break-words border-l-2 border-white/15 pl-2 text-xs text-zinc-300">{post.excerpt}</p>
+      ) : null}
+      <p className="mt-2 text-xs text-zinc-400">
+        {post.commentCount} comments · {post.removedComments} removed
+        {post.imageCount ? ` · ${post.imageCount} image${post.imageCount === 1 ? '' : 's'}` : ''}
+        {post.removedAt ? ` · post removed ${caseWhen(post.removedAt)}${post.removedBy ? ` by ${post.removedBy}` : ''}` : ''}
+      </p>
+      {post.removalReason ? <p className="mt-1 text-xs text-amber-100">Removal reason: {post.removalReason}</p> : null}
+    </Card>
+  );
+}
+
 function ForumCase({ data }: { data: CaseForum }) {
+  const membership = data.group?.requesterMembership;
   return (
     <>
       {data.post ? (
         <PanelSection title="Forum post">
-          <Card tone={data.post.status === 'removed' ? 'warn' : 'default'}>
-            <div className="flex flex-wrap items-start justify-between gap-2">
-              <div className="min-w-0">
-                <p className="text-sm font-semibold text-white">{data.post.title}</p>
-                <p className="text-[11px] text-zinc-500">
-                  {[data.post.author ? `by ${data.post.author}` : null, data.post.groupName ? `in ${data.post.groupName}` : null, caseDay(data.post.createdAt)]
-                    .filter(Boolean)
-                    .join(' · ')}
-                </p>
-              </div>
-              <span className="flex flex-wrap gap-1.5">
-                {data.post.isLocked ? <Pill className="border-white/15 text-zinc-300">Locked</Pill> : null}
-                {data.post.isSticky ? <Pill className="border-white/15 text-zinc-300">Pinned</Pill> : null}
-                <StatusPill status={data.post.status} />
-              </span>
-            </div>
-            <p className="mt-2 text-xs text-zinc-400">
-              {data.post.commentCount} comments · {data.post.removedComments} removed
-              {data.post.removedAt ? ` · post removed ${caseWhen(data.post.removedAt)}` : ''}
-            </p>
-          </Card>
+          <ForumPostCard post={data.post} />
           <ReportRefs title="Reports on this post" items={data.post.reports} empty="No reports on this post." />
         </PanelSection>
       ) : null}
       {data.group ? (
         <PanelSection title="Forum group">
-          <Card>
+          <Card tone={data.group.deletedAt || data.group.status !== 'active' ? 'warn' : 'default'}>
             <div className="flex flex-wrap items-start justify-between gap-2">
               <p className="text-sm font-semibold text-white">{data.group.name}</p>
-              <StatusPill status={data.group.deletedAt ? 'deleted' : data.group.status} />
+              <span className="flex flex-wrap items-center gap-1.5">
+                <StatusPill status={data.group.deletedAt ? 'archived' : data.group.status} />
+                <CaseOpenLink path={`/forums/group/${data.group.id}`} label="Group" />
+              </span>
             </div>
+            {data.group.archiveReason || data.group.archivedBy ? (
+              <p className="mt-1 text-xs text-amber-100">
+                Archived{data.group.archivedBy ? ` by the ${data.group.archivedBy}` : ''}
+                {data.group.archiveReason ? `: ${data.group.archiveReason}` : ''}
+              </p>
+            ) : null}
             <dl className="mt-2 grid gap-2 sm:grid-cols-4">
-              <Fact label="Owner" value={data.group.owner || '—'} />
-              <Fact label="Members" value={data.group.memberCount} />
+              <Fact
+                label="Owner"
+                value={
+                  data.group.owner ? (
+                    <PersonLink person={{ accountId: data.group.ownerAccountId || null, name: data.group.owner, handle: data.group.ownerHandle || null }} />
+                  ) : (
+                    '—'
+                  )
+                }
+              />
+              <Fact
+                label="Members"
+                value={`${data.group.memberCount}${data.group.bannedMemberCount ? ` · ${data.group.bannedMemberCount} banned` : ''}`}
+              />
               <Fact label="Discussions" value={data.group.discussionCount} />
               <Fact label="Removed" value={data.group.removedDiscussionCount} />
+              {membership ? (
+                <Fact
+                  label="Requester in this group"
+                  value={
+                    membership.banned ? (
+                      <span className="text-red-300">Banned{membership.bannedAt ? ` ${caseDay(membership.bannedAt)}` : ''}</span>
+                    ) : membership.role ? (
+                      `${membership.role}${membership.joinedAt ? ` · joined ${caseDay(membership.joinedAt)}` : ''}`
+                    ) : (
+                      <span className="text-amber-300">Not a member</span>
+                    )
+                  }
+                />
+              ) : null}
             </dl>
           </Card>
         </PanelSection>
@@ -1058,12 +1481,15 @@ function BillingCase({ data }: { data: CaseBilling }) {
               </div>
               <p className="mt-1 text-[11px] text-zinc-500">
                 {caseWhen(tx.createdAt)}
+                {tx.reference && tx.reference !== tx.query ? ` · reference ${tx.reference}` : ''}
+                {tx.settledAt ? ` · ${tx.kind === 'cashout' ? 'credits returned' : 'settled'} ${caseWhen(tx.settledAt)}` : ''}
                 {tx.belongsToRequester ? '' : ' · Not on the requester’s account'}
               </p>
+              {tx.failureCode ? <p className="mt-1 text-xs text-red-200">Provider failure: {tx.failureCode}</p> : null}
             </Card>
           ) : (
             <Card tone="warn">
-              <p className="text-xs text-amber-100">No payment, credit transaction or cashout matches “{tx.query}”.</p>
+              <p className="text-xs text-amber-100">No payment, credit transaction, cashout or invoice matches “{tx.query}”.</p>
             </Card>
           )}
         </PanelSection>
@@ -1091,11 +1517,47 @@ function AccountCase({ data }: { data: NonNullable<TicketCaseContext['account']>
       </PanelSection>
       {data.team ? (
         <PanelSection title="Team">
-          <dl className="grid gap-2 sm:grid-cols-3">
-            <Fact label="Team" value={`${data.team.name}${data.team.handle ? ` @${data.team.handle}` : ''}`} />
-            <Fact label="Status" value={<StatusPill status={data.team.status} />} />
-            <Fact label="Created" value={caseDay(data.team.createdAt)} />
-          </dl>
+          <Card>
+            <div className="flex flex-wrap items-start justify-between gap-2">
+              <p className="text-sm font-semibold text-white">
+                {data.team.name}
+                {data.team.handle ? <span className="font-normal text-zinc-500"> @{data.team.handle}</span> : null}
+              </p>
+              <span className="flex flex-wrap items-center gap-1.5">
+                {data.team.contractWorkspace ? <Pill className="border-white/15 text-zinc-300">Contract workspace</Pill> : null}
+                {data.team.visibility ? <Pill className="border-white/15 text-zinc-300">{data.team.visibility}</Pill> : null}
+                <StatusPill status={data.team.status} />
+                <CaseOpenLink path={`/teams/${data.team.id}`} label="Team page" />
+              </span>
+            </div>
+            <dl className="mt-3 grid gap-2 sm:grid-cols-4">
+              <Fact label="Owner" value={<PersonLink person={data.team.owner} />} />
+              <Fact
+                label="Members"
+                value={`${data.team.activeMembers ?? '—'} active${data.team.otherMembers ? ` · ${data.team.otherMembers} invited or suspended` : ''}`}
+              />
+              <Fact label="Created" value={caseDay(data.team.createdAt)} />
+              <Fact
+                label="Requester on this team"
+                value={
+                  <span className={data.team.requesterMembership?.status === 'Active' ? '' : 'text-amber-300'}>
+                    {membershipLine(data.team.requesterMembership)}
+                  </span>
+                }
+              />
+            </dl>
+          </Card>
+        </PanelSection>
+      ) : null}
+      {data.team?.affectedMember ? (
+        <PanelSection title="Member the ticket is about">
+          <Card>
+            <StaffStandingSummary account={data.team.affectedMember} />
+            <div className="mt-2.5 flex flex-wrap items-center justify-between gap-2">
+              <p className="text-xs text-zinc-300">On this team: {membershipLine(data.team.affectedMember.membership)}</p>
+              <CaseOpenLink path={profilePath(data.team.affectedMember)} label="Profile" />
+            </div>
+          </Card>
         </PanelSection>
       ) : null}
       {data.recentChanges ? (
@@ -1112,22 +1574,111 @@ function AccountCase({ data }: { data: NonNullable<TicketCaseContext['account']>
 }
 
 function EditorCase({ data }: { data: NonNullable<TicketCaseContext['editor']> }) {
+  const project = data.project;
+  const collaborator = project?.collaborator;
+  if (data.asksProject === false) {
+    return (
+      <PanelSection title="Recent uploads" count={data.recentUploads?.length || 0}>
+        <List
+          items={data.recentUploads}
+          empty="The member has not started an upload lately."
+          render={(u) => (
+            <Row
+              key={u.id}
+              title={
+                <>
+                  {u.name}
+                  {u.matchesTicket ? <span className="text-amber-300"> · the file in this ticket</span> : null}
+                </>
+              }
+              meta={[
+                u.mimeType,
+                u.maxSizeBytes ? `up to ${(u.maxSizeBytes / 1024 / 1024).toFixed(1)} MB` : null,
+                `started ${caseWhen(u.createdAt)}`,
+                u.finishedAt ? `finished ${caseWhen(u.finishedAt)}` : null,
+              ]
+                .filter(Boolean)
+                .join(' · ')}
+              right={<StatusPill status={u.status === 'expired' ? 'failed · never finished' : u.status} />}
+            />
+          )}
+        />
+      </PanelSection>
+    );
+  }
   return (
-    <PanelSection title="Project">
-      {data.project ? (
-        <dl className="grid gap-2 sm:grid-cols-4">
-          <Fact label="Project" value={data.project.name} />
-          <Fact label="Members" value={data.project.members} />
-          <Fact label="Last updated" value={caseWhen(data.project.updatedAt)} />
-          <Fact
-            label="Requester"
-            value={data.project.requesterIsMember ? 'Member' : <span className="text-amber-300">Not a member</span>}
+    <>
+      <PanelSection title="Project">
+        {project ? (
+          <>
+            {project.deleted || project.trashedAt || project.frozenAt ? (
+              <p className="flex flex-wrap gap-1.5">
+                {project.deleted ? <Pill className="border-red-500/30 bg-red-500/10 text-red-200">Deleted</Pill> : null}
+                {!project.deleted && project.trashedAt ? (
+                  <Pill className="border-amber-500/30 bg-amber-500/10 text-amber-200">In trash since {caseDay(project.trashedAt)}</Pill>
+                ) : null}
+                {project.frozenAt ? (
+                  <Pill className="border-sky-500/30 bg-sky-500/10 text-sky-200">Frozen by staff {caseDay(project.frozenAt)}</Pill>
+                ) : null}
+              </p>
+            ) : null}
+            <dl className="grid gap-2 sm:grid-cols-4">
+              <Fact label="Project" value={project.name} />
+              <Fact label="Members" value={project.members} />
+              <Fact label="Last updated" value={caseWhen(project.updatedAt)} />
+              <Fact
+                label="Requester"
+                value={project.requesterIsMember ? 'Member' : <span className="text-amber-300">Not a member</span>}
+              />
+              {collaborator ? (
+                <Fact
+                  label={`Collaborator “${collaborator.query}”`}
+                  value={
+                    collaborator.member ? (
+                      collaborator.onProject ? (
+                        `${collaborator.member.role} since ${caseDay(collaborator.member.joinedAt)}`
+                      ) : (
+                        <span className="text-amber-300">Removed {caseDay(collaborator.member.removedAt)}</span>
+                      )
+                    ) : (
+                      <span className="text-amber-300">Never on this project</span>
+                    )
+                  }
+                />
+              ) : null}
+            </dl>
+          </>
+        ) : (
+          <EmptyNote>No project is named on this ticket.</EmptyNote>
+        )}
+      </PanelSection>
+      {project?.roster?.length ? (
+        <PanelSection title="People on the project" count={project.roster.filter((m) => !m.removedAt).length}>
+          <List
+            items={project.roster}
+            empty=""
+            render={(m) => (
+              <Row
+                key={`${m.accountId}-${m.joinedAt}`}
+                title={
+                  <>
+                    <PersonLink person={m} />
+                    {m.isRequester ? <span className="text-sky-300"> · requester</span> : null}
+                  </>
+                }
+                meta={[
+                  m.joinedAt ? `joined ${caseDay(m.joinedAt)}` : null,
+                  m.removedAt ? `removed ${caseDay(m.removedAt)}` : null,
+                ]
+                  .filter(Boolean)
+                  .join(' · ')}
+                right={<StatusPill status={m.removedAt ? 'removed' : m.role} />}
+              />
+            )}
           />
-        </dl>
-      ) : (
-        <EmptyNote>No project is named on this ticket.</EmptyNote>
-      )}
-    </PanelSection>
+        </PanelSection>
+      ) : null}
+    </>
   );
 }
 
@@ -1151,8 +1702,26 @@ function SafetyCase({ data }: { data: NonNullable<TicketCaseContext['safety']> }
               ))}
             </div>
           ) : (
-            <EmptyNote>The links do not point to a marketplace listing. Check them by hand.</EmptyNote>
+            <EmptyNote>The links do not point to a marketplace listing.</EmptyNote>
           )}
+        </PanelSection>
+      ) : null}
+      {data.infringingPostings?.length ? (
+        <PanelSection title="Jobs and gigs named in the claim" count={data.infringingPostings.length}>
+          <div className="space-y-2">
+            {data.infringingPostings.map((p) => (
+              <PostingCard key={p.id} posting={p} />
+            ))}
+          </div>
+        </PanelSection>
+      ) : null}
+      {data.infringingPosts?.length ? (
+        <PanelSection title="Forum posts named in the claim" count={data.infringingPosts.length}>
+          <div className="space-y-2">
+            {data.infringingPosts.map((p) => (
+              <ForumPostCard key={p.id} post={p} />
+            ))}
+          </div>
         </PanelSection>
       ) : null}
     </>
@@ -1227,10 +1796,23 @@ export default function TicketCasePanel({
       {context.kind === 'account' && context.account ? <AccountCase data={context.account} /> : null}
       {context.kind === 'editor' && context.editor ? <EditorCase data={context.editor} /> : null}
       {context.kind === 'safety' && context.safety ? <SafetyCase data={context.safety} /> : null}
-      {context.kind === 'general' ? (
+      {context.namedPeople?.map((person: CaseNamedPerson) => (
+        <MemberSection
+          key={person.key}
+          title={person.label}
+          account={person.account}
+          empty={`No member matches “${person.query}”.`}
+        />
+      ))}
+
+      {context.kind === 'general' && !context.namedPeople?.length ? (
         <p className="flex items-center gap-2 text-xs text-zinc-500">
           <Info className="h-3.5 w-3.5" /> This ticket type has no linked records. The form answers are in the Details tab.
         </p>
+      ) : null}
+
+      {context.relatedTickets ? (
+        <TicketRefs title="Other tickets about the same item" items={context.relatedTickets} empty="No other tickets name this item." />
       ) : null}
 
       <TicketRefs title="Requester's other open tickets" items={context.otherOpenTickets} empty="No other open tickets." />

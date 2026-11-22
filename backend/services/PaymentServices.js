@@ -1476,8 +1476,16 @@ async function processSubscriptionPayment(req, res) {
 
 }
 
-async function cancelSubscription(req,res){
-    const { userId } = req.session;
+/**
+ * Stop a member's paid plan from renewing (Xendit plan deactivated; the plan stays until the
+ * period ends). Shared by the member's own cancel and the permanent-ban clean-up.
+ * @param {string} userId
+ * @param {{ notice?: string }} [options] notice replaces the member notification text
+ * @returns {Promise<{ statusCode: number, body: object }>}
+ */
+async function cancelSubscriptionForUser(userId, { notice = null } = {}){
+    const respond = (statusCode, body) => ({ statusCode, body });
+    if (!userId) return respond(404, { error: "No subscription found for this user" });
     const subscriptionDetails = await getSubcriptionByUserIdRepositories(userId);
     const subscription = subscriptionDetails.find(
         (s) => s.xendit_plan_id && !s.cancel_at_period_end
@@ -1485,14 +1493,14 @@ async function cancelSubscription(req,res){
         (s) => s.xendit_plan_id
     ) || subscriptionDetails[0];
     if (!subscription) {
-        return res.status(404).json({ error: "No subscription found for this user" });
+        return respond(404, { error: "No subscription found for this user" });
     }
     const planDetails = await getPlandetailsByPlanIdRepositories(subscription.plan_id);
     if (!planDetails || Number(planDetails.amount_php_cents || 0) <= 0) {
-        return res.status(422).json({ error: "Free subscriptions cannot be cancelled." });
+        return respond(422, { error: "Free subscriptions cannot be cancelled." });
     }
     if (subscription.cancel_at_period_end) {
-        return res.status(200).json({ message: "Subscription cancellation is already scheduled.", cancel_at_period_end: true });
+        return respond(200, { message: "Subscription cancellation is already scheduled.", cancel_at_period_end: true });
     }
     try{
         let responseCancelData = null;
@@ -1528,7 +1536,7 @@ async function cancelSubscription(req,res){
         });
 
         const notification = await createNotification({
-            message: `Your subscription plan ${planDetails.name} has been cancelled and will end on ${new Date(periodEnd).toLocaleDateString()}.`,
+            message: notice || `Your subscription plan ${planDetails.name} has been cancelled and will end on ${new Date(periodEnd).toLocaleDateString()}.`,
             is_read: false,
             reference_table: "subscriptions",
             reference_prefix: "SUBSCRIPTION",
@@ -1541,7 +1549,7 @@ async function cancelSubscription(req,res){
             io.to(notification.account_id).emit("notification", notification);
         }
         console.log("Subscription canceled successfully");
-        return res.status(200).json({
+        return respond(200, {
             message: "Subscription canceled successfully",
             cancel_at_period_end: true,
             responseCancel: responseCancelData,
@@ -1549,11 +1557,16 @@ async function cancelSubscription(req,res){
         });
     }catch(err){
         console.error("Error in cancelSubscription:", err.response?.data || err);
-        return res.status(500).json({
+        return respond(500, {
             message: "Failed to cancel subscription",
             error: 'Unable to cancel subscription.'
         });
     }
+}
+
+async function cancelSubscription(req,res){
+    const { statusCode, body } = await cancelSubscriptionForUser(req.session?.userId);
+    return res.status(statusCode).json(body);
 }
 
 async function endSubscription(subscriptionId) {
@@ -1936,6 +1949,7 @@ module.exports = {
     subscriptionWebhookHandler,
     endSubscription,
     cancelSubscription,
+    cancelSubscriptionForUser,
     updateSubscriptionPayment,
     getActiveCreditPackagesService,
     savePaymentTokenForUser,

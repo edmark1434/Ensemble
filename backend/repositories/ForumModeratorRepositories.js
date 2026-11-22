@@ -125,6 +125,21 @@ function contentImages(doc) {
   ].filter((path) => typeof path === 'string' && path.trim() !== '');
 }
 
+/** A comment's earlier versions, oldest first (see `comments[].revisions`). */
+function commentRevisions(comment, identities) {
+  const list = Array.isArray(comment?.revisions) ? comment.revisions : [];
+  return list
+    .filter((revision) => revision && typeof revision === 'object')
+    .map((revision) => ({
+      kind: revision.kind === 'deleted' ? 'deleted' : 'edited',
+      comment: typeof revision.comment === 'string' ? revision.comment : null,
+      images: contentImages(revision),
+      by: revision.by_user_id != null ? identityPerson(revision.by_user_id, identities) : null,
+      recordedAt: revision.recorded_at || null,
+    }))
+    .sort((a, b) => new Date(a.recordedAt || 0) - new Date(b.recordedAt || 0));
+}
+
 /** How many members a group card previews (owner first). */
 const MEMBER_PREVIEW_SIZE = 5;
 
@@ -621,7 +636,14 @@ async function getModeratorForumDiscussionDetail(discussionId) {
       ? await db.collection('forum_groups').findOne({ _id: new ObjectId(String(doc.forum_group_id)) })
       : null;
 
-  const identities = await resolveForumIdentities([doc.user_id, ...comments.map((c) => c.user_id)]);
+  const revisionAuthors = comments.flatMap((c) =>
+    (Array.isArray(c.revisions) ? c.revisions : []).map((revision) => revision?.by_user_id)
+  ).filter((id) => id != null);
+  const identities = await resolveForumIdentities([
+    doc.user_id,
+    ...comments.map((c) => c.user_id),
+    ...revisionAuthors,
+  ]);
   const replyCounts = new Map();
   for (const comment of comments) {
     const parent = comment.comment_reference_id;
@@ -647,6 +669,8 @@ async function getModeratorForumDiscussionDetail(discussionId) {
         images: contentImages(comment),
         attachmentCount: contentImages(comment).length,
         isEdited: Boolean(comment.is_edited),
+        // Staff-only history: the text before each edit, and what an author deleted.
+        revisions: commentRevisions(comment, identities),
         isDeleted: Boolean(comment.deleted_at),
         deletedAt: comment.deleted_at || null,
         removedBy: comment.deleted_at ? comment.removed_by || null : null,

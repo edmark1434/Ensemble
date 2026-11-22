@@ -656,6 +656,9 @@ async function purchaseAssetServices(assetId, accountId, projectId = null, expec
     if (error.code === 'ASSET_SELF_PURCHASE') {
       throw new AssetError('You already own this asset as its creator.', 409, error.code);
     }
+    if (error.code === 'ASSET_CREATOR_UNAVAILABLE') {
+      throw new AssetError("This creator's account is restricted, so the asset is not for sale right now.", 409, error.code);
+    }
     if (error.code === 'ASSET_WALLET_NOT_FOUND') {
       throw new AssetError('An account wallet is unavailable for this purchase.', 409, error.code);
     }

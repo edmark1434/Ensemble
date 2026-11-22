@@ -153,6 +153,10 @@ async function sendJobOfferController(req, res) {
             error.message === "Insufficient balance for escrow funding") {
             return res.status(400).json({ success: false, message: error.message });
         }
+        // Errors that carry their own status (the other side cannot answer, open dispute, …).
+        if (error.statusCode && error.statusCode < 500) {
+            return res.status(error.statusCode).json({ success: false, code: error.code, message: error.message });
+        }
 
         return res.status(500).json({ success: false, message: 'Internal server error' });
     }
@@ -260,6 +264,9 @@ async function acceptJobOfferController(req, res) {
         ]);
         if (businessErrors.has(error.message)) {
             return res.status(400).json({ success: false, message: error.message });
+        }
+        if (error.statusCode && error.statusCode < 500) {
+            return res.status(error.statusCode).json({ success: false, code: error.code, message: error.message });
         }
 
         return res.status(500).json({ success: false, message: 'Internal server error' });

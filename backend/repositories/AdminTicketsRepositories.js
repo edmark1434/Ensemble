@@ -1656,10 +1656,11 @@ async function getTicketDetail(ticketId, staffSession = null, options = {}) {
   });
   const role = staff?.role || staffSession?.role || null;
   const showPayments = Boolean(staffSession) && canViewTicketPayments(role, ticket.type);
-  const [timeline, articles, payments] = await Promise.all([
+  const [timeline, articles, payments, formValues] = await Promise.all([
     staffSession ? listTicketTimeline(ticketId, row.account_id, row.created_at) : Promise.resolve([]),
     listTicketArticles(ticket.type),
     showPayments ? listTicketPaymentEvidence(row.account_id) : Promise.resolve(null),
+    linkFormAnswers(row.type, mapFormAnswers(row.form_answers)),
   ]);
 
   // The category case file (standing, listing, contract…) is only built when a staff desk asks
@@ -1693,7 +1694,7 @@ async function getTicketDetail(ticketId, staffSession = null, options = {}) {
     timeline,
     articles,
     payments,
-    formValues: mapFormAnswers(row.form_answers),
+    formValues,
     submissionContext: mapSubmissionContext(row.submission_context),
     canAdjustCredits: Boolean(staffSession) && canAdjustTicketCredits(role, ticket.type),
     participants,
@@ -6307,6 +6308,70 @@ function mapFormAnswers(raw) {
   });
 }
 
+/**
+ * Adds `href`, the member-site page of the record a picker answer names, so Cases and the staff
+ * Details tab can open it. Listings open their asset page and a job-or-gig id is looked up to
+ * tell the two apart; typed answers (no `id`) and records that no longer exist get no link.
+ */
+async function linkFormAnswers(type, answers) {
+  const picked = answers.filter((answer) => answer.id && TICKET_ACCOUNT_UUID.test(answer.id));
+  if (!picked.length) return answers;
+  const { fieldsForType } = require('../lib/TicketFormFields');
+  const pickerOf = new Map(fieldsForType(normalizeTicketType(type, type)).map((field) => [field.key, field.picker || null]));
+  const idsFor = (...pickers) => picked.filter((answer) => pickers.includes(pickerOf.get(answer.key))).map((answer) => answer.id);
+  const listingIds = idsFor('listing');
+  const postingIds = idsFor('job', 'posting');
+  const found = new Map();
+  if (listingIds.length || postingIds.length) {
+    try {
+      const result = await pool.query(
+        `
+        SELECT listing_id::text AS id, 'listing'::text AS kind, market_asset_id::text AS target
+        FROM marketplace_listings WHERE listing_id = ANY($1::uuid[]) AND market_asset_id IS NOT NULL
+        UNION ALL
+        SELECT job_id::text, 'job', job_id::text FROM jobs WHERE job_id = ANY($2::uuid[])
+        UNION ALL
+        SELECT gig_id::text, 'gig', gig_id::text FROM gigs WHERE gig_id = ANY($2::uuid[])
+        `,
+        [listingIds, postingIds]
+      );
+      for (const row of result.rows) found.set(`${row.kind === 'listing' ? 'listing' : 'posting'}:${row.id}`, row);
+    } catch (err) {
+      console.warn('Ticket answer links skipped:', err.message);
+    }
+  }
+  const hrefFor = (answer) => {
+    const id = answer.id;
+    switch (pickerOf.get(answer.key)) {
+      case 'asset':
+      case 'order':
+        return `/assets/${id}`;
+      case 'listing': {
+        const hit = found.get(`listing:${id}`);
+        return hit ? `/assets/${hit.target}` : null;
+      }
+      case 'job':
+      case 'posting': {
+        const hit = found.get(`posting:${id}`);
+        if (!hit) return null;
+        return hit.kind === 'gig' ? `/gigs/services/${id}/page` : `/jobs/${id}/page`;
+      }
+      case 'contract':
+        return `/contracts/${id}`;
+      case 'team':
+        return `/teams/${id}`;
+      case 'project':
+        return `/projects/open/${id}`;
+      default:
+        return null;
+    }
+  };
+  return answers.map((answer) => {
+    const href = answer.id && TICKET_ACCOUNT_UUID.test(answer.id) ? hrefFor(answer) : null;
+    return href ? { ...answer, href } : answer;
+  });
+}
+
 function mapSubmissionContext(raw) {
   const source = readJsonColumn(raw, {});
   if (!source || typeof source !== 'object' || Array.isArray(source)) return null;
@@ -7306,9 +7371,33 @@ async function decideTicketAppeal(ticketId, decision, staffSession, body = {}) {
     }
   }
 
+  // An accepted ban appeal puts back what the ban closed (jobs, gigs, listings), so the member
+  // never needs a second ticket for it. The ban still ends on its own clock; until then the
+  // paused gate keeps those items hidden. Old account-wide appeals do the same while banned.
+  let banRestore = null;
+  if (normalized === 'accepted' && options.restoreClosedItems !== false) {
+    const bannedTarget = targeted && ticket.appeal_target_type === 'ban' && outcome?.applied;
+    let legacyBanned = false;
+    if (!targeted) {
+      const current = await pool.query(`SELECT status FROM accounts WHERE account_id = $1`, [ticket.account_id]);
+      legacyBanned = String(current.rows[0]?.status || '').toLowerCase() === 'banned';
+    }
+    if (bannedTarget || legacyBanned) {
+      try {
+        const { restoreBanClosedItems } = require('../services/BanRestoreServices');
+        banRestore = await restoreBanClosedItems(ticket.account_id, { source: 'appeal', staffId });
+      } catch (error) {
+        console.error('Restoring what the ban closed failed:', error.message);
+        banRestore = { restored: [], skipped: [], error: error.message };
+      }
+    }
+  }
+
   const detail = await getTicketDetail(ticketId, staffSession);
   // Tell the deciding staff member exactly what happened (the follow-up may have failed).
-  return detail ? { ...detail, appealOutcomeSummary: { outcome: outcome?.state || null, followUp } } : detail;
+  return detail
+    ? { ...detail, appealOutcomeSummary: { outcome: outcome?.state || null, followUp, banRestore } }
+    : detail;
 }
 
 module.exports = {

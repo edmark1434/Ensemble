@@ -297,6 +297,12 @@ async function applyAutoSuspension(accountId, rule, { points, staffId, violation
     console.error('Failed to notify auto-suspended account:', notifyErr);
   }
 
+  // The other side of each live contract hears the member cannot act until the end date.
+  if (!extended) {
+    const { notifyLiveWorkCounterparties } = require('./RestrictedWorkServices');
+    await notifyLiveWorkCounterparties(accountId, 'Suspended', { endsAt });
+  }
+
   return { suspended: true, extended, days, merit, endsAt, previousStatus };
 }
 
@@ -473,6 +479,8 @@ async function liftEndedAutoSuspension(accountId, { staffId = null, reason }) {
     } catch (err) {
       console.warn('Auto-suspension end notice skipped:', err.message);
     }
+    const { notifyLiveWorkCounterparties } = require('./RestrictedWorkServices');
+    await notifyLiveWorkCounterparties(accountId, 'Active');
   }
   return true;
 }

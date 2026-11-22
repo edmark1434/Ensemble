@@ -45,6 +45,37 @@ async function withTransaction(work) {
   }
 }
 
+const BAN_LISTING_NOTE = 'Removed from the marketplace because this account was banned.';
+
+let banItemsTableReady = false;
+/** The record table arrives with migration 1830800000000; items still close without it. */
+async function banItemsReady(runner) {
+  if (banItemsTableReady) return true;
+  const result = await runner.query(`SELECT to_regclass('public.ban_cleanup_items') IS NOT NULL AS ready`);
+  banItemsTableReady = Boolean(result.rows[0]?.ready);
+  return banItemsTableReady;
+}
+
+/** Remember what the ban closed and how it was, so an accepted appeal can put it back. */
+async function recordBanItem(client, item) {
+  if (!(await banItemsReady(client))) return;
+  await client.query(
+    `INSERT INTO ban_cleanup_items
+       (account_id, item_type, item_id, title, previous_status, market_asset_id, previous_asset_status, closed_by_staff_id)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+    [
+      item.accountId,
+      item.type,
+      String(item.id),
+      item.title || null,
+      item.previousStatus,
+      item.marketAssetId || null,
+      item.previousAssetStatus || null,
+      item.staffId || null,
+    ]
+  );
+}
+
 async function lockAccountWallet(client, accountId) {
   const result = await client.query(
     `SELECT w.wallet_id
@@ -105,7 +136,7 @@ async function listPendingOffers(accountId) {
  * close their proposals, or refund the posting fee when nobody applied — the job engine's
  * own rule for a job that ends without a hire.
  */
-async function closeJobForBan(jobId) {
+async function closeJobForBan(jobId, { staffId = null } = {}) {
   return withTransaction(async (client) => {
     const jobRes = await client.query(
       `SELECT job_id, client_account_id, title, posting_fee_credits, status
@@ -164,6 +195,14 @@ async function closeJobForBan(jobId) {
     }
 
     await client.query(`UPDATE jobs SET status = 'Closed', updated_at = NOW() WHERE job_id = $1`, [jobId]);
+    await recordBanItem(client, {
+      accountId: job.client_account_id,
+      type: 'job',
+      id: jobId,
+      title: job.title,
+      previousStatus: job.status,
+      staffId,
+    });
     return { jobId, title: job.title, applicants: proposals.rows.length, refunded };
   });
 }
@@ -182,7 +221,7 @@ async function listOpenJobs(accountId) {
  * a gig order holds nothing until the client confirms and funds the contract, and confirmed
  * contracts are left for staff.
  */
-async function closeGigForBan(gigId) {
+async function closeGigForBan(gigId, { staffId = null } = {}) {
   return withTransaction(async (client) => {
     const gigRes = await client.query(
       `SELECT gig_id, freelancer_account_id, title, status
@@ -229,6 +268,14 @@ async function closeGigForBan(gigId) {
     }
 
     await client.query(`UPDATE gigs SET status = 'closed', updated_at = NOW() WHERE gig_id = $1`, [gigId]);
+    await recordBanItem(client, {
+      accountId: gig.freelancer_account_id,
+      type: 'gig',
+      id: gigId,
+      title: gig.title,
+      previousStatus: gig.status || 'active',
+      staffId,
+    });
     return { gigId, title: gig.title, ordersCancelled: orders.rows.length };
   });
 }
@@ -246,18 +293,28 @@ async function listOpenGigs(accountId) {
  * Take the banned account's marketplace listings out of the catalog. Buyers keep their
  * licenses and originals; only new sales stop. The note is what the creator sees.
  */
-async function delistListingsForBan(accountId) {
+async function delistListingsForBan(accountId, { staffId = null } = {}) {
   return withTransaction(async (client) => {
+    // Lock and read first: the record keeps each listing's and asset's status before the ban.
     const listings = await client.query(
-      `UPDATE marketplace_listings
+      `WITH prev AS (
+         SELECT ml.listing_id, ml.status, ml.market_asset_id, ma.status AS asset_status, ma.name AS title
+         FROM marketplace_listings ml
+         LEFT JOIN market_assets ma ON ma.market_asset_id = ml.market_asset_id
+         WHERE ml.submitted_by_account_id = $1
+           AND ml.status IN ('approved', 'pending', 'scheduled')
+         FOR UPDATE OF ml
+       )
+       UPDATE marketplace_listings ml
        SET status = 'delisted',
-           moderation_note = 'Removed from the marketplace because this account was banned.',
+           moderation_note = $2,
            reviewed_at = NOW(),
            updated_at = NOW()
-       WHERE submitted_by_account_id = $1
-         AND status IN ('approved', 'pending', 'scheduled')
-       RETURNING listing_id, market_asset_id`,
-      [accountId]
+       FROM prev
+       WHERE ml.listing_id = prev.listing_id
+       RETURNING ml.listing_id, ml.market_asset_id, prev.status AS previous_status,
+                 prev.asset_status AS previous_asset_status, prev.title`,
+      [accountId, BAN_LISTING_NOTE]
     );
     const assetIds = listings.rows.map((row) => row.market_asset_id).filter(Boolean);
     if (assetIds.length) {
@@ -266,6 +323,18 @@ async function delistListingsForBan(accountId) {
          WHERE market_asset_id = ANY($1::uuid[]) AND deleted_at IS NULL`,
         [assetIds]
       );
+    }
+    for (const row of listings.rows) {
+      await recordBanItem(client, {
+        accountId,
+        type: 'listing',
+        id: row.listing_id,
+        title: row.title,
+        previousStatus: row.previous_status,
+        marketAssetId: row.market_asset_id,
+        previousAssetStatus: row.previous_asset_status,
+        staffId,
+      });
     }
     return { listings: listings.rowCount || 0 };
   });
@@ -346,7 +415,126 @@ async function countLiveContracts(accountId) {
   return Number(result.rows[0]?.n || 0);
 }
 
+/** What bans closed for this account (restored ones included), newest first. */
+async function listBanCleanupItems(accountId) {
+  if (!(await banItemsReady(pool))) return [];
+  const result = await pool.query(
+    `SELECT * FROM ban_cleanup_items WHERE account_id = $1 ORDER BY closed_at DESC LIMIT 500`,
+    [accountId]
+  );
+  return result.rows;
+}
+
+const RESTORE_SKIP_REASONS = {
+  gone: 'it was deleted',
+  changed: 'it was changed after the ban',
+  staff_hold: 'staff put it on hold',
+  window_ended: 'its application window has ended',
+};
+
+/**
+ * Put one item a ban closed back exactly as it was — only when nothing changed it since the
+ * ban (so a separate staff decision is never undone). One transaction per item.
+ * @param {string} itemId ban_cleanup_item_id
+ * @param {{ source: 'appeal'|'staff', staffId?: string|null }} options
+ * @returns {Promise<{ restored: boolean, reason?: string, item: object|null }>}
+ */
+async function restoreBanCleanupItem(itemId, { source, staffId = null }) {
+  return withTransaction(async (client) => {
+    const found = await client.query(
+      `SELECT * FROM ban_cleanup_items WHERE ban_cleanup_item_id = $1 FOR UPDATE`,
+      [itemId]
+    );
+    const item = found.rows[0];
+    if (!item) return { restored: false, reason: 'gone', item: null };
+    if (item.restored_at) return { restored: false, reason: 'already_restored', item };
+
+    let reason = null;
+    const previous = String(item.previous_status || '');
+    if (item.item_type === 'job') {
+      const job = (await client.query(
+        `SELECT status, application_deadline, deleted_at, staff_hold_at
+         FROM jobs WHERE job_id::text = $1 FOR UPDATE`,
+        [item.item_id]
+      )).rows[0];
+      if (!job || job.deleted_at) reason = 'gone';
+      else if (String(job.status || '').toLowerCase() !== 'closed') reason = 'changed';
+      else if (job.staff_hold_at && previous.toLowerCase() !== 'paused') reason = 'staff_hold';
+      else if (job.application_deadline && new Date(job.application_deadline).getTime() <= Date.now()) {
+        reason = 'window_ended';
+      } else {
+        await client.query(`UPDATE jobs SET status = $2, updated_at = NOW() WHERE job_id::text = $1`, [
+          item.item_id,
+          previous,
+        ]);
+      }
+    } else if (item.item_type === 'gig') {
+      const gig = (await client.query(
+        `SELECT status, deleted_at, staff_hold_at FROM gigs WHERE gig_id::text = $1 FOR UPDATE`,
+        [item.item_id]
+      )).rows[0];
+      if (!gig || gig.deleted_at) reason = 'gone';
+      else if (String(gig.status || '').toLowerCase() !== 'closed') reason = 'changed';
+      else if (gig.staff_hold_at && previous.toLowerCase() !== 'paused') reason = 'staff_hold';
+      else {
+        await client.query(`UPDATE gigs SET status = $2, updated_at = NOW() WHERE gig_id::text = $1`, [
+          item.item_id,
+          previous,
+        ]);
+      }
+    } else if (item.item_type === 'listing') {
+      const listing = (await client.query(
+        `SELECT ml.status, ml.moderation_note, ml.market_asset_id, ma.deleted_at AS asset_deleted_at
+         FROM marketplace_listings ml
+         LEFT JOIN market_assets ma ON ma.market_asset_id = ml.market_asset_id
+         WHERE ml.listing_id::text = $1
+         FOR UPDATE OF ml`,
+        [item.item_id]
+      )).rows[0];
+      if (!listing || listing.asset_deleted_at) reason = 'gone';
+      else if (listing.status !== 'delisted' || listing.moderation_note !== BAN_LISTING_NOTE) reason = 'changed';
+      else {
+        await client.query(
+          `UPDATE marketplace_listings
+           SET status = $2, moderation_note = NULL, updated_at = NOW()
+           WHERE listing_id::text = $1`,
+          [item.item_id, previous]
+        );
+        if (listing.market_asset_id) {
+          const assetStatus = item.previous_asset_status || (previous === 'approved' ? 'published' : 'draft');
+          await client.query(
+            `UPDATE market_assets SET status = $2, updated_at = NOW()
+             WHERE market_asset_id = $1 AND deleted_at IS NULL`,
+            [listing.market_asset_id, assetStatus]
+          );
+        }
+      }
+    } else {
+      reason = 'gone';
+    }
+
+    if (reason) {
+      await client.query(`UPDATE ban_cleanup_items SET skipped_reason = $2 WHERE ban_cleanup_item_id = $1`, [
+        itemId,
+        reason,
+      ]);
+      return { restored: false, reason, item };
+    }
+    await client.query(
+      `UPDATE ban_cleanup_items
+       SET restored_at = NOW(), restore_source = $2, restored_by_staff_id = $3, skipped_reason = NULL
+       WHERE ban_cleanup_item_id = $1`,
+      [itemId, source, staffId || null]
+    );
+    return { restored: true, item };
+  });
+}
+
 module.exports = {
+  BAN_LISTING_NOTE,
+  RESTORE_SKIP_REASONS,
+  listBanCleanupItems,
+  restoreBanCleanupItem,
   listPendingOffers,
   listOpenJobs,
   closeJobForBan,

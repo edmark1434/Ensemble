@@ -39,6 +39,13 @@ function formatMarketMediaName(name, suffix = '') {
   return `${clippedName}${suffix}`;
 }
 
+/** Locked or banned creator (account or team): new sales of their assets pause. */
+const CREATOR_UNAVAILABLE_SQL = require('../lib/OwnerAvailability').ownerUnavailableReasonSql('owner', {
+  deactivated: false,
+  suspended: false,
+  teamLeader: false,
+});
+
 function repoError(code, extra = {}) {
   const error = new Error(code);
   error.code = code;
@@ -486,6 +493,14 @@ const ASSET_SELECT = `
            ELSE owner.handle
          END AS creator_handle,
          CASE
+           WHEN (COALESCE(ma.is_admin_asset, FALSE) OR owner.type = 'Staff') THEN NULL
+           ELSE ${CREATOR_UNAVAILABLE_SQL}
+         END AS creator_unavailable_reason,
+         CASE
+           WHEN (COALESCE(ma.is_admin_asset, FALSE) OR owner.type = 'Staff') THEN NULL
+           ELSE ${require('../lib/OwnerAvailability').publicStandingSql('owner')}
+         END AS creator_standing,
+         CASE
            WHEN (COALESCE(ma.is_admin_asset, FALSE) OR owner.type = 'Staff') THEN '/ensemble_lg.svg'
            ELSE owner_avatar.path
          END AS creator_avatar_path,
@@ -825,11 +840,19 @@ async function listAssetsRepository({ accountId, search, type, status, view, cre
                   AND liked_asset.deleted_at IS NULL
               )`
           : `ma.status = 'published' AND ma.trashed_at IS NULL`;
+  // Public catalog views leave out a locked or banned creator's assets (new sales are paused);
+  // the creator's own views and buyers' "purchased" keep them.
+  const creatorPaused = ['mine', 'trash', 'purchased'].includes(view)
+    ? ''
+    : `AND (owner.account_id = $1
+         OR COALESCE(ma.is_admin_asset, FALSE) OR owner.type = 'Staff'
+         OR ${CREATOR_UNAVAILABLE_SQL} IS NULL)`;
   const { rows } = await pool.query(
     `${ASSET_SELECT_WITH_TOTAL}
      WHERE ma.deleted_at IS NULL
        AND owner.deleted_at IS NULL
        AND ${visibility}
+       ${creatorPaused}
        AND ($2 = '' OR ma.name ILIKE '%' || $2 || '%'
          OR ma.description ILIKE '%' || $2 || '%'
          OR owner.display_name ILIKE '%' || $2 || '%'
@@ -1161,7 +1184,8 @@ async function purchaseAssetRepository(assetId, buyerAccountId, feePercent = DEF
                 ELSE owner.display_name
               END AS creator_name,
               buyer.display_name AS buyer_name,
-              buyer_user.user_id AS buyer_user_id
+              buyer_user.user_id AS buyer_user_id,
+              ${CREATOR_UNAVAILABLE_SQL} AS creator_unavailable_reason
        FROM market_assets ma
        JOIN (SELECT DISTINCT ON (market_asset_id) market_asset_id, submitted_by_account_id AS account_id
          FROM marketplace_listings WHERE market_asset_id IS NOT NULL
@@ -1299,6 +1323,12 @@ async function purchaseAssetRepository(assetId, buyerAccountId, feePercent = DEF
         creatorBalanceCredits: Number(creatorWallet.balance_credits),
         notifications: [],
       };
+    }
+
+    // New sales pause while the creator is locked or banned (docs/punishment-system.md §9).
+    // Buyers who already own a license keep it (handled above); suspended creators keep selling.
+    if (asset.creator_unavailable_reason && !isAdminAsset) {
+      throw repoError('ASSET_CREATOR_UNAVAILABLE');
     }
 
     if (Number(buyerWallet.balance_credits) < priceCredits) {

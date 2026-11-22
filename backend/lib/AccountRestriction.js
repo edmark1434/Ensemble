@@ -288,6 +288,17 @@ async function announceStandingLift({ accountId, previousStatus, nextStatus = 'A
     action: 'expired',
     reason: `Your ${penalty} has ended.`,
   });
+  // The other side of each live contract hears this side can act again. A suspended team kept
+  // working, so its counterparties were never told it stopped.
+  try {
+    const team = await require('../services/TeamStandingServices').describeTeamAccount(accountId);
+    if (!(team.isTeam && penalty === 'suspension')) {
+      const { notifyLiveWorkCounterparties } = require('../services/RestrictedWorkServices');
+      await notifyLiveWorkCounterparties(accountId, 'Active');
+    }
+  } catch (err) {
+    console.warn('Counterparty lift notice skipped:', err.message);
+  }
   // A team account has no inbox: its Owners and Admins hear that the team is back.
   try {
     const { describeTeamAccount, notifyTeamManagers } = require('../services/TeamStandingServices');
@@ -876,6 +887,8 @@ const BANNED_READ_ALLOWLIST = [
   // Each active penalty and its own appeal (per-penalty appeals).
   /^\/api\/users\/appeals$/,
   /^\/api\/accounts\/disputes\/[^/]+$/,
+  // The plan card on the appeal page: a restricted member can always see and stop charges.
+  /^\/api\/subscription\/plan-details$/,
 ];
 
 const BANNED_WRITE_ALLOWLIST = [
@@ -886,6 +899,8 @@ const BANNED_WRITE_ALLOWLIST = [
   // Evidence for the appeal ticket. The file controller limits these to `ticket-attachments`.
   /^\/api\/files\/upload-url$/,
   /^\/api\/files\/finalize$/,
+  // Stopping charges is never blocked, whatever the standing.
+  /^\/api\/payment\/cancel-subscription$/,
 ];
 
 function appealRequestAllowed(req) {
@@ -908,12 +923,15 @@ const DEACTIVATED_READ_ALLOWLIST = [
   /^\/api\/users\/me$/,
   /^\/api\/users\/session$/,
   /^\/api\/accounts\/deactivation$/,
+  /^\/api\/subscription\/plan-details$/,
 ];
 
 const DEACTIVATED_WRITE_ALLOWLIST = [
   /^\/api\/users\/logout$/,
   /^\/api\/users\/refresh-token$/,
   /^\/api\/accounts\/reactivate$/,
+  // Stopping charges is never blocked, whatever the standing.
+  /^\/api\/payment\/cancel-subscription$/,
 ];
 
 function deactivatedRequestAllowed(req) {

@@ -270,6 +270,12 @@ async function createJobInvitationServices(jobId, clientAccountId, freelancerAcc
         throw new Error("This freelancer has already been invited to this job.");
     }
 
+    // Nobody is invited to apply while they cannot (deactivated, suspended, locked, banned).
+    await require('../lib/OwnerAvailability').assertOwnerAvailable(freelancerAccountId, {
+        role: 'freelancer',
+        action: 'able to apply',
+    });
+
     const invite = await JobRepositories.createJobInvitationRepositories(jobId, clientAccountId, freelancerAccountId, message);
 
     // Fetch client details for notification

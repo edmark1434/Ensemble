@@ -20,8 +20,9 @@ const { createNotification } = require('../repositories/NotificationRepositories
  * ban, and never stops the other items. Live contracts are counted for staff, not touched.
  * @returns {Promise<object>} what was closed, for the staff response and the audit log
  */
-async function closeBannedAccountListings(accountId, { staffId = null } = {}) {
+async function closeBannedAccountListings(accountId, { staffId = null, permanent = false } = {}) {
   const summary = {
+    subscriptionStopped: false,
     offersWithdrawn: 0,
     jobsClosed: 0,
     applicantsRefunded: 0,
@@ -62,7 +63,7 @@ async function closeBannedAccountListings(accountId, { staffId = null } = {}) {
   try {
     for (const jobId of await listOpenJobs(accountId)) {
       try {
-        const closed = await closeJobForBan(jobId);
+        const closed = await closeJobForBan(jobId, { staffId });
         if (!closed) continue;
         summary.jobsClosed += 1;
         summary.applicantsRefunded += closed.applicants;
@@ -78,7 +79,7 @@ async function closeBannedAccountListings(accountId, { staffId = null } = {}) {
   try {
     for (const gigId of await listOpenGigs(accountId)) {
       try {
-        const closed = await closeGigForBan(gigId);
+        const closed = await closeGigForBan(gigId, { staffId });
         if (!closed) continue;
         summary.gigsClosed += 1;
         summary.gigOrdersCancelled += closed.ordersCancelled;
@@ -91,7 +92,7 @@ async function closeBannedAccountListings(accountId, { staffId = null } = {}) {
   }
 
   try {
-    summary.listingsDelisted = (await delistListingsForBan(accountId)).listings;
+    summary.listingsDelisted = (await delistListingsForBan(accountId, { staffId })).listings;
   } catch (error) {
     fail('listings', null, error);
   }
@@ -108,6 +109,30 @@ async function closeBannedAccountListings(accountId, { staffId = null } = {}) {
     summary.liveContracts = await countLiveContracts(accountId);
   } catch (error) {
     fail('contracts', null, error);
+  }
+
+  // A permanent ban stops a paid plan from renewing: the member can never use it again, and
+  // was charged every month before. Temporary bans keep the plan; the member can cancel it
+  // from the appeal page (the cancel route is on the appeal allowlist).
+  if (permanent) {
+    try {
+      const user = await require('../lib/Database').pool.query(
+        `SELECT u.user_id FROM users u JOIN accounts a ON a.account_id = u.account_id
+         WHERE u.account_id = $1 AND LOWER(a.type) = 'user' LIMIT 1`,
+        [accountId]
+      );
+      const userId = user.rows[0]?.user_id;
+      if (userId) {
+        const { cancelSubscriptionForUser } = require('./PaymentServices');
+        const result = await cancelSubscriptionForUser(userId, {
+          notice: 'Because your account is permanently banned, your paid plan will not renew. You keep it until the current period ends.',
+        });
+        summary.subscriptionStopped = result.statusCode === 200 && !String(result.body?.message || '').includes('already');
+        if (result.statusCode >= 500) fail('subscription', userId, new Error(result.body?.message || 'cancel failed'));
+      }
+    } catch (error) {
+      fail('subscription', null, error);
+    }
   }
 
   const closedAnything =
@@ -135,7 +160,7 @@ async function closeBannedAccountListings(accountId, { staffId = null } = {}) {
         account_id: accountId,
         message: `Because your account is banned, Ensemble closed your open postings: ${describeSummary(summary, {
           forMember: true,
-        })}. If your appeal is accepted you can post them again.`,
+        })}. If your appeal is accepted, Ensemble puts your jobs, gigs and listings back as they were. Withdrawn proposals, offers and orders cannot come back.`,
         is_read: false,
         reference_table: 'accounts',
         reference_prefix: 'ACCOUNT_BANNED',
@@ -163,6 +188,7 @@ function describeSummary(summary, { forMember = false } = {}) {
   if (summary.outgoingGigOrdersWithdrawn) {
     parts.push(`${plural(summary.outgoingGigOrdersWithdrawn, 'gig order')} withdrawn`);
   }
+  if (summary.subscriptionStopped) parts.push('plan renewal stopped');
   if (!forMember) {
     if (summary.gigOrdersCancelled) parts.push(`${plural(summary.gigOrdersCancelled, 'incoming order')} cancelled`);
     if (summary.creditsRefunded) parts.push(`${summary.creditsRefunded} credits refunded`);

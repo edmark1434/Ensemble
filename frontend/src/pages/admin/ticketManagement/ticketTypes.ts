@@ -512,7 +512,8 @@ export type TicketDetail = {
   articles?: TicketArticle[];
   payments?: TicketPaymentEvidence | null;
   canAdjustCredits?: boolean;
-  formValues?: { key: string; label: string; value: string; id?: string }[];
+  /** `href`: the member-site page of the record a picker answer names (asset, job, gig, team…). */
+  formValues?: { key: string; label: string; value: string; id?: string; href?: string }[];
   submissionContext?: {
     accountId?: string;
     username?: string;
@@ -692,10 +693,14 @@ export type CaseAppeal = {
         createdAt: string | null;
       }
     | null;
+  /** Marketplace appeals: what the member says happened (listing rejected, selling restricted…). */
+  actionTaken?: string | null;
   /** Marketplace appeals: the listing the member picked, if any. */
   listing?: CaseListing | null;
   /** Jobs appeals: the job or gig the member picked, if any. */
   posting?: CasePosting | null;
+  /** Other tickets naming the picked listing, job or gig. */
+  relatedTickets?: CaseTicketRef[] | null;
   record: {
     warnings: {
       id: string;
@@ -771,10 +776,30 @@ export type CaseListing = {
   assetType: string | null;
   marketAssetId: string | null;
   rejectionReason: string | null;
+  /** Rejected for good: the seller cannot resubmit it. */
+  permanentlyRejected?: boolean;
+  permanentlyRejectedAt?: string | null;
   moderationNote: string | null;
+  /** Go-live time while `scheduled`; when it went live once `approved`. */
+  publishAt?: string | null;
   reviewedBy: string | null;
   reviewedAt: string | null;
   createdAt: string;
+  updatedAt?: string | null;
+  /** The review conversation with the seller: the latest entries, oldest first. */
+  thread?: {
+    total: number;
+    items: {
+      id: string;
+      kind: string;
+      authorType: 'staff' | 'seller' | 'system' | string;
+      authorName: string | null;
+      authorRole: string | null;
+      body: string | null;
+      publishAt: string | null;
+      createdAt: string;
+    }[];
+  };
   seller: {
     accountId: string | null;
     name: string;
@@ -787,6 +812,7 @@ export type CaseListing = {
     id: string;
     name: string;
     status: string;
+    tags?: string[];
     stats: {
       activeLicenses: number;
       refundedLicenses: number;
@@ -819,10 +845,47 @@ export type CaseMarketplace = {
   } | null;
   buyer: { purchases: number; refunded: number; spentCredits: number } | null;
   sellerListings: { id: string; number: string | null; title: string; status: string; priceCredits: number; rejectionReason: string | null; createdAt: string }[] | null;
+  /** The seller named on a report, or the seller of the reported listing. */
   reportedSeller: CaseAccountSummary | null;
   reportedText: string | null;
+  /** "Asset reviews": reviews on the asset, the named reviewer's first. */
+  reviews?: CaseAssetReviews | null;
+  /** False for types that name no listing or purchase ("Seller verification"). */
+  asksListing?: boolean;
+  /** "Seller verification" / "Listing review": the same check listing creation runs. */
+  sellingEligibility?: {
+    allowed: boolean;
+    /** Why not: `ASSET_VERIFICATION_REQUIRED`, `ASSET_POST_LIMIT_REACHED`, `ASSET_POSTING_UNAVAILABLE`. */
+    code: string | null;
+    isVerified: boolean;
+    unlimited: boolean;
+    limit: number | null;
+    used: number;
+    remaining: number | null;
+    planName: string;
+    identity: CaseAccount['verification'];
+  } | null;
   relatedTickets: CaseTicketRef[];
 };
+
+export type CaseAssetReviews = {
+  total: number;
+  averageRating: number | null;
+  reviewerFound: boolean;
+  items: {
+    id: string;
+    rating: number;
+    text: string;
+    author: CasePersonRef;
+    byNamedReviewer: boolean;
+    edited: boolean;
+    removed: boolean;
+    createdAt: string;
+  }[];
+};
+
+/** A person shown by name, linkable to their profile. */
+export type CasePersonRef = { accountId: string | null; name: string; handle: string | null };
 
 /**
  * What a gig order bought: the package (tier) and the add-ons the client picked. Add-on prices
@@ -850,6 +913,9 @@ export type CaseContract = {
   startsAt: string | null;
   deadlineAt: string | null;
   createdAt: string | null;
+  endedAt?: string | null;
+  /** Escrow and deadlines are frozen while a dispute holds the contract. */
+  disputeHoldSince?: string | null;
   requesterRole: 'client' | 'freelancer' | null;
   /** The requester is on the contract through a team they own. */
   requesterViaTeam?: boolean;
@@ -859,7 +925,28 @@ export type CaseContract = {
   gigOrder?: CaseGigOrder | null;
   milestones: { id: string; index: number; name: string; status: string; credits: number; deadlineAt: string | null; startedAt: string | null }[];
   milestoneTotals: { count: number; credits: number; completed: number };
-  disputes: { id: string; number: string; title: string; status: string; public: boolean; filedByRequester: boolean; openedAt: string }[];
+  disputes: {
+    id: string;
+    number: string;
+    title: string;
+    status: string;
+    public: boolean;
+    /** Member page of a public case; private cases live on the dispute desk. */
+    publicPath?: string | null;
+    filedByRequester: boolean;
+    openedAt: string;
+  }[];
+  /** Reviews the two sides left on each other. */
+  ratings?: {
+    id: string;
+    stars: number;
+    feedback: string;
+    authorRole: 'client' | 'freelancer' | null;
+    author: CasePersonRef;
+    byRequester: boolean;
+    removed: boolean;
+    createdAt: string;
+  }[];
   transactions: { id: string; type: string; credits: number; status: string; createdAt: string }[];
 };
 
@@ -869,47 +956,93 @@ export type CasePosting = {
   title: string;
   status: string;
   createdAt: string;
+  deletedAt?: string | null;
+  /** Staff paused, closed or archived it: the owner cannot reopen it themselves. */
+  staffHoldAt?: string | null;
   owner: { accountId: string; name: string; handle: string | null };
   reports: CaseReportRef[];
   history: { id: string; status: string | null; previousStatus: string | null; reason: string | null; actor: string; createdAt: string }[];
 };
 
+export type CaseProposal = {
+  id: string;
+  status: string;
+  rateCredits: number;
+  rejectReason: string | null;
+  freelancer: CasePersonRef;
+  byRequester: boolean;
+  onThisJob: boolean;
+  createdAt: string;
+  updatedAt: string | null;
+};
+
 export type CaseJobs = {
   contract: CaseContract | null;
   posting: CasePosting | null;
+  /** The user named on a report, or whoever posted the reported job or gig. */
   reportedMember: CaseAccountSummary | null;
   proposalId: string | null;
+  /** False for types that name no contract (listings, proposals, reports). */
+  asksContract?: boolean;
+  /** "Proposals and hiring" on a job: the requester's proposals and the job's counts. */
+  proposals?: {
+    total: number;
+    byStatus: Record<string, number>;
+    requesterOwnsJob: boolean;
+    mine: CaseProposal[];
+    latest: CaseProposal[];
+    named: CaseProposal | null;
+    namedQuery: string | null;
+  } | null;
   desiredOutcome: string | null;
   activity: { jobs: number; gigs: number; contracts: number } | null;
   relatedTickets: CaseTicketRef[];
 };
 
+export type CaseForumPost = {
+  id: string;
+  title: string;
+  status: string;
+  isLocked: boolean;
+  isSticky: boolean;
+  groupId?: string | null;
+  groupName: string | null;
+  author: string | null;
+  authorAccountId?: string | null;
+  authorHandle?: string | null;
+  /** The post body as written (kept when the post is removed). */
+  excerpt?: string | null;
+  imageCount?: number;
+  commentCount: number;
+  removedComments: number;
+  createdAt: string | null;
+  removedAt: string | null;
+  removedBy?: string | null;
+  removalReason?: string | null;
+  reports: CaseReportRef[];
+};
+
 export type CaseForum = {
-  post: {
-    id: string;
-    title: string;
-    status: string;
-    isLocked: boolean;
-    isSticky: boolean;
-    groupName: string | null;
-    author: string | null;
-    commentCount: number;
-    removedComments: number;
-    createdAt: string | null;
-    removedAt: string | null;
-    reports: CaseReportRef[];
-  } | null;
+  post: CaseForumPost | null;
   group: {
     id: string;
     name: string;
     status: string;
     owner: string | null;
+    ownerAccountId?: string | null;
+    ownerHandle?: string | null;
     memberCount: number;
+    bannedMemberCount?: number;
     discussionCount: number;
     removedDiscussionCount: number;
+    archivedBy?: string | null;
+    archiveReason?: string | null;
     createdAt: string | null;
     deletedAt: string | null;
+    /** "Forum groups" tickets: the requester's place in the group (role null: not a member). */
+    requesterMembership?: { role: string | null; banned: boolean; bannedAt: string | null; joinedAt: string | null } | null;
   } | null;
+  /** The member named on a report, or the author / owner of the reported post or group. */
   reportedMember: CaseAccountSummary | null;
   restrictions: { id: string; type: string; active: boolean; startsAt: string; endsAt: string | null }[] | null;
 };
@@ -925,13 +1058,17 @@ export type CaseBilling =
         | {
             found: true;
             query: string;
-            kind: 'payment' | 'credit' | 'cashout';
+            kind: 'payment' | 'credit' | 'cashout' | 'invoice';
             id: string;
             reference: string | null;
             status: string;
             type: string | null;
             amount: number | null;
             credits: number | null;
+            /** Cashouts: the provider's failure code. */
+            failureCode?: string | null;
+            /** Cashouts: when the credits went back; invoices: when it was paid or failed. */
+            settledAt?: string | null;
             belongsToRequester: boolean;
             createdAt: string;
           }
@@ -949,7 +1086,44 @@ export type CaseAccount = {
     updatedAt?: string | null;
   } | null;
   recentChanges: { id: string; action: string; eventCode: string; createdAt: string }[] | null;
-  team: { id: string; name: string; handle: string | null; status: string; createdAt: string } | null;
+  team: CaseTeam | null;
+};
+
+/** One person's place on a team; `status` is `Removed` once they were taken off. */
+export type CaseTeamMembership = {
+  role: string;
+  status: string;
+  joinedAt: string | null;
+  invitedAt: string | null;
+  changedAt: string | null;
+};
+
+export type CaseTeam = {
+  id: string;
+  accountId?: string;
+  name: string;
+  handle: string | null;
+  status: string;
+  visibility?: string | null;
+  contractWorkspace?: boolean;
+  createdAt: string;
+  activeMembers?: number;
+  otherMembers?: number;
+  owner?: CasePersonRef | null;
+  /** Null: the requester has never been on this team. */
+  requesterMembership?: CaseTeamMembership | null;
+  /** The member the ticket is about, with their membership (null: never on this team). */
+  affectedMember?: (CaseAccountSummary & { membership: CaseTeamMembership | null }) | null;
+};
+
+export type CaseProjectMember = {
+  accountId: string;
+  name: string;
+  handle: string | null;
+  role: string;
+  joinedAt: string | null;
+  removedAt: string | null;
+  isRequester: boolean;
 };
 
 export type CaseEditor = {
@@ -959,22 +1133,53 @@ export type CaseEditor = {
     createdAt: string;
     updatedAt: string;
     deleted: boolean;
+    trashedAt?: string | null;
+    frozenAt?: string | null;
     members: number;
     requesterIsMember: boolean;
+    /** Everyone on the project, owners first; removed members keep `removedAt`. */
+    roster?: CaseProjectMember[];
+    /** "Sharing and collaboration": the collaborator the member named. */
+    collaborator?: { query: string; onProject: boolean; member: CaseProjectMember | null } | null;
   } | null;
+  /** False for types whose form names no project ("Uploads and storage"). */
+  asksProject?: boolean;
+  /** "Uploads and storage": the member's latest uploads and whether each finished. */
+  recentUploads?: {
+    id: string;
+    name: string;
+    mimeType: string | null;
+    maxSizeBytes: number | null;
+    status: string;
+    stored: boolean;
+    matchesTicket: boolean;
+    createdAt: string;
+    finishedAt: string | null;
+  }[] | null;
 };
 
 export type CaseSafety = {
   reportedMember: CaseAccountSummary | null;
   reportsAgainst: CaseReportRef[] | null;
   infringingListings: CaseListing[] | null;
+  /** Copyright claims: jobs and gigs the links point to. */
+  infringingPostings?: CasePosting[] | null;
+  /** Copyright claims: forum posts the links point to. */
+  infringingPosts?: CaseForumPost[] | null;
 };
+
+/** A username typed into the form (other person, collaborator, reviewer) and who it is. */
+export type CaseNamedPerson = { key: string; label: string; query: string; account: CaseAccountSummary | null };
 
 export type TicketCaseContext = {
   kind: CaseKind;
   requester: CaseAccountSummary | null;
   otherOpenTickets: CaseTicketRef[];
   notes: string[];
+  /** Usernames the form asked for that no layout reads itself. */
+  namedPeople?: CaseNamedPerson[];
+  /** Other tickets naming the same record, for layouts that do not list them themselves. */
+  relatedTickets?: CaseTicketRef[];
   appeal?: CaseAppeal | null;
   marketplace?: CaseMarketplace | null;
   jobs?: CaseJobs | null;

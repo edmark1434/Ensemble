@@ -1,4 +1,5 @@
 const { pool } = require('../lib/Database');
+const { livePenaltySql } = require('../lib/OwnerAvailability');
 
 /**
  * Member parties of ended (`Done`) contracts who have not reviewed the other party yet.
@@ -14,8 +15,26 @@ const { pool } = require('../lib/Database');
  *   `remindedBefore` ago and not warned yet.
  */
 async function listPendingReviewers({ endedBefore, endedAfter, stage, remindedBefore = '0 seconds', limit = 200 }) {
+  // A member who was suspended, locked or banned for any part of the review window could not
+  // leave the review (ratings are writes), so they are never warned for missing it. A status
+  // change into or out of a penalty since the contract ended means part of the window was
+  // blocked; a penalty still running means it is blocked now.
+  const blockedByStandingSql = `(
+      ${livePenaltySql('reviewer')}
+      OR EXISTS (
+        SELECT 1 FROM account_activity standing_aa
+        WHERE standing_aa.account_id = r.reviewer_account_id
+          AND standing_aa.event_code = 'ACCOUNT_STATUS_CHANGED'
+          AND standing_aa.created_at >= r.ended_at
+          AND (
+            LOWER(COALESCE(standing_aa.metadata->>'status', '')) IN ('suspended', 'locked', 'banned')
+            OR LOWER(COALESCE(standing_aa.metadata->>'previousStatus', '')) IN ('suspended', 'locked', 'banned')
+          )
+      )
+    )`;
   const stageSql = stage === 'warn'
-    ? `o.warned_at IS NULL AND o.reminded_at IS NOT NULL AND o.reminded_at <= NOW() - $4::interval`
+    ? `o.warned_at IS NULL AND o.reminded_at IS NOT NULL AND o.reminded_at <= NOW() - $4::interval
+       AND NOT ${blockedByStandingSql}`
     : `o.reminded_at IS NULL`;
 
   const result = await pool.query(

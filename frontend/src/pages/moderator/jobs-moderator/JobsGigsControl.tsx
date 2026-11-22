@@ -10,7 +10,10 @@ import {
   Gem,
   History,
   Inbox,
+  Info,
+  LayoutGrid,
   Layers,
+  List,
   Pause,
   RefreshCw,
   Search,
@@ -23,15 +26,18 @@ import { showErrorToast, showSuccessToast } from "@/components/utility/toast.ts"
 import RowActionsMenu, { type MenuItem } from "@/pages/admin/userTeam/components/RowActionsMenu";
 import type { JobsGigsPosting, JobsOverview } from "../shared/moderatorTypes";
 import PostingDetailModal, { UserHistoryModal } from "./PostingDetailModal";
+import PostingMemberCard from "./PostingMemberCard";
 import {
   DEFAULT_JOBS_API_BASE,
   POSTING_ACTIONS,
+  POSTING_STATUS_GUIDE,
   PostingReasonDialog,
   actionsForPostingStatus,
   apiErrorMessage,
   formatCredits,
   formatDateTime,
   initials,
+  memberViewFor,
   relativeTime,
   statusPill,
   typeBadge,
@@ -57,6 +63,87 @@ const SORT_OPTIONS = [
 type TypeTab = (typeof TYPE_TABS)[number];
 type StatusTab = (typeof STATUS_TABS)[number];
 type SortKey = (typeof SORT_OPTIONS)[number]["value"];
+type Layout = "cards" | "table";
+
+const LAYOUT_KEY = "jobsGigsControl.layout";
+const GUIDE_KEY = "jobsGigsControl.statusGuideHidden";
+
+function readPref(key: string) {
+  try {
+    return window.localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function writePref(key: string, value: string) {
+  try {
+    window.localStorage.setItem(key, value);
+  } catch {
+    /* per-browser convenience only */
+  }
+}
+
+const GUIDE_TONES: Record<keyof typeof POSTING_STATUS_GUIDE, string> = {
+  active: "border-emerald-500/20 text-emerald-300",
+  paused: "border-amber-500/25 text-amber-300",
+  closed: "border-zinc-500/25 text-zinc-200",
+  archived: "border-red-500/25 text-red-300",
+};
+
+/** What pause, close and archive do for members and the owner. */
+function StatusGuide({ onHide }: { onHide: () => void }) {
+  return (
+    <section className="mb-5 rounded-2xl border border-white/[0.08] bg-[#0f1016] px-5 py-4">
+      <div className="mb-3 flex items-start justify-between gap-3">
+        <div>
+          <p className="flex items-center gap-1.5 text-sm font-semibold text-white">
+            <Info className="h-4 w-4 text-emerald-400" />
+            What each status does
+          </p>
+          <p className="mt-0.5 text-xs text-zinc-500">
+            Every pause, close, archive and reopen notifies the owner with your reason. Pause, close and archive
+            also put the posting on a staff hold, so only staff can reopen it.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={onHide}
+          className="shrink-0 rounded-lg px-2 py-1 text-[11px] text-zinc-500 transition hover:bg-white/5 hover:text-zinc-200"
+        >
+          Hide
+        </button>
+      </div>
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        {(Object.keys(POSTING_STATUS_GUIDE) as (keyof typeof POSTING_STATUS_GUIDE)[]).map((key) => {
+          const g = POSTING_STATUS_GUIDE[key];
+          return (
+            <div key={key} className={`rounded-xl border bg-white/[0.02] px-3.5 py-3 ${GUIDE_TONES[key]}`}>
+              <p className="text-xs font-semibold">{g.title}</p>
+              <p className="mt-1 text-[11px] leading-relaxed text-zinc-300">{g.purpose}</p>
+              <dl className="mt-2 space-y-1 text-[11px] leading-relaxed">
+                <div>
+                  <dt className="inline font-medium text-zinc-400">Members: </dt>
+                  <dd className="inline text-zinc-500">{g.members}</dd>
+                </div>
+                <div>
+                  <dt className="inline font-medium text-zinc-400">Owner: </dt>
+                  <dd className="inline text-zinc-500">{g.owner}</dd>
+                </div>
+                {g.undo !== "—" && (
+                  <div>
+                    <dt className="inline font-medium text-zinc-400">Next: </dt>
+                    <dd className="inline text-zinc-500">{g.undo}</dd>
+                  </div>
+                )}
+              </dl>
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
 
 function postingParams(type: string, status: string, search: string, sort: string, limit: number) {
   return {
@@ -205,7 +292,18 @@ export default function JobsGigsControl({
   const [historyAccountId, setHistoryAccountId] = useState<string | null>(null);
   const [selected, setSelected] = useState<JobsGigsPosting | null>(null);
   const [prompt, setPrompt] = useState<{ posting: JobsGigsPosting; action: PostingAction } | null>(null);
+  const [layout, setLayoutState] = useState<Layout>(() => (readPref(LAYOUT_KEY) === "table" ? "table" : "cards"));
+  const [guideHidden, setGuideHidden] = useState(() => readPref(GUIDE_KEY) === "1");
   const shownKey = useRef(loading ? null : JSON.stringify(params));
+
+  const setLayout = (next: Layout) => {
+    setLayoutState(next);
+    writePref(LAYOUT_KEY, next);
+  };
+  const toggleGuide = (hidden: boolean) => {
+    setGuideHidden(hidden);
+    writePref(GUIDE_KEY, hidden ? "1" : "0");
+  };
 
   const loadOverview = async () => {
     try {
@@ -331,7 +429,19 @@ export default function JobsGigsControl({
   return (
     <Shell className={shellClass} style={embedded ? undefined : { animation: "fadeIn 420ms ease" }}>
       {embedded ? (
-        <div className="flex justify-end">{refreshButton}</div>
+        <div className="flex justify-end gap-2">
+          {guideHidden && (
+            <button
+              type="button"
+              onClick={() => toggleGuide(false)}
+              className="flex items-center gap-1.5 rounded-lg border border-white/10 px-3 py-2 text-xs text-zinc-400 transition hover:border-white/20 hover:text-white"
+            >
+              <Info className="h-3.5 w-3.5" />
+              Status guide
+            </button>
+          )}
+          {refreshButton}
+        </div>
       ) : (
         <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
           <div>
@@ -340,11 +450,23 @@ export default function JobsGigsControl({
             </p>
             <h1 className="text-2xl font-bold text-white">Jobs &amp; Gigs Control</h1>
             <p className="mt-1 text-sm text-zinc-500">
-              Review every job and gig on the board. Reported postings float to the top — pause while
-              you investigate, close or archive when a violation is confirmed.
+              Review every job and gig as members see it. Reported postings float to the top: pause
+              while you investigate, archive when a violation is confirmed.
             </p>
           </div>
-          {refreshButton}
+          <div className="flex items-center gap-2">
+            {guideHidden && (
+              <button
+                type="button"
+                onClick={() => toggleGuide(false)}
+                className="flex items-center gap-1.5 rounded-lg border border-white/10 px-3 py-2 text-xs text-zinc-400 transition hover:border-white/20 hover:text-white"
+              >
+                <Info className="h-3.5 w-3.5" />
+                Status guide
+              </button>
+            )}
+            {refreshButton}
+          </div>
         </div>
       )}
 
@@ -398,12 +520,14 @@ export default function JobsGigsControl({
           icon={Archive}
           label="Archived"
           value={counts?.archived ?? postings.filter((p) => p.status === "archived").length}
-          sub="Removed from the board"
+          sub="Removed from Ensemble"
           tone="bg-zinc-500/15 text-zinc-300"
           active={statusFilter === "archived"}
           onClick={() => setStatusFilter("archived")}
         />
       </div>
+
+      {!guideHidden && <StatusGuide onHide={() => toggleGuide(true)} />}
 
       <section className="overflow-hidden rounded-2xl border border-white/[0.08] bg-[#0f1016]">
         <div className="flex flex-col gap-3 border-b border-white/[0.06] px-5 py-4 xl:flex-row xl:items-center xl:justify-between">
@@ -417,6 +541,30 @@ export default function JobsGigsControl({
             />
           </div>
           <div className="flex flex-wrap items-center gap-2">
+            <div className="inline-flex rounded-xl border border-white/[0.08] bg-[#14151c] p-1" role="group" aria-label="Layout">
+              {(
+                [
+                  { id: "cards", label: "Member view", icon: LayoutGrid },
+                  { id: "table", label: "Table", icon: List },
+                ] as const
+              ).map((option) => {
+                const Icon = option.icon;
+                return (
+                  <button
+                    key={option.id}
+                    type="button"
+                    onClick={() => setLayout(option.id)}
+                    aria-pressed={layout === option.id}
+                    className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition ${
+                      layout === option.id ? "bg-emerald-500/15 text-emerald-200" : "text-zinc-500 hover:text-zinc-200"
+                    }`}
+                  >
+                    <Icon className="h-3.5 w-3.5" />
+                    {option.label}
+                  </button>
+                );
+              })}
+            </div>
             <div className="inline-flex rounded-xl border border-white/[0.08] bg-[#14151c] p-1">
               {TYPE_TABS.map((tab) => (
                 <button
@@ -504,6 +652,28 @@ export default function JobsGigsControl({
           </div>
         ) : (
           <>
+            {layout === "cards" ? (
+              <div className="grid grid-cols-1 gap-4 p-5 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+                {visible.map((p) => (
+                  <PostingMemberCard
+                    key={`${p.type}-${p.id}`}
+                    posting={p}
+                    saving={savingKey === `${p.type}-${p.id}`}
+                    onOpen={() => setSelected(p)}
+                    onOwner={() => setHistoryAccountId(String(p.author.accountId))}
+                    actions={
+                      <RowActionsMenu
+                        items={menuItems(p)}
+                        status={p.status}
+                        statusLabel="Posting status"
+                        sectionLabels={{ primary: "Posting", manage: "Moderate" }}
+                        onAction={(id) => onMenuAction(p, id)}
+                      />
+                    }
+                  />
+                ))}
+              </div>
+            ) : (
             <div className="overflow-x-auto">
               <table className="w-full min-w-[1120px] text-left text-sm">
                 <thead>
@@ -623,7 +793,17 @@ export default function JobsGigsControl({
                             <span className="text-xs text-zinc-600">—</span>
                           )}
                         </td>
-                        <td className="px-4 py-3.5 align-top">{statusPill(p.status)}</td>
+                        <td className="px-4 py-3.5 align-top">
+                          {statusPill(p.status)}
+                          <p className="mt-1 text-[11px] text-zinc-600">
+                            {p.status === "archived"
+                              ? "Removed for members"
+                              : memberViewFor(p.status).onBoard
+                                ? "On the board"
+                                : "Hidden from the board"}
+                            {p.staffHoldAt && p.status !== "active" ? " · staff hold" : ""}
+                          </p>
+                        </td>
                         <td className="px-4 py-3.5 align-top">
                           <span
                             className="inline-flex items-center gap-1 text-xs text-zinc-500"
@@ -655,6 +835,7 @@ export default function JobsGigsControl({
                 </tbody>
               </table>
             </div>
+            )}
 
             <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-3 text-xs text-zinc-500">
               <p>

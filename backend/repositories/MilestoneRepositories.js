@@ -16,6 +16,35 @@ const { assertNoOpenContractDispute, contractOnDisputeHoldSql } = require('../li
 // A contract on dispute hold has its clock stopped: no job below may advance it.
 const NOT_ON_DISPUTE_HOLD = `NOT ${contractOnDisputeHoldSql('c.contract_id')}`;
 
+const { livePenaltySql } = require('../lib/OwnerAvailability');
+/** Hours a party gets to act after a suspension or lock ends before automatic steps resume. */
+const STANDING_GRACE_HOURS = 48;
+
+/**
+ * SQL: the account cannot act on its contracts right now — locked, or a suspended member (a
+ * suspended team keeps working), or one of those ended less than STANDING_GRACE_HOURS ago.
+ * Automatic steps that decide against a party who could not answer (abandonment refund,
+ * cancellation auto-approval) wait for this. Bans do not: staff settle those (§9).
+ */
+function partyCannotActSql(accountIdExpr) {
+    return `EXISTS (
+        SELECT 1 FROM accounts blocked_a
+        WHERE blocked_a.account_id = ${accountIdExpr}
+          AND (
+            ${livePenaltySql('blocked_a', ['locked'])}
+            OR (LOWER(COALESCE(blocked_a.type, '')) <> 'team' AND ${livePenaltySql('blocked_a', ['suspended'])})
+            OR EXISTS (
+                SELECT 1 FROM account_activity blocked_aa
+                WHERE blocked_aa.account_id = blocked_a.account_id
+                  AND blocked_aa.event_code = 'ACCOUNT_STATUS_CHANGED'
+                  AND blocked_aa.created_at > NOW() - INTERVAL '${STANDING_GRACE_HOURS} hours'
+                  AND LOWER(COALESCE(blocked_aa.metadata->>'previousStatus', '')) IN ('suspended', 'locked')
+                  AND LOWER(COALESCE(blocked_aa.metadata->>'status', '')) NOT IN ('suspended', 'locked', 'banned')
+            )
+          )
+    )`;
+}
+
 // ─── Constants ───────────────────────────────────────────────────────────────
 const AUTO_APPROVE_DAYS_JOB  = 5;   // Days after submission before auto-approve (job contracts)
 const AUTO_APPROVE_DAYS_GIG  = 3;   // Days after submission before auto-approve (gig contracts)
@@ -192,6 +221,9 @@ async function getStalledMilestonesNowAbandoned() {
               END
           )
           AND ${NOT_ON_DISPUTE_HOLD}
+          -- A freelancer who is (or just was) suspended or locked could not submit: the automatic
+          -- refund waits. The client can still cancel the stalled milestone for a refund.
+          AND NOT ${partyCannotActSql('COALESCE(jc_info.freelancer_account_id, gc_info.freelancer_account_id)')}
     `, [ABANDONED_DAYS_GIG, ABANDONED_DAYS_JOB]);
     return res.rows;
 }
@@ -1250,7 +1282,9 @@ async function getExpiredPendingCancellationRequests() {
          WHERE cr.status = 'pending'
            AND cr.auto_cancel_at <= NOW()
            AND c.status IN ('Active', 'Waiting')
-           AND ${NOT_ON_DISPUTE_HOLD}`
+           AND ${NOT_ON_DISPUTE_HOLD}
+           -- Silence only counts as consent from someone who could answer.
+           AND NOT ${partyCannotActSql('cr.recipient_account_id')}`
     );
     return res.rows;
 }

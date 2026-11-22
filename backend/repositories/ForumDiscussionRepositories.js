@@ -31,7 +31,26 @@ const REMOVED_BY = Object.freeze({
     staff: 'staff',
 });
 
-const MODERATION_FIELDS = ['removed_by', 'removed_by_user_id', 'removed_by_staff_id', 'removal_reason'];
+// `revisions` is the staff-only history of a comment (text before each edit,
+// and the text an author deleted). Members never receive it.
+const MODERATION_FIELDS = ['removed_by', 'removed_by_user_id', 'removed_by_staff_id', 'removal_reason', 'revisions'];
+
+/** Revision kinds kept in `comments[].revisions`. */
+const COMMENT_REVISION_KIND = Object.freeze({
+    edited: 'edited',
+    deleted: 'deleted',
+});
+
+/** One history entry: what the comment said just before an edit or delete. */
+function commentRevision(kind, comment, byUserId, at = new Date()) {
+    return {
+        kind,
+        comment: typeof comment?.comment === 'string' ? comment.comment : null,
+        attachments: Array.isArray(comment?.attachments) ? comment.attachments : [],
+        by_user_id: byUserId ?? null,
+        recorded_at: at,
+    };
+}
 
 function withoutModerationFields(doc) {
     const copy = { ...doc };
@@ -328,13 +347,16 @@ async function addForumDiscussionCommentRepository(discussionId, commentPayload 
 /**
  * Takes a comment down from the member forum.
  *
- * An author deleting their own comment wipes its text and files. Anyone else
- * (the discussion's author, a group moderator) only hides it: the content is
- * kept so Forum Control can review and restore it.
+ * An author deleting their own comment wipes its text and files from the
+ * comment, but `snapshot` (the comment as it was) is kept in its staff-only
+ * `revisions` so moderators can still read what was deleted. Anyone else (the
+ * discussion's author, a group moderator) only hides it: the content is kept
+ * so Forum Control can review and restore it.
  */
 async function softDeleteForumDiscussionComment(discussionId, commentId, {
     removedBy = REMOVED_BY.author,
     removedByUserId = null,
+    snapshot = null,
 } = {}) {
     try {
         const forumDiscussionsCollection = db.collection('forum_discussions');
@@ -346,16 +368,24 @@ async function softDeleteForumDiscussionComment(discussionId, commentId, {
             'comments.$.removed_by_user_id': removedByUserId,
             updated_at: now,
         };
+        const update = { $set: fields };
         if (removedBy === REMOVED_BY.author) {
             fields['comments.$.comment'] = '[deleted]';
             fields['comments.$.attachments'] = [];
+            if (snapshot) {
+                update.$push = {
+                    'comments.$.revisions': commentRevision(
+                        COMMENT_REVISION_KIND.deleted, snapshot, removedByUserId, now
+                    ),
+                };
+            }
         }
         const result = await forumDiscussionsCollection.updateOne(
             activeDiscussionFilter({
                 _id: new ObjectId(discussionId),
                 comments: { $elemMatch: { comment_id: commentId, deleted_at: null } },
             }),
-            { $set: fields }
+            update
         );
         return result.modifiedCount > 0;
     } catch (err) {
@@ -420,6 +450,8 @@ async function deleteForumDiscussion(discussionId, {
 
 module.exports = {
     REMOVED_BY,
+    COMMENT_REVISION_KIND,
+    commentRevision,
     publicForumDiscussion,
     publicForumComment,
     createForumDiscussionRepositories,

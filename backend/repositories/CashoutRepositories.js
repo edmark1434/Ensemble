@@ -256,6 +256,26 @@ async function transferAccountCredits({ senderAccountId, recipientAccountId, amo
         if (String(recipientRow.status).toLowerCase() !== 'active') {
             throw Object.assign(new Error('Recipient account wallet is not active.'), { code: 'RECIPIENT_WALLET_INACTIVE' });
         }
+        // Credits sent to a deactivated, locked or banned account would sit where nobody can use
+        // them. A suspended member can still receive (they read and keep their wallet).
+        {
+            const { getOwnerUnavailableReason } = require('../lib/OwnerAvailability');
+            const reason = await getOwnerUnavailableReason(
+                recipientAccountId,
+                { suspended: false, teamLeader: false },
+                client
+            );
+            if (reason) {
+                throw Object.assign(
+                    new Error(
+                        reason === 'deactivated'
+                            ? 'This member has deactivated their account, so they cannot receive credits right now.'
+                            : "This member's account is restricted, so they cannot receive credits right now."
+                    ),
+                    { code: 'RECIPIENT_UNAVAILABLE' }
+                );
+            }
+        }
         if (Number(senderRow.balance_credits) < amountCredits) {
             throw Object.assign(new Error('Insufficient balance for this transfer.'), { code: 'INSUFFICIENT_BALANCE' });
         }

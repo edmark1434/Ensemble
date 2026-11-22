@@ -402,7 +402,11 @@ async function createJobInvitationController(req, res) {
         res.status(201).json({ success: true, data: invite, message: 'Invitation sent successfully' });
     } catch (err) {
         console.error('Error in createJobInvitationController:', err);
-        res.status(500).json({ success: false, message: err.message || 'Failed to send invitation' });
+        res.status(err.statusCode || 500).json({
+            success: false,
+            code: err.code,
+            message: err.message || 'Failed to send invitation',
+        });
     }
 }
 

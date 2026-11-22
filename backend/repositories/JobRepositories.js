@@ -1,5 +1,11 @@
 // backend/repositories/JobRepositories.js
 const { pool } = require('../lib/Database');
+const {
+    ownerUnavailableReasonSql,
+    ownerUnavailableSql,
+    ownerUnavailableError,
+    publicStandingSql,
+} = require('../lib/OwnerAvailability');
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 async function createJobRepositories(jobData) {
@@ -340,7 +346,9 @@ async function getAllJobsRepositories(filters = {}, accountId = null, actorIds =
                       s.updated_at DESC, s.created_at DESC
                     LIMIT 1
                 ), 0)::int as client_profile_visibility,
-                COALESCE(j.updated_at, j.created_at) as client_last_active
+                COALESCE(j.updated_at, j.created_at) as client_last_active,
+                ${ownerUnavailableReasonSql('a')} as owner_unavailable_reason,
+                ${publicStandingSql('a')} as client_standing
             FROM jobs j
             LEFT JOIN accounts a ON j.client_account_id = a.account_id
             LEFT JOIN teams tm ON (
@@ -360,14 +368,17 @@ async function getAllJobsRepositories(filters = {}, accountId = null, actorIds =
             values.push(filters.jobId || filters.job_id);
             query += ` AND j.job_id = $${values.length}`;
         } else {
-            // Browse hides jobs from a client who deactivated (their own posts stay visible to
-            // them). A job opened by id still loads for people already working with them.
+            // Browse hides jobs from a client who deactivated or is suspended, locked or banned
+            // (or a team whose leader is): the job is paused until that ends. Their own posts stay
+            // visible to them. A job opened by id still loads, with `owner_unavailable_reason`.
             query += ` AND (
                 j.client_account_id = ANY($2::uuid[])
                 OR a.account_id IS NULL
-                OR LOWER(COALESCE(a.type, '')) <> 'user'
-                OR (LOWER(COALESCE(a.status, '')) <> 'deactivated' AND a.deactivated_at IS NULL)
+                OR NOT ${ownerUnavailableSql('a')}
             )`;
+            // Only staff set a job to "Paused": it leaves browse while staff review it, and its
+            // owner still sees it in their own posts.
+            query += ` AND (LOWER(COALESCE(j.status, '')) <> 'paused' OR j.client_account_id = ANY($3::uuid[]))`;
         }
         
         query += ` ORDER BY j.created_at DESC`;
@@ -651,9 +662,7 @@ async function createProposalRepositories(proposalData) {
             `SELECT j.client_account_id,
                     j.application_deadline,
                     j.client_account_id = ANY($2::uuid[]) AS is_affiliated_listing,
-                    (LOWER(COALESCE(owner.type, '')) = 'user'
-                      AND (LOWER(COALESCE(owner.status, '')) = 'deactivated' OR owner.deactivated_at IS NOT NULL)
-                    ) AS owner_deactivated
+                    ${ownerUnavailableReasonSql('owner')} AS owner_unavailable_reason
              FROM jobs j
              LEFT JOIN accounts owner ON owner.account_id = j.client_account_id
              WHERE j.job_id = $1 AND j.deleted_at IS NULL AND j.status = 'Open'
@@ -670,12 +679,13 @@ async function createProposalRepositories(proposalData) {
             error.statusCode = 404;
             throw error;
         }
-        // The fee above rolls back with this: nobody pays to apply to a hidden client.
-        if (jobResult.rows[0].owner_deactivated) {
-            const error = new Error('This client has deactivated their account, so the job is not taking proposals right now.');
-            error.statusCode = 409;
-            error.code = 'ACCOUNT_DEACTIVATED';
-            throw error;
+        // The fee above rolls back with this: nobody pays to apply to a client who cannot hire
+        // (deactivated, suspended, locked, banned, or a team whose leader is restricted).
+        if (jobResult.rows[0].owner_unavailable_reason) {
+            throw ownerUnavailableError(jobResult.rows[0].owner_unavailable_reason, {
+                role: 'client',
+                action: 'taking proposals',
+            });
         }
         if (jobResult.rows[0].is_affiliated_listing) {
             const error = new Error('You cannot submit a proposal to a job posted by your account or an active Team.');

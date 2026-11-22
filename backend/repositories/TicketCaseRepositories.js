@@ -47,6 +47,13 @@ const EDITOR_TYPES = new Set([
   'Sharing and collaboration',
 ]);
 const SAFETY_TYPES = new Set(['Report a user', 'Copyright claim']);
+/**
+ * Free-text usernames the form asks for that no case layout reads itself: the other person in a
+ * chat, a project collaborator, a reviewer. They resolve to a standing card in `namedPeople`.
+ */
+const NAMED_PERSON_KEYS = new Set(['other_username', 'collaborator', 'reviewer_username']);
+/** Layouts that list other tickets about their item themselves. */
+const KINDS_WITH_OWN_RELATED = new Set(['marketplace', 'jobs', 'appeal']);
 const ACTIVE_WARNING_SQL = `
   v.deleted_at IS NULL
   AND LOWER(COALESCE(v.status, 'active')) IN ('active', 'open', 'pending')
@@ -654,25 +661,28 @@ async function referencedCase(caseText, accountId) {
   };
 }
 
-/** Area appeals also show the actions taken in that area. */
-async function areaActions(area, accountId) {
+/**
+ * Area appeals also show the actions taken in that area, on the member's own listings and
+ * postings and on those of teams they own (`actorIds`).
+ */
+async function areaActions(area, accountId, actorIds = [accountId]) {
   if (area === 'marketplace') {
     const result = await pool.query(
       `
       SELECT l.listing_id, l.listing_number, l.title, l.status, l.rejection_reason, l.moderation_note,
-             l.reviewed_at, l.updated_at
+             l.permanently_rejected_at, l.reviewed_at, l.updated_at
       FROM marketplace_listings l
-      WHERE l.submitted_by_account_id = $1 AND l.status IN ('rejected', 'delisted', 'pending')
+      WHERE l.submitted_by_account_id = ANY($1::uuid[]) AND l.status IN ('rejected', 'delisted', 'pending', 'scheduled')
       ORDER BY COALESCE(l.reviewed_at, l.updated_at) DESC
       LIMIT 10
       `,
-      [accountId]
+      [actorIds]
     );
     return result.rows.map((row) => ({
       id: row.listing_id,
       label: row.title,
       number: row.listing_number || null,
-      status: row.status,
+      status: row.status === 'rejected' && row.permanently_rejected_at ? 'permanently rejected' : row.status,
       reason: row.rejection_reason || row.moderation_note || null,
       at: row.reviewed_at || row.updated_at,
     }));
@@ -683,15 +693,15 @@ async function areaActions(area, accountId) {
       SELECT aa.account_activity_id, aa.reference_id, aa.metadata, aa.created_at, posting.title, posting.kind
       FROM account_activity aa
       JOIN (
-        SELECT job_id::text AS id, title, 'job' AS kind FROM jobs WHERE client_account_id = $1
+        SELECT job_id::text AS id, title, 'job' AS kind FROM jobs WHERE client_account_id = ANY($1::uuid[])
         UNION ALL
-        SELECT gig_id::text, title, 'gig' FROM gigs WHERE freelancer_account_id = $1
+        SELECT gig_id::text, title, 'gig' FROM gigs WHERE freelancer_account_id = ANY($1::uuid[])
       ) posting ON posting.id = aa.reference_id
       WHERE aa.event_code IN ('JOBS_POSTING_STATUS_CHANGED', 'JOBS_POSTING_ARCHIVED')
       ORDER BY aa.created_at DESC
       LIMIT 10
       `,
-      [accountId]
+      [actorIds]
     );
     return result.rows.map((row) => {
       const meta = row.metadata && typeof row.metadata === 'object' ? row.metadata : {};
@@ -739,11 +749,12 @@ async function appealContext(row, form, notes) {
   const itemAnswer = area === 'marketplace' || area === 'jobs' ? answerOf(form, 'listing') : { value: '', id: null };
   const itemId = itemAnswer.id || uuidIn(itemAnswer.value);
   const { describeAppealTarget } = require('../services/PenaltyAppealServices');
+  const actorIds = area ? await requesterActorIds(accountId) : [accountId];
   const [record, appeals, caseRef, actions, reports, target, listing, posting] = await Promise.all([
     section(notes, 'Punishment record', () => punishmentRecord(accountId)),
     section(notes, 'Appeal history', () => appealHistory(accountId, row.ticket_id)),
     section(notes, 'Referenced case', () => referencedCase(caseAnswer.value, accountId)),
-    area ? section(notes, 'Area actions', () => areaActions(area, accountId)) : Promise.resolve(null),
+    area ? section(notes, 'Area actions', () => areaActions(area, accountId, actorIds)) : Promise.resolve(null),
     section(notes, 'Reports against the member', () => reportsList('r.for_account_id = $1', [accountId], 10)),
     // `row` is `tickets.*`, so the target columns are there once the per-penalty migration ran.
     row.appeal_target_type
@@ -761,6 +772,16 @@ async function appealContext(row, form, notes) {
   if (itemId && !listing && !posting && !itemFailed) {
     notes.push('The listing, job or gig named in this appeal was not found.');
   }
+  const item = listing || posting;
+  const ownerId = listing ? listing.seller.accountId : posting ? posting.owner.accountId : null;
+  if (item && ownerId && !actorIds.includes(String(ownerId))) {
+    notes.push(`The ${listing ? 'listing' : 'job or gig'} in this appeal belongs to someone else.`);
+  }
+  const related = item
+    ? await section(notes, 'Related tickets', () =>
+        ticketsReferencing([itemId, item.id, listing?.marketAssetId], row.ticket_id)
+      )
+    : null;
   return {
     area: area || 'account',
     // Only "Appeal an account penalty" has the accept / deny flow; area appeals are resolved by acting on the item.
@@ -769,12 +790,15 @@ async function appealContext(row, form, notes) {
     decidedAt: row.appeal_decided_at || null,
     // The one penalty this appeal is about (null: an account-wide appeal from before the change).
     target,
+    // Marketplace appeals: what the member says happened (listing rejected, selling restricted…).
+    actionTaken: answerOf(form, 'action_taken').value || null,
     reasonGiven: answerOf(form, 'why_reverse', 'explanation').value || null,
     evidence: answerOf(form, 'evidence').value || null,
     referencedCase: caseRef,
     // The item the member picked (marketplace / jobs appeals only).
     listing: listing || null,
     posting: posting || null,
+    relatedTickets: related || null,
     record,
     appeals,
     areaActions: actions,
@@ -786,11 +810,15 @@ async function appealContext(row, form, notes) {
 /* Marketplace                                                         */
 /* ------------------------------------------------------------------ */
 
+/** Thread entries a case shows, newest last; older ones stay on the listing desk. */
+const LISTING_THREAD_PREVIEW = 8;
+
 async function listingSummary(listingId) {
   const { getMarketplaceListingDetail } = require('./MarketplaceModeratorRepositories');
   const listing = await getMarketplaceListingDetail(listingId);
   if (!listing) return null;
   const files = listing.asset?.mediaFiles || listing.asset?.files || [];
+  const thread = Array.isArray(listing.thread) ? listing.thread : [];
   return {
     id: listing.id,
     number: listing.number || null,
@@ -801,10 +829,16 @@ async function listingSummary(listingId) {
     assetType: listing.assetType || null,
     marketAssetId: listing.marketAssetId || null,
     rejectionReason: listing.rejectionReason || null,
+    // Rejected for good: the seller cannot resubmit it.
+    permanentlyRejected: Boolean(listing.permanentlyRejected),
+    permanentlyRejectedAt: listing.permanentlyRejectedAt || null,
     moderationNote: listing.moderationNote || null,
+    // Go-live time while `scheduled`; when it went live once `approved`.
+    publishAt: listing.publishAt || null,
     reviewedBy: listing.reviewedBy?.name || null,
     reviewedAt: listing.reviewedAt || null,
     createdAt: listing.createdAt,
+    updatedAt: listing.updatedAt || null,
     seller: {
       accountId: listing.submittedBy?.accountId || null,
       name: listing.submittedBy?.name || 'Unknown',
@@ -813,11 +847,26 @@ async function listingSummary(listingId) {
       merit: listing.seller?.merit ?? null,
       listings: listing.seller?.listings || null,
     },
+    // The review conversation between the seller and the marketplace team.
+    thread: {
+      total: thread.length,
+      items: thread.slice(-LISTING_THREAD_PREVIEW).map((entry) => ({
+        id: entry.id,
+        kind: entry.kind,
+        authorType: entry.authorType,
+        authorName: entry.authorName || null,
+        authorRole: entry.authorRole || null,
+        body: entry.body ? String(entry.body).slice(0, 600) : null,
+        publishAt: entry.publishAt || null,
+        createdAt: entry.createdAt,
+      })),
+    },
     asset: listing.asset
       ? {
           id: listing.asset.id,
           name: listing.asset.name,
           status: listing.asset.status,
+          tags: Array.isArray(listing.asset.tags) ? listing.asset.tags.slice(0, 12) : [],
           stats: listing.asset.stats || null,
           files: (Array.isArray(files) ? files : []).slice(0, 12).map((file) => ({
             name: file.originalName || file.name || 'File',
@@ -913,6 +962,44 @@ async function sellerListings(actorIds) {
   }));
 }
 
+/**
+ * Reviews on one asset, newest first, removed ones included (staff judge review reports on them).
+ * The named reviewer's review comes first, so a report about it is never cut off the list.
+ */
+async function assetReviews(marketAssetId, reviewerAccountId = null) {
+  const result = await pool.query(
+    `
+    SELECT r.asset_review_id, r.rating, r.review, r.created_at, r.updated_at, r.deleted_at,
+           r.account_id, ${MEMBER_NAME_SQL('a', 'u')} AS author_name, a.handle AS author_handle,
+           COUNT(*) FILTER (WHERE r.deleted_at IS NULL) OVER ()::int AS live_count,
+           ROUND((AVG(r.rating) FILTER (WHERE r.deleted_at IS NULL) OVER ())::numeric, 1) AS live_average
+    FROM asset_reviews r
+    LEFT JOIN accounts a ON a.account_id = r.account_id
+    LEFT JOIN users u ON u.account_id = a.account_id
+    WHERE r.market_asset_id = $1
+    ORDER BY (r.account_id = $2::uuid) DESC NULLS LAST, r.created_at DESC
+    LIMIT 10
+    `,
+    [marketAssetId, reviewerAccountId]
+  );
+  const first = result.rows[0];
+  return {
+    total: num(first?.live_count),
+    averageRating: first?.live_average == null ? null : Number(first.live_average),
+    reviewerFound: Boolean(reviewerAccountId && result.rows.some((row) => String(row.account_id) === String(reviewerAccountId))),
+    items: result.rows.map((row) => ({
+      id: row.asset_review_id,
+      rating: num(row.rating),
+      text: String(row.review || '').slice(0, 1200),
+      author: { accountId: row.account_id, name: row.author_name, handle: row.author_handle || null },
+      byNamedReviewer: Boolean(reviewerAccountId && String(row.account_id) === String(reviewerAccountId)),
+      edited: Boolean(row.updated_at && row.created_at && new Date(row.updated_at) - new Date(row.created_at) > 60000),
+      removed: Boolean(row.deleted_at),
+      createdAt: row.created_at,
+    })),
+  };
+}
+
 /** A listing id from a form answer: the picker id, a pasted link, or an asset id. */
 async function resolveListingId(answer) {
   const id = answer.id || uuidIn(answer.value);
@@ -934,38 +1021,64 @@ async function marketplaceContext(row, form, notes) {
     if (assetId) return listingIdForAsset(assetId);
     return resolveListingId(listingAnswer);
   });
-  const sellerSide = ['Seller verification', 'Listing review', 'Appeal a marketplace action'].includes(row.type);
+  const isReport = row.type === 'Report a listing or seller';
+  const isReviewTicket = row.type === 'Asset reviews';
   // The current report form names the seller in its own field; on older forms one field held
   // a listing link or a seller username, so text that matched no listing was read as a seller.
   const currentReportForm = form.some((item) => item.key === 'report_target');
-  const reportedText = row.type === 'Report a listing or seller'
+  const reportedText = isReport
     ? currentReportForm
       ? sellerAnswer.value || null
       : !listingId ? listingAnswer.value || null : null
     : null;
   const actorIds = await requesterActorIds(accountId);
+  const reviewerText = isReviewTicket ? answerOf(form, 'reviewer_username').value : '';
 
-  const [listing, purchase, buyer, ownListings, reported] = await Promise.all([
+  const [listing, purchase, reportedByName, reviewerId] = await Promise.all([
     listingId ? section(notes, 'Listing', () => listingSummary(listingId)) : Promise.resolve(null),
     assetId ? section(notes, 'Purchase', () => purchaseSummary(accountId, assetId)) : Promise.resolve(null),
+    reportedText ? section(notes, 'Reported seller', () => accountFromText(reportedText)) : Promise.resolve(null),
+    reviewerText ? accountIdForHandle(handleIn(reviewerText)).catch(() => null) : Promise.resolve(null),
+  ]);
+  const sellerIsRequester = Boolean(listing?.seller.accountId && actorIds.includes(String(listing.seller.accountId)));
+  // A review ticket from the asset's own seller is about reviews they received.
+  const sellerSide = ['Seller verification', 'Listing review', 'Appeal a marketplace action'].includes(row.type)
+    || (isReviewTicket && sellerIsRequester);
+  const reviewedAssetId = listing?.marketAssetId || listing?.asset?.id || null;
+
+  const checksEligibility = row.type === 'Seller verification' || row.type === 'Listing review';
+  const [buyer, ownListings, reportedOwner, reviews, related, eligibility] = await Promise.all([
     sellerSide ? Promise.resolve(null) : section(notes, 'Buyer history', () => buyerStats(accountId)),
     sellerSide ? section(notes, 'Seller listings', () => sellerListings(actorIds)) : Promise.resolve(null),
-    reportedText ? section(notes, 'Reported seller', () => accountFromText(reportedText)) : Promise.resolve(null),
+    // Reporting a listing reports its seller: staff need the seller's standing either way.
+    isReport && !reportedByName && listing?.seller.accountId
+      ? section(notes, 'Reported seller', () => accountSummary(listing.seller.accountId))
+      : Promise.resolve(null),
+    isReviewTicket && reviewedAssetId
+      ? section(notes, 'Asset reviews', () => assetReviews(reviewedAssetId, reviewerId))
+      : Promise.resolve(null),
+    // Other tickets may name the same item by its listing id (listing picker) or asset id.
+    section(notes, 'Related tickets', () =>
+      ticketsReferencing([assetId, listingId, listing?.marketAssetId, listing?.asset?.id], row.ticket_id)
+    ),
+    checksEligibility ? section(notes, 'Selling eligibility', () => sellingEligibility(accountId)) : Promise.resolve(null),
   ]);
-  // Other tickets may name the same item by its listing id (listing picker) or asset id.
-  const related = await section(notes, 'Related tickets', () =>
-    ticketsReferencing([assetId, listingId, listing?.marketAssetId, listing?.asset?.id], row.ticket_id)
-  );
 
   if (purchase && !purchase.licenses.length) {
     notes.push('The requester has no license for the asset named in this ticket.');
   }
-  const sellerIsRequester = Boolean(listing?.seller.accountId && actorIds.includes(String(listing.seller.accountId)));
-  if (listing && sellerSide && listing.seller.accountId && !sellerIsRequester) {
+  if (listing && sellerSide && !isReviewTicket && listing.seller.accountId && !sellerIsRequester) {
     notes.push('The listing in this ticket belongs to another seller.');
   }
-  if (listing && row.type === 'Report a listing or seller' && sellerIsRequester) {
+  if (listing && isReport && sellerIsRequester) {
     notes.push('The requester reported a listing they sell.');
+  }
+  if (reviewerText && reviews && !reviews.reviewerFound) {
+    notes.push(
+      reviewerId
+        ? `@${handleIn(reviewerText)} has no review on this asset.`
+        : `No member matches the reviewer "${reviewerText.slice(0, 60)}".`
+    );
   }
   return {
     role: sellerSide ? 'seller' : 'buyer',
@@ -973,10 +1086,20 @@ async function marketplaceContext(row, form, notes) {
     purchase,
     buyer,
     sellerListings: ownListings,
-    reportedSeller: reported,
+    reportedSeller: reportedByName || reportedOwner || null,
     reportedText: reportedText || null,
+    reviews: reviews || null,
+    sellingEligibility: eligibility || null,
+    // False for types that name no listing or purchase ("Seller verification").
+    asksListing: typeAsksAny(row.type, ['listing', 'order']),
     relatedTickets: related || [],
   };
+}
+
+/** Whether a ticket type's form has any of these questions. */
+function typeAsksAny(type, keys) {
+  const { fieldsForType } = require('../lib/TicketFormFields');
+  return fieldsForType(normalizeTicketType(type, type)).some((field) => keys.includes(field.key));
 }
 
 /* ------------------------------------------------------------------ */
@@ -989,8 +1112,11 @@ async function contractSummary(contractId, requesterIds) {
   const contract = await getContractWithParties(contractId);
   if (!contract) return null;
   const requesterId = requesterIds[0] || null;
-  const [extra, milestones, disputes, transactions, parties, gigOrders] = await Promise.all([
-    pool.query(`SELECT payment_type, created_at FROM contracts WHERE contract_id = $1`, [contractId]),
+  const [extra, milestones, disputes, transactions, parties, gigOrders, ratings] = await Promise.all([
+    pool.query(
+      `SELECT payment_type, created_at, ended_at, dispute_hold_since FROM contracts WHERE contract_id = $1`,
+      [contractId]
+    ),
     pool.query(
       `
       SELECT contract_milestone_id, index, name, status, credits, deadline_at, started_at
@@ -1030,6 +1156,25 @@ async function contractSummary(contractId, requesterIds) {
       console.warn('Ticket case gig order skipped:', err.message);
       return new Map();
     }),
+    // Reviews the two sides left on each other (`ratings.account_id` is the author).
+    pool
+      .query(
+        `
+        SELECT r.rating_id, r.stars_out_of_five, r.feedback, r.created_at, r.deleted_at, r.account_id,
+               ${MEMBER_NAME_SQL('a', 'u')} AS author_name, a.handle AS author_handle
+        FROM ratings r
+        LEFT JOIN accounts a ON a.account_id = r.account_id
+        LEFT JOIN users u ON u.account_id = a.account_id
+        WHERE r.contract_id = $1
+        ORDER BY r.created_at ASC
+        LIMIT 6
+        `,
+        [contractId]
+      )
+      .catch((err) => {
+        console.warn('Ticket case contract ratings skipped:', err.message);
+        return { rows: [] };
+      }),
   ]);
   const milestoneRows = milestones.rows.map((m) => ({
     id: m.contract_milestone_id,
@@ -1061,6 +1206,9 @@ async function contractSummary(contractId, requesterIds) {
     startsAt: contract.starts_at || null,
     deadlineAt: contract.deadline_at || null,
     createdAt: extra.rows[0]?.created_at || null,
+    endedAt: extra.rows[0]?.ended_at || null,
+    // Escrow and deadlines are frozen while a dispute holds the contract.
+    disputeHoldSince: extra.rows[0]?.dispute_hold_since || null,
     requesterRole,
     // True when the requester is on this contract through a team they own.
     requesterViaTeam,
@@ -1080,9 +1228,29 @@ async function contractSummary(contractId, requesterIds) {
       title: d.title,
       status: d.status,
       public: Boolean(d.visibility),
+      // Only public cases have a member page; private ones live on the dispute desk.
+      publicPath: d.visibility ? `/disputes/${d.dispute_id}` : null,
       filedByRequester: Boolean(d.filed_by_requester),
       openedAt: d.opened_at,
     })),
+    ratings: ratings.rows.map((r) => {
+      const author = String(r.account_id);
+      return {
+        id: r.rating_id,
+        stars: num(r.stars_out_of_five),
+        feedback: String(r.feedback || '').slice(0, 1200),
+        authorRole:
+          author === String(contract.client_account_id)
+            ? 'client'
+            : author === String(contract.freelancer_account_id)
+              ? 'freelancer'
+              : null,
+        author: { accountId: r.account_id, name: r.author_name, handle: r.author_handle || null },
+        byRequester: requesterIds.includes(author),
+        removed: Boolean(r.deleted_at),
+        createdAt: r.created_at,
+      };
+    }),
     transactions: transactions.rows.map((t) => ({
       id: t.credit_transaction_id,
       type: t.type,
@@ -1098,6 +1266,7 @@ async function postingSummary(postingId) {
     `
     SELECT j.job_id AS id, 'job'::text AS kind, j.title::text AS title, j.status::text AS status,
            j.created_at::timestamptz AS created_at, j.deleted_at::timestamptz AS deleted_at,
+           j.staff_hold_at::timestamptz AS staff_hold_at,
            j.client_account_id AS owner_id, ${MEMBER_NAME_SQL('a', 'u')} AS owner_name, a.handle AS owner_handle
     FROM jobs j
     LEFT JOIN accounts a ON a.account_id = j.client_account_id
@@ -1105,6 +1274,7 @@ async function postingSummary(postingId) {
     WHERE j.job_id = $1
     UNION ALL
     SELECT g.gig_id, 'gig', g.title::text, g.status::text, g.created_at::timestamptz, g.deleted_at::timestamptz,
+           g.staff_hold_at::timestamptz,
            g.freelancer_account_id, ${MEMBER_NAME_SQL('a', 'u')}, a.handle
     FROM gigs g
     LEFT JOIN accounts a ON a.account_id = g.freelancer_account_id
@@ -1137,6 +1307,9 @@ async function postingSummary(postingId) {
     title: row.title,
     status: row.deleted_at ? 'archived' : row.status,
     createdAt: row.created_at,
+    deletedAt: row.deleted_at || null,
+    // Staff paused, closed or archived it: the owner cannot reopen it themselves.
+    staffHoldAt: row.staff_hold_at || null,
     owner: { accountId: row.owner_id, name: row.owner_name, handle: row.owner_handle || null },
     reports,
     history: history.rows.map((h) => {
@@ -1150,6 +1323,67 @@ async function postingSummary(postingId) {
         createdAt: h.created_at,
       };
     }),
+  };
+}
+
+/**
+ * Proposals on one job, as "Proposals and hiring" needs them: the requester's own proposals when
+ * they applied, the job's proposal counts when they posted it, and the proposal they named.
+ */
+async function jobProposals(jobId, actorIds, namedText, { requesterOwnsJob = false } = {}) {
+  const namedId = uuidIn(namedText);
+  const [result, counts] = await Promise.all([
+    pool.query(
+      `
+      SELECT p.proposal_id, p.job_id, p.status, p.rate_credits, p.reject_reason, p.created_at, p.updated_at,
+             p.deleted_at, p.freelancer_account_id, ${MEMBER_NAME_SQL('a', 'u')} AS freelancer_name,
+             a.handle AS freelancer_handle,
+             (p.freelancer_account_id = ANY($2::uuid[])) AS mine,
+             (p.proposal_id = $3::uuid) AS named
+      FROM proposals p
+      LEFT JOIN accounts a ON a.account_id = p.freelancer_account_id
+      LEFT JOIN users u ON u.account_id = a.account_id
+      WHERE (p.job_id = $1 AND ($4::boolean OR p.freelancer_account_id = ANY($2::uuid[])))
+         OR p.proposal_id = $3::uuid
+      ORDER BY (p.proposal_id = $3::uuid) DESC NULLS LAST, p.created_at DESC
+      LIMIT 12
+      `,
+      [jobId, actorIds, namedId, requesterOwnsJob]
+    ),
+    pool.query(
+      `
+      SELECT CASE WHEN deleted_at IS NOT NULL THEN 'withdrawn' ELSE LOWER(COALESCE(status, 'unknown')) END AS status,
+             COUNT(*)::int AS count
+      FROM proposals
+      WHERE job_id = $1
+      GROUP BY 1
+      `,
+      [jobId]
+    ),
+  ]);
+  const mapProposal = (p) => ({
+    id: p.proposal_id,
+    status: p.deleted_at ? 'withdrawn' : p.status,
+    rateCredits: num(p.rate_credits),
+    rejectReason: p.reject_reason || null,
+    freelancer: { accountId: p.freelancer_account_id, name: p.freelancer_name, handle: p.freelancer_handle || null },
+    byRequester: Boolean(p.mine),
+    onThisJob: String(p.job_id) === String(jobId),
+    createdAt: p.created_at,
+    updatedAt: p.updated_at || null,
+  });
+  const onJob = result.rows.filter((p) => String(p.job_id) === String(jobId) && !p.named);
+  const byStatus = Object.fromEntries(counts.rows.map((c) => [c.status, num(c.count)]));
+  const named = result.rows.find((p) => p.named);
+  return {
+    total: counts.rows.reduce((sum, c) => sum + num(c.count), 0),
+    byStatus,
+    requesterOwnsJob,
+    mine: onJob.filter((p) => p.mine).slice(0, 5).map(mapProposal),
+    // Other freelancers' proposals only matter when the requester posted the job.
+    latest: requesterOwnsJob ? onJob.filter((p) => !p.mine).slice(0, 5).map(mapProposal) : [],
+    named: named ? mapProposal(named) : null,
+    namedQuery: namedText ? String(namedText).slice(0, 80) : null,
   };
 }
 
@@ -1200,20 +1434,41 @@ async function jobsContext(row, form, notes) {
   const typedPosting = contractId && !contract && !contractAnswer.id && !postingId
     ? await section(notes, 'Posting', () => postingSummary(contractId))
     : null;
-  const related = await section(notes, 'Related tickets', () =>
-    ticketsReferencing([contractId, postingId], row.ticket_id)
-  );
+  const shownPosting = posting || reportedPosting || typedPosting;
+  const isReport = row.type === 'Report a listing or user';
+  const proposalText = answerOf(form, 'proposal_id').value;
+  const wantsProposals = row.type === 'Proposals and hiring' && shownPosting?.kind === 'job';
+  const [related, postingOwner, proposals] = await Promise.all([
+    section(notes, 'Related tickets', () => ticketsReferencing([contractId, postingId], row.ticket_id)),
+    // Reporting a job or gig reports whoever posted it: staff need their standing.
+    isReport && shownPosting?.owner.accountId && !(reportedMember && !reportedPosting)
+      ? section(notes, 'Reported member', () => accountSummary(shownPosting.owner.accountId))
+      : Promise.resolve(null),
+    wantsProposals
+      ? section(notes, 'Proposals', () =>
+          jobProposals(shownPosting.id, actorIds, proposalText, {
+            requesterOwnsJob: actorIds.includes(String(shownPosting.owner.accountId)),
+          })
+        )
+      : Promise.resolve(null),
+  ]);
   if (contractId && !contract && !typedPosting) notes.push('The contract named in this ticket was not found.');
   if (contract && !contract.requesterRole) notes.push('The requester is not a party to this contract.');
-  const shownPosting = posting || reportedPosting || typedPosting;
-  if (shownPosting && row.type === 'Report a listing or user' && actorIds.includes(String(shownPosting.owner.accountId))) {
+  if (shownPosting && isReport && actorIds.includes(String(shownPosting.owner.accountId))) {
     notes.push('The requester reported a job or gig they posted.');
+  }
+  if (proposals && proposalText) {
+    if (!proposals.named) notes.push(`No proposal matches "${proposalText.slice(0, 60)}".`);
+    else if (!proposals.named.onThisJob) notes.push('The proposal named in this ticket is on a different job.');
   }
   return {
     contract,
     posting: shownPosting,
-    reportedMember: reportedPosting ? null : reportedMember,
-    proposalId: answerOf(form, 'proposal_id').value || null,
+    reportedMember: (reportedPosting ? null : reportedMember) || postingOwner || null,
+    proposalId: proposalText || null,
+    proposals: proposals || null,
+    // False for types that name no contract (listings, proposals, reports).
+    asksContract: typeAsksAny(row.type, ['contract_or_order']),
     desiredOutcome: answerOf(form, 'desired_outcome', 'request').value || null,
     activity,
     relatedTickets: related || [],
@@ -1228,30 +1483,57 @@ function escapeRegex(value) {
   return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-async function forumGroupByName(name) {
-  const { getMongoClient } = require('../lib/MongoDb');
-  const client = getMongoClient();
-  if (!client || !name) return null;
-  // Same database the forum moderator repository reads.
-  const db = client.db('ensemble');
-  const group = await db
-    .collection('forum_groups')
-    .findOne({ group_name: { $regex: `^${escapeRegex(String(name).trim().slice(0, 100))}$`, $options: 'i' } });
-  if (!group) return null;
+/** A group as a case shows it; `requesterAccountId` adds the requester's own membership. */
+async function forumGroupSummary(groupId, requesterAccountId = null) {
   const { getModeratorForumGroupDetail } = require('./ForumModeratorRepositories');
-  const detail = await getModeratorForumGroupDetail(String(group._id));
+  const detail = await getModeratorForumGroupDetail(String(groupId));
   if (!detail) return null;
+  const roster = Array.isArray(detail.members) ? detail.members : [];
+  const mine = requesterAccountId
+    ? roster.find((member) => member.accountId && String(member.accountId) === String(requesterAccountId))
+    : null;
   return {
     id: detail.id,
     name: detail.name,
     status: detail.status,
     owner: detail.owner ? detail.owner.name || null : null,
-    memberCount: Array.isArray(detail.members) ? detail.members.length : 0,
+    ownerAccountId: detail.owner?.accountId || null,
+    ownerHandle: detail.owner?.handle || null,
+    // Banned members stay on the roster; they are counted apart.
+    memberCount: roster.filter((member) => !member.isBanned).length,
+    bannedMemberCount: num(detail.bannedMemberCount),
     discussionCount: num(detail.discussionCount),
     removedDiscussionCount: num(detail.removedDiscussionCount),
+    archivedBy: detail.archivedBy || null,
+    archiveReason: detail.archiveReason || null,
     createdAt: detail.createdAt || null,
     deletedAt: detail.deletedAt || null,
+    requesterMembership: requesterAccountId
+      ? mine
+        ? { role: mine.role || 'Member', banned: Boolean(mine.isBanned), bannedAt: mine.bannedAt || null, joinedAt: mine.joinedAt || null }
+        : { role: null, banned: false, bannedAt: null, joinedAt: null }
+      : null,
   };
+}
+
+/** The group a "Forum groups" answer names: a pasted group link (its id) or the group's name. */
+async function forumGroupFromText(text, requesterAccountId) {
+  const value = String(text || '').trim();
+  if (!value) return null;
+  const linkedId = objectIdIn(value);
+  if (linkedId) {
+    const byId = await forumGroupSummary(linkedId, requesterAccountId);
+    if (byId) return byId;
+  }
+  const { getMongoClient } = require('../lib/MongoDb');
+  const client = getMongoClient();
+  if (!client) return null;
+  // Same database the forum moderator repository reads.
+  const db = client.db('ensemble');
+  const group = await db
+    .collection('forum_groups')
+    .findOne({ group_name: { $regex: `^${escapeRegex(value.slice(0, 100))}$`, $options: 'i' } });
+  return group ? forumGroupSummary(String(group._id), requesterAccountId) : null;
 }
 
 async function forumPost(postId) {
@@ -1265,26 +1547,40 @@ async function forumPost(postId) {
     status: post.status,
     isLocked: Boolean(post.isLocked),
     isSticky: Boolean(post.isSticky),
+    groupId: post.groupId || null,
     groupName: post.groupName || null,
     author: post.author ? post.author.name || post.author.handle || null : null,
+    authorAccountId: post.author?.accountId || null,
+    authorHandle: post.author?.handle || null,
+    // The body as written (kept when the post is removed), so staff can read what is at issue.
+    excerpt: post.excerpt || null,
+    imageCount: num(post.imageCount),
     commentCount: num(post.commentCount ?? (post.comments || []).length),
     removedComments: (post.comments || []).filter((c) => c.isDeleted).length,
     createdAt: post.createdAt || null,
     removedAt: post.removedAt || null,
+    removedBy: post.removedBy || null,
+    removalReason: post.removalReason || null,
     reports,
   };
 }
 
 async function forumContext(row, form, notes) {
   const accountId = row.account_id;
+  const isReport = row.type === 'Report a post or member';
   const postText = answerOf(form, 'post_link', 'link_or_username').value;
-  const postId = objectIdIn(postText);
-  const groupName = answerOf(form, 'group_name').value;
-  const memberText = row.type === 'Report a post or member' && !postId ? postText : null;
+  const linkedId = objectIdIn(postText);
+  const groupText = answerOf(form, 'group_name').value;
+  const memberText = isReport && !linkedId ? postText : null;
 
-  const [post, group, member, restrictions] = await Promise.all([
-    postId ? section(notes, 'Forum post', () => forumPost(postId)) : Promise.resolve(null),
-    groupName ? section(notes, 'Forum group', () => forumGroupByName(groupName)) : Promise.resolve(null),
+  // A link names a discussion, or (on a report) a group: try the post first, then the group.
+  const linkedPost = linkedId ? await section(notes, 'Forum post', () => forumPost(linkedId)) : null;
+  const linkedGroup = linkedId && !linkedPost && isReport
+    ? await section(notes, 'Forum group', () => forumGroupSummary(linkedId))
+    : null;
+  const post = linkedPost;
+  const [namedGroup, member, restrictions] = await Promise.all([
+    groupText ? section(notes, 'Forum group', () => forumGroupFromText(groupText, accountId)) : Promise.resolve(null),
     memberText ? section(notes, 'Reported member', () => accountFromText(memberText)) : Promise.resolve(null),
     section(notes, 'Forum restrictions', async () => {
       const result = await pool.query(
@@ -1307,9 +1603,21 @@ async function forumContext(row, form, notes) {
       }));
     }),
   ]);
-  if (postText && !postId && !memberText) notes.push('The post link in this ticket does not contain a post id.');
-  if (groupName && !group) notes.push(`No forum group is named "${String(groupName).slice(0, 60)}".`);
-  return { post, group, reportedMember: member, restrictions };
+  const group = namedGroup || linkedGroup || null;
+  const forumDown = notes.some((note) => /^Forum (post|group) could not/.test(note));
+  if (postText && !linkedId && !memberText) notes.push('The post link in this ticket does not contain a post id.');
+  if (linkedId && !post && !linkedGroup && !forumDown) {
+    notes.push(isReport ? 'No forum post or group matches the link in this ticket.' : 'No forum post matches the link in this ticket.');
+  }
+  if (groupText && !namedGroup && !forumDown) notes.push(`No forum group matches "${String(groupText).slice(0, 60)}".`);
+  if (memberText && !member) notes.push(`No member matches "${String(memberText).slice(0, 60)}".`);
+  // Reporting a post or a group reports the person behind it: show their standing.
+  const ownerId = isReport && !member ? post?.authorAccountId || linkedGroup?.ownerAccountId || null : null;
+  const owner = ownerId ? await section(notes, 'Reported member', () => accountSummary(ownerId)) : null;
+  if (ownerId && String(ownerId) === String(accountId)) {
+    notes.push('The requester reported their own post or group.');
+  }
+  return { post, group, reportedMember: member || owner || null, restrictions };
 }
 
 /* ------------------------------------------------------------------ */
@@ -1371,7 +1679,8 @@ async function referencedTransaction(reference, accountId) {
       -- Cast throughout: credit transaction status and type are native enums.
       SELECT 'payment'::text AS kind, p.id::text AS id, p.reference_id::text AS reference, p.status::text AS status,
              p.payment_type::text AS type, p.amount::numeric AS amount, p.credits::numeric AS credits,
-             p.created_at::timestamptz AS created_at, (u.account_id = $3) AS own
+             p.created_at::timestamptz AS created_at, (u.account_id = $3) AS own,
+             NULL::text AS failure, NULL::timestamptz AS settled_at
       FROM payments p JOIN users u ON u.user_id = p.user_id
       WHERE p.reference_id::text = $1 OR p.id::text = $1
       UNION ALL
@@ -1380,14 +1689,25 @@ async function referencedTransaction(reference, accountId) {
              EXISTS (
                SELECT 1 FROM account_wallets aw
                WHERE aw.account_id = $3 AND aw.wallet_id IN (ct.source_wallet_id, ct.destination_wallet_id)
-             )
+             ),
+             NULL::text, NULL::timestamptz
       FROM credit_transactions ct
       WHERE ct.credit_transaction_id::text = $2
       UNION ALL
-      SELECT 'cashout', c.cashout_id::text, NULL::text, c.status::text, c.xendit_channel_code::text, NULL::numeric,
-             c.amount_credits::numeric, c.created_at::timestamptz, (u.account_id = $3)
+      -- Members quote a payout by its id, its reference, or the provider's disbursement id.
+      SELECT 'cashout', c.cashout_id::text, c.reference_id::text, c.status::text, c.xendit_channel_code::text,
+             (c.net_amount_php_cents / 100.0)::numeric, c.amount_credits::numeric, c.created_at::timestamptz,
+             (u.account_id = $3), c.failure_code::text, c.refunded_at::timestamptz
       FROM cashouts c JOIN users u ON u.user_id = c.user_id
-      WHERE c.cashout_id::text = $2
+      WHERE c.cashout_id::text = $2 OR c.reference_id = $1 OR c.xendit_disbursement_id = $1
+      UNION ALL
+      SELECT 'invoice', si.subscription_invoice_id::text, si.xendit_cycle_id::text, si.status::text, 'Subscription'::text,
+             (si.amount_php_cents / 100.0)::numeric, NULL::numeric, si.created_at::timestamptz,
+             (u.account_id = $3), NULL::text, COALESCE(si.paid_at, si.failed_at)::timestamptz
+      FROM subscription_invoices si
+      JOIN subscriptions s ON s.subscription_id = si.subscription_id
+      JOIN users u ON u.user_id = s.user_id
+      WHERE si.subscription_invoice_id::text = $2 OR si.xendit_cycle_id = $1
     ) found
     LIMIT 1
     `,
@@ -1405,6 +1725,9 @@ async function referencedTransaction(reference, accountId) {
     type: row.type || null,
     amount: row.amount === null ? null : Number(row.amount),
     credits: row.credits === null ? null : Number(row.credits),
+    // Cashouts: the provider's failure code, and when the credits went back (refund) or it settled.
+    failureCode: row.failure || null,
+    settledAt: row.settled_at || null,
     belongsToRequester: Boolean(row.own),
     createdAt: row.created_at,
   };
@@ -1431,33 +1754,9 @@ async function billingContext(row, form, notes, role) {
 async function accountTypeContext(row, form, notes) {
   const accountId = row.account_id;
   const teamAnswer = answerOf(form, 'team_name');
+  const affectedText = answerOf(form, 'affected_username').value;
   const [verification, security, team] = await Promise.all([
-    section(notes, 'Identity verification', async () => {
-      // Status only. Session links, documents and business registration data stay on the verification desk.
-      const result = await pool.query(
-        `
-        SELECT v.is_verified, v.verified_at, vs.kyc_status, vs.verification_status, vs.expires_at,
-               vs.created_at AS session_created_at, vs.updated_at AS session_updated_at
-        FROM verifications v
-        LEFT JOIN verification_sessions vs ON vs.verification_session_id = v.verification_session_id
-        WHERE v.account_id = $1
-        LIMIT 1
-        `,
-        [accountId]
-      );
-      const v = result.rows[0];
-      return v
-        ? {
-            verified: Boolean(v.is_verified),
-            verifiedAt: v.verified_at || null,
-            kycStatus: v.kyc_status || null,
-            status: v.verification_status || null,
-            expiresAt: v.expires_at || null,
-            submittedAt: v.session_created_at || null,
-            updatedAt: v.session_updated_at || null,
-          }
-        : { verified: false, status: 'not_started' };
-    }),
+    section(notes, 'Identity verification', () => identityVerification(accountId)),
     ['Account compromised', 'Sign-in and password', 'Profile and settings'].includes(row.type)
       ? section(notes, 'Recent account changes', async () => {
           const result = await pool.query(
@@ -1476,60 +1775,249 @@ async function accountTypeContext(row, form, notes) {
           return result.rows.map((a) => ({ id: a.account_activity_id, action: a.action, eventCode: a.event_code, createdAt: a.created_at }));
         })
       : Promise.resolve(null),
-    teamAnswer.id
-      ? section(notes, 'Team', async () => {
-          const result = await pool.query(
-            `
-            SELECT t.team_id, a.display_name AS name, a.handle, a.status, a.created_at
-            FROM teams t JOIN accounts a ON a.account_id = t.account_id
-            WHERE t.team_id::text = $1 OR t.account_id::text = $1
-            LIMIT 1
-            `,
-            [teamAnswer.id]
-          );
-          const t = result.rows[0];
-          return t ? { id: t.team_id, name: t.name || t.handle || 'Team', handle: t.handle || null, status: t.status, createdAt: t.created_at } : null;
-        })
-      : Promise.resolve(null),
+    teamAnswer.id ? section(notes, 'Team', () => ticketTeam(teamAnswer.id, accountId, affectedText)) : Promise.resolve(null),
   ]);
+  if (team && affectedText && !team.affectedMember) {
+    notes.push(`No member matches "${affectedText.slice(0, 60)}".`);
+  } else if (team?.affectedMember && !team.affectedMember.membership) {
+    notes.push(`@${team.affectedMember.handle || affectedText} has never been on this team.`);
+  }
+  if (team && !team.requesterMembership) notes.push('The requester has never been on this team.');
   return { verification, recentChanges: security, team };
+}
+
+/** Identity check status only. Session links, documents and business data stay on the verification desk. */
+async function identityVerification(accountId) {
+  const result = await pool.query(
+    `
+    SELECT v.is_verified, v.verified_at, vs.kyc_status, vs.verification_status, vs.expires_at,
+           vs.created_at AS session_created_at, vs.updated_at AS session_updated_at
+    FROM verifications v
+    LEFT JOIN verification_sessions vs ON vs.verification_session_id = v.verification_session_id
+    WHERE v.account_id = $1
+    LIMIT 1
+    `,
+    [accountId]
+  );
+  const v = result.rows[0];
+  return v
+    ? {
+        verified: Boolean(v.is_verified),
+        verifiedAt: v.verified_at || null,
+        kycStatus: v.kyc_status || null,
+        status: v.verification_status || null,
+        expiresAt: v.expires_at || null,
+        submittedAt: v.session_created_at || null,
+        updatedAt: v.session_updated_at || null,
+      }
+    : { verified: false, status: 'not_started' };
+}
+
+/**
+ * Whether the requester may list on the marketplace now: a verified identity, and room under
+ * their plan's listing limit (`AssetRepositories.readAssetPostingEligibility`, the same check
+ * listing creation runs).
+ */
+async function sellingEligibility(accountId) {
+  const { getAssetPostingEligibilityRepository } = require('./AssetRepositories');
+  const [eligibility, identity] = await Promise.all([
+    getAssetPostingEligibilityRepository(accountId),
+    identityVerification(accountId),
+  ]);
+  return { ...eligibility, identity };
+}
+
+/**
+ * The team a Teams ticket names: who leads it, how many are on it, and the membership (role,
+ * status, dates) of the requester and of the member the ticket is about.
+ */
+async function ticketTeam(teamId, requesterAccountId, affectedText) {
+  const affectedId = affectedText ? await accountIdForHandle(handleIn(affectedText)) : null;
+  const result = await pool.query(
+    `
+    SELECT t.team_id, t.account_id, t.visibility, t.team_type, t.deleted_at,
+           a.display_name AS name, a.handle, a.status, a.created_at,
+           (SELECT COUNT(*)::int FROM team_members tm
+             WHERE tm.team_id = t.team_id AND tm.status = 'Active' AND tm.deleted_at IS NULL) AS active_members,
+           (SELECT COUNT(*)::int FROM team_members tm
+             WHERE tm.team_id = t.team_id AND tm.status <> 'Active' AND tm.deleted_at IS NULL) AS other_members,
+           owner_row.owner_account_id, owner_row.owner_name, owner_row.owner_handle
+    FROM teams t
+    JOIN accounts a ON a.account_id = t.account_id
+    LEFT JOIN LATERAL (
+      SELECT ou.account_id AS owner_account_id, ${MEMBER_NAME_SQL('oa', 'ou')} AS owner_name, oa.handle AS owner_handle
+      FROM team_members tm
+      JOIN users ou ON ou.user_id = tm.user_id
+      JOIN accounts oa ON oa.account_id = ou.account_id
+      WHERE tm.team_id = t.team_id AND tm.role = 'Owner' AND tm.deleted_at IS NULL
+      ORDER BY tm.joined_at ASC
+      LIMIT 1
+    ) owner_row ON TRUE
+    WHERE t.team_id::text = $1 OR t.account_id::text = $1
+    LIMIT 1
+    `,
+    [teamId]
+  );
+  const t = result.rows[0];
+  if (!t) return null;
+  // Removed members keep their row (deleted_at), so "removed" is told apart from "never joined".
+  const memberships = await pool.query(
+    `
+    SELECT u.account_id, tm.role, tm.status, tm.joined_at, tm.invited_at, tm.updated_at, tm.deleted_at
+    FROM team_members tm
+    JOIN users u ON u.user_id = tm.user_id
+    WHERE tm.team_id = $1 AND u.account_id = ANY($2::uuid[])
+    ORDER BY tm.deleted_at NULLS FIRST, tm.updated_at DESC
+    `,
+    [t.team_id, [requesterAccountId, affectedId].filter(Boolean)]
+  );
+  const membershipOf = (accountId) => {
+    const m = accountId ? memberships.rows.find((row) => String(row.account_id) === String(accountId)) : null;
+    return m
+      ? {
+          role: m.role,
+          status: m.deleted_at ? 'Removed' : m.status,
+          joinedAt: m.joined_at || null,
+          invitedAt: m.invited_at || null,
+          changedAt: m.deleted_at || m.updated_at || null,
+        }
+      : null;
+  };
+  const affectedAccount = affectedId ? await accountSummary(affectedId) : null;
+  return {
+    id: t.team_id,
+    accountId: t.account_id,
+    name: t.name || t.handle || 'Team',
+    handle: t.handle || null,
+    status: t.deleted_at ? 'Deleted' : t.status,
+    visibility: t.visibility || null,
+    // Contract workspaces are job scaffolding, not teams members run.
+    contractWorkspace: String(t.team_type || '') === 'contractual',
+    createdAt: t.created_at,
+    activeMembers: num(t.active_members),
+    otherMembers: num(t.other_members),
+    owner: t.owner_account_id ? { accountId: t.owner_account_id, name: t.owner_name, handle: t.owner_handle || null } : null,
+    requesterMembership: membershipOf(requesterAccountId),
+    affectedMember: affectedAccount
+      ? { ...affectedAccount, membership: membershipOf(affectedId) }
+      : null,
+  };
 }
 
 async function editorContext(row, form, notes) {
   const projectAnswer = answerOf(form, 'project');
   const projectId = projectAnswer.id || uuidIn(projectAnswer.value);
+  const collaboratorText = answerOf(form, 'collaborator').value;
+  const collaboratorHandle = handleIn(collaboratorText);
   const project = projectId
     ? await section(notes, 'Project', async () => {
-        const result = await pool.query(
-          `
-          SELECT p.project_id, p.name, p.created_at, p.updated_at, p.deleted_at,
-                 (SELECT COUNT(*)::int FROM project_members pm WHERE pm.project_id = p.project_id AND pm.deleted_at IS NULL) AS members,
-                 EXISTS (
-                   SELECT 1 FROM project_members pm JOIN users u ON u.user_id = pm.user_id
-                   WHERE pm.project_id = p.project_id AND pm.deleted_at IS NULL AND u.account_id = $2
-                 ) AS requester_is_member
-          FROM projects p
-          WHERE p.project_id = $1
-          `,
-          [projectId, row.account_id]
-        );
+        const [result, roster] = await Promise.all([
+          pool.query(
+            `
+            SELECT p.project_id, p.name, p.created_at, p.updated_at, p.deleted_at, p.trashed_at, p.frozen_at,
+                   (SELECT COUNT(*)::int FROM project_members pm WHERE pm.project_id = p.project_id AND pm.deleted_at IS NULL) AS members,
+                   EXISTS (
+                     SELECT 1 FROM project_members pm JOIN users u ON u.user_id = pm.user_id
+                     WHERE pm.project_id = p.project_id AND pm.deleted_at IS NULL AND u.account_id = $2
+                   ) AS requester_is_member
+            FROM projects p
+            WHERE p.project_id = $1
+            `,
+            [projectId, row.account_id]
+          ),
+          // Owners first; removed members stay listed so lost access can be traced.
+          pool.query(
+            `
+            SELECT u.account_id, ${MEMBER_NAME_SQL('a', 'u')} AS name, a.handle, pm.role, pm.joined_at, pm.deleted_at
+            FROM project_members pm
+            JOIN users u ON u.user_id = pm.user_id
+            LEFT JOIN accounts a ON a.account_id = u.account_id
+            WHERE pm.project_id = $1
+            ORDER BY pm.deleted_at NULLS FIRST,
+                     CASE pm.role WHEN 'Owner' THEN 0 WHEN 'Manager' THEN 1 WHEN 'Editor' THEN 2 ELSE 3 END,
+                     pm.joined_at ASC
+            LIMIT 20
+            `,
+            [projectId]
+          ),
+        ]);
         const p = result.rows[0];
-        return p
-          ? {
-              id: p.project_id,
-              name: p.name,
-              createdAt: p.created_at,
-              updatedAt: p.updated_at,
-              deleted: Boolean(p.deleted_at),
-              members: num(p.members),
-              requesterIsMember: Boolean(p.requester_is_member),
-            }
+        if (!p) return null;
+        const members = roster.rows.map((m) => ({
+          accountId: m.account_id,
+          name: m.name,
+          handle: m.handle || null,
+          role: m.role,
+          joinedAt: m.joined_at || null,
+          removedAt: m.deleted_at || null,
+          isRequester: String(m.account_id) === String(row.account_id),
+        }));
+        const collaborator = collaboratorHandle
+          ? members.find((m) => m.handle && m.handle.toLowerCase() === collaboratorHandle.toLowerCase()) || null
           : null;
+        return {
+          id: p.project_id,
+          name: p.name,
+          createdAt: p.created_at,
+          updatedAt: p.updated_at,
+          deleted: Boolean(p.deleted_at),
+          trashedAt: p.trashed_at || null,
+          frozenAt: p.frozen_at || null,
+          members: num(p.members),
+          requesterIsMember: Boolean(p.requester_is_member),
+          roster: members,
+          collaborator: collaboratorText
+            ? { query: collaboratorText.slice(0, 80), onProject: Boolean(collaborator && !collaborator.removedAt), member: collaborator }
+            : null,
+        };
       })
     : null;
   if (project && !project.requesterIsMember) notes.push('The requester is not a member of this project.');
   if (project?.deleted) notes.push('This project is deleted.');
-  return { project };
+  else if (project?.trashedAt) notes.push('This project is in its owner’s trash.');
+  if (project?.frozenAt) notes.push('Staff froze this project.');
+  if (project?.collaborator && !project.collaborator.member) {
+    notes.push(`"${project.collaborator.query.slice(0, 60)}" has never been on this project.`);
+  }
+  const asksProject = typeAsksAny(row.type, ['project']);
+  // Upload tickets name a file, not a project: show the uploads the member started lately.
+  const recentUploads = row.type === 'Uploads and storage'
+    ? await section(notes, 'Recent uploads', () => recentUploadsOf(row.account_id, answerOf(form, 'file_name').value))
+    : null;
+  return { project, asksProject, recentUploads };
+}
+
+/**
+ * The member's latest uploads (`upload_intents`): what they tried to upload and whether it
+ * finished. A pending upload past its expiry never reached storage.
+ */
+async function recentUploadsOf(accountId, fileName) {
+  const result = await pool.query(
+    `
+    SELECT upload_intent_id, original_name, expected_mime_type, max_size_bytes, status, expires_at,
+           consumed_at, created_at, (file_id IS NOT NULL) AS stored
+    FROM upload_intents
+    WHERE account_id = $1
+    ORDER BY created_at DESC
+    LIMIT 10
+    `,
+    [accountId]
+  );
+  const wanted = String(fileName || '').trim().toLowerCase();
+  return result.rows.map((u) => {
+    const pending = String(u.status || '').toLowerCase() === 'pending';
+    return {
+      id: u.upload_intent_id,
+      name: u.original_name,
+      mimeType: u.expected_mime_type || null,
+      maxSizeBytes: u.max_size_bytes == null ? null : num(u.max_size_bytes),
+      status: pending && u.expires_at && new Date(u.expires_at) <= new Date() ? 'expired' : u.status,
+      stored: Boolean(u.stored),
+      matchesTicket: Boolean(wanted && String(u.original_name || '').trim().toLowerCase() === wanted),
+      createdAt: u.created_at,
+      finishedAt: u.consumed_at || null,
+    };
+  });
 }
 
 async function safetyContext(row, form, notes) {
@@ -1542,20 +2030,49 @@ async function safetyContext(row, form, notes) {
       : null;
     return { reportedMember: member, reportsAgainst: reports, infringingListings: null };
   }
-  const links = answerOf(form, 'infringing_links').value;
-  const ids = [...new Set((String(links).match(new RegExp(UUID_RE.source, 'gi')) || []).map((id) => id.toLowerCase()))].slice(0, 3);
-  const listings = await section(notes, 'Infringing listings', async () => {
-    const found = [];
-    for (const id of ids) {
-      const listingId = await resolveListingId({ id, value: '' });
-      if (listingId) {
-        const summary = await listingSummary(listingId);
-        if (summary) found.push(summary);
+  // A claim can point anywhere on Ensemble: marketplace listings and assets, jobs and gigs
+  // (uuid ids), and forum posts (24-character ids).
+  const links = String(answerOf(form, 'infringing_links').value || '');
+  const ids = [...new Set((links.match(new RegExp(UUID_RE.source, 'gi')) || []).map((id) => id.toLowerCase()))].slice(0, 5);
+  const forumIds = [...new Set((links.match(new RegExp(OBJECT_ID_RE.source, 'gi')) || []).map((id) => id.toLowerCase()))].slice(0, 3);
+  const [linked, posts] = await Promise.all([
+    section(notes, 'Infringing listings', async () => {
+      const listings = [];
+      const postings = [];
+      for (const id of ids) {
+        const listingId = await resolveListingId({ id, value: '' });
+        const summary = listingId ? await listingSummary(listingId) : null;
+        if (summary) {
+          if (!listings.some((l) => l.id === summary.id)) listings.push(summary);
+          continue;
+        }
+        const posting = await postingSummary(id);
+        if (posting) postings.push(posting);
       }
-    }
-    return found;
-  });
-  return { reportedMember: null, reportsAgainst: null, infringingListings: listings };
+      return { listings, postings };
+    }),
+    forumIds.length
+      ? section(notes, 'Infringing forum posts', async () => {
+          const found = [];
+          for (const id of forumIds) {
+            const post = await forumPost(id);
+            if (post) found.push(post);
+          }
+          return found;
+        })
+      : Promise.resolve([]),
+  ]);
+  const foundCount = (linked?.listings.length || 0) + (linked?.postings.length || 0) + (posts?.length || 0);
+  if ((ids.length || forumIds.length) && linked && !foundCount) {
+    notes.push('None of the links in this claim match a listing, job, gig or forum post. Check them by hand.');
+  }
+  return {
+    reportedMember: null,
+    reportsAgainst: null,
+    infringingListings: linked ? linked.listings : null,
+    infringingPostings: linked ? linked.postings : null,
+    infringingPosts: posts || null,
+  };
 }
 
 async function openTicketsOf(accountId, ticketId) {
@@ -1602,9 +2119,30 @@ async function getTicketCaseContext(row, { role = null } = {}) {
     editor: () => editorContext(row, form, notes),
     safety: () => safetyContext(row, form, notes),
   };
-  if (loaders[kind]) {
-    context[kind] = await section(notes, 'Case details', loaders[kind]);
-  }
+  // Kind-specific people (reported member, seller, affected team member) load with their kind.
+  const namedRows = form.filter((answer) => NAMED_PERSON_KEYS.has(answer.key) && String(answer.value || '').trim());
+  const otherIds = KINDS_WITH_OWN_RELATED.has(kind) ? [] : form.map((answer) => answer.id).filter(Boolean);
+  const [details, namedPeople, relatedTickets] = await Promise.all([
+    loaders[kind] ? section(notes, 'Case details', loaders[kind]) : Promise.resolve(undefined),
+    namedRows.length
+      ? section(notes, 'People named in the ticket', () =>
+          Promise.all(
+            namedRows.map(async (answer) => ({
+              key: answer.key,
+              label: answer.label || answer.key,
+              query: String(answer.value).slice(0, 80),
+              account: await accountFromText(answer.value),
+            }))
+          )
+        )
+      : Promise.resolve(null),
+    otherIds.length
+      ? section(notes, 'Related tickets', () => ticketsReferencing(otherIds, row.ticket_id))
+      : Promise.resolve(null),
+  ]);
+  if (loaders[kind]) context[kind] = details;
+  if (namedPeople) context.namedPeople = namedPeople;
+  if (relatedTickets) context.relatedTickets = relatedTickets;
   return context;
 }
 

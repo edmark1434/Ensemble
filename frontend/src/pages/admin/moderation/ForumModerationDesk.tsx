@@ -21,6 +21,7 @@ import {
   ExternalLink,
   EyeOff,
   Heart,
+  History,
   LayoutGrid,
   List,
   Loader2,
@@ -84,6 +85,15 @@ type ForumMember = ForumPerson & {
   joinedAt: string | null;
 };
 
+/** An earlier version of a comment: the text before an edit, or what its author deleted. */
+type ForumCommentRevision = {
+  kind: 'edited' | 'deleted';
+  comment: string | null;
+  images?: string[];
+  by: ForumPerson | null;
+  recordedAt: string | null;
+};
+
 type ForumComment = {
   commentId: string;
   comment: string;
@@ -94,6 +104,8 @@ type ForumComment = {
   attachmentCount: number;
   images?: string[];
   isEdited?: boolean;
+  /** Staff-only history, oldest first. */
+  revisions?: ForumCommentRevision[];
   isDeleted: boolean;
   deletedAt: string | null;
   removedBy?: string | null;
@@ -1978,6 +1990,82 @@ function buildCommentTree(comments: ForumComment[]) {
 /** Deeper replies stop indenting here so long threads stay readable. */
 const MAX_COMMENT_INDENT = 4;
 
+function RevisionBody({ revision }: { revision: ForumCommentRevision }) {
+  return (
+    <>
+      <p className="whitespace-pre-wrap break-words text-sm text-zinc-300">
+        {revision.comment || <span className="italic text-zinc-600">No text</span>}
+      </p>
+      {revision.images?.length ? (
+        <div className="mt-2">
+          <ForumImageGrid images={revision.images} compact />
+        </div>
+      ) : null}
+    </>
+  );
+}
+
+/**
+ * Staff-only: what the author deleted (shown up front) and the text before
+ * each edit (behind a toggle). Members never receive this history.
+ */
+function CommentHistory({ comment }: { comment: ForumComment }) {
+  const [open, setOpen] = useState(false);
+  const revisions = comment.revisions || [];
+  if (!revisions.length) return null;
+
+  const deleted = [...revisions].reverse().find((revision) => revision.kind === 'deleted') || null;
+  const edits = revisions.filter((revision) => revision.kind === 'edited');
+
+  return (
+    <div className="mt-2 space-y-2 pl-9">
+      {deleted ? (
+        <div className="rounded-lg border border-amber-500/20 bg-amber-500/[0.04] px-3 py-2">
+          <p className="mb-1 flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-wide text-amber-300/80">
+            <Shield className="h-3 w-3" />
+            Deleted by {deleted.by?.name || 'the author'}
+            {deleted.recordedAt ? ` · ${formatDateTime(deleted.recordedAt)}` : ''}
+            <span className="font-normal normal-case tracking-normal text-zinc-500">· staff only</span>
+          </p>
+          <RevisionBody revision={deleted} />
+        </div>
+      ) : null}
+      {edits.length ? (
+        <div>
+          <button
+            type="button"
+            onClick={() => setOpen((value) => !value)}
+            aria-expanded={open}
+            className="inline-flex items-center gap-1 text-[11px] text-zinc-400 hover:text-zinc-200"
+          >
+            <History className="h-3 w-3" />
+            {open ? 'Hide' : 'Show'} edit history ({edits.length} earlier {edits.length === 1 ? 'version' : 'versions'})
+          </button>
+          {open ? (
+            <ol className="mt-2 space-y-2">
+              {[...edits].reverse().map((revision, index) => (
+                <li
+                  key={`${revision.recordedAt || 'edit'}-${index}`}
+                  className="rounded-lg border border-white/[0.06] bg-white/[0.02] px-3 py-2"
+                >
+                  <p className="mb-1 text-[10px] text-zinc-500">
+                    Before edit
+                    {revision.recordedAt ? ` · ${formatDateTime(revision.recordedAt)}` : ''}
+                    {revision.by && String(revision.by.userId) !== String(comment.author?.userId)
+                      ? ` · edited by ${revision.by.name || 'another member'}`
+                      : ''}
+                  </p>
+                  <RevisionBody revision={revision} />
+                </li>
+              ))}
+            </ol>
+          ) : null}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function CommentNode({
   comment,
   childrenOf,
@@ -2068,6 +2156,7 @@ function CommentNode({
               <ForumImageGrid images={comment.images} compact />
             </div>
           ) : null}
+          <CommentHistory comment={comment} />
           {comment.isDeleted && (comment.removalReason || comment.restoreBlockedReason) ? (
             <p className="mt-1 pl-9 text-[10px] text-zinc-500">
               {comment.removalReason ? `Reason: “${comment.removalReason}”` : ''}

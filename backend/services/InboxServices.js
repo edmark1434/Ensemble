@@ -1926,6 +1926,19 @@ async function createOrReuseDirectChatServices(payload, accountId) {
             if (error.code === 'ACCOUNT_DEACTIVATED') throw new ChatServiceError(error.message, 409);
             throw error;
         }
+        // Banned and locked members can only use the appeal pages: a new thread would never be
+        // read. Suspended members can still read, so a new DM to them is allowed.
+        {
+            const { getOwnerUnavailableReason } = require('../lib/OwnerAvailability');
+            const reason = await getOwnerUnavailableReason(recipientId, {
+                deactivated: false,
+                suspended: false,
+                teamLeader: false,
+            });
+            if (reason) {
+                throw new ChatServiceError("This member's account is restricted, so you cannot message them right now.", 409);
+            }
+        }
         const now = new Date();
 
         const result = await createInboxRepositories({

@@ -1,4 +1,5 @@
 import api from "@/lib/axios";
+import type { PublicStanding } from "@/pages/user/7_profile/Displays/AccountStanding";
 
 export const DEFAULT_FORUM_AVATAR = "/default-avatar.png";
 
@@ -28,5 +29,7 @@ export function identityFromDetails(details: any) {
     avatar: forumAvatarUrl(details.avatar_preset_url || details.avatar_url || details.path),
     isVerified: Boolean(details.is_verified),
     subscriptionPlan: details.subscription_plan || "Free",
+    // Public standing chip (Banned / Suspended / Locked / Timeout); null when in good standing.
+    standing: (details.standing || null) as PublicStanding | null,
   };
 }

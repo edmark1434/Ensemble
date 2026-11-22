@@ -6,6 +6,13 @@ const { createNotification } = require('./NotificationRepositories');
 
 const { platformMeritSql } = require('./WarningBandRepositories');
 
+const {
+    ownerUnavailableReasonSql,
+    ownerUnavailableError,
+    getOwnerUnavailableReason,
+    publicStandingSql,
+} = require('../lib/OwnerAvailability');
+
 /** Seller's Platform Merit (100 minus active, unexpired warning points) for gig ranking. */
 const FREELANCER_MERIT_SQL = `${platformMeritSql('g.freelancer_account_id')} as "freelancerMerit"`;
 
@@ -792,9 +799,13 @@ async function getAllGigsRepository(filters, accountId = null, actorIds = [], af
 
             (tm.team_id IS NOT NULL) as "isTeam",
 
-            (LOWER(COALESCE(a.type, '')) = 'user'
-              AND (LOWER(COALESCE(a.status, '')) = 'deactivated' OR a.deactivated_at IS NOT NULL)
-            ) as "sellerDeactivated"
+            ${ownerUnavailableReasonSql('a')} as "sellerUnavailableReason",
+
+            ${publicStandingSql('a')} as "sellerStanding",
+
+            -- Only staff set a gig to "paused" (owners open and close); it leaves browse while
+            -- staff review it. Not the derived "Queue Full" state above.
+            (LOWER(COALESCE(g.status, '')) = 'paused') as "staffPaused"
 
         FROM gigs g
 
@@ -802,7 +813,8 @@ async function getAllGigsRepository(filters, accountId = null, actorIds = [], af
 
         LEFT JOIN teams tm ON tm.account_id = g.freelancer_account_id AND tm.deleted_at IS NULL
 
-        WHERE LOWER(g.status) != 'archived' AND LOWER(g.status) != 'deleted'
+        -- deleted_at: archived by staff (docs/punishment-system.md §8.3).
+        WHERE LOWER(g.status) != 'archived' AND LOWER(g.status) != 'deleted' AND g.deleted_at IS NULL
 
         ORDER BY g.created_at DESC
 
@@ -810,10 +822,13 @@ async function getAllGigsRepository(filters, accountId = null, actorIds = [], af
 
     const res = accountId ? await pool.query(query, [accountId]) : await pool.query(query);
 
-    // A deactivated seller's gigs leave browse; the seller still sees their own.
-    const visibleRows = res.rows.filter(
-        (row) => !row.sellerDeactivated || actorIds.map(String).includes(String(row.freelancer_account_id))
-    );
+    // Gigs leave browse while staff pause them or while the seller cannot take orders
+    // (deactivated, suspended, locked, banned, team leader restricted); the seller still sees their own.
+    const ownIds = new Set([...actorIds, ...affiliatedAccountIds].map(String));
+    const visibleRows = res.rows.filter((row) => {
+        if (ownIds.has(String(row.freelancer_account_id))) return true;
+        return !row.sellerUnavailableReason && !row.staffPaused;
+    });
 
     return visibleRows.map(row => {
 
@@ -901,6 +916,11 @@ async function getAllGigsRepository(filters, accountId = null, actorIds = [], af
             teamVisibility: row.teamVisibility || null,
 
             isTeam: Boolean(row.isTeam || row.teamId),
+
+            // Paused while the seller cannot take orders (docs/punishment-system.md §9).
+            sellerUnavailableReason: row.sellerUnavailableReason || null,
+
+            sellerStanding: row.sellerStanding || null,
 
         };
 
@@ -1156,7 +1176,11 @@ async function getSavedGigsRepository(accountId) {
 
             (tm.team_id IS NOT NULL) as "isTeam",
 
-            COALESCE(g.included_member_account_ids, '[]'::jsonb) as "includedMemberAccountIds"
+            COALESCE(g.included_member_account_ids, '[]'::jsonb) as "includedMemberAccountIds",
+
+            ${ownerUnavailableReasonSql('a')} as "sellerUnavailableReason",
+
+            ${publicStandingSql('a')} as "sellerStanding"
 
         FROM gigs g
 
@@ -1166,7 +1190,7 @@ async function getSavedGigsRepository(accountId) {
 
         JOIN gig_saves gs ON gs.gig_id = g.gig_id
 
-        WHERE gs.account_id = $1 AND LOWER(g.status) != 'archived' AND LOWER(g.status) != 'deleted'
+        WHERE gs.account_id = $1 AND LOWER(g.status) != 'archived' AND LOWER(g.status) != 'deleted' AND g.deleted_at IS NULL
 
         ORDER BY gs.created_at DESC
 
@@ -1239,6 +1263,11 @@ async function getSavedGigsRepository(accountId) {
 
             isTeam: Boolean(row.isTeam || row.teamId),
 
+            // Paused while the seller cannot take orders (docs/punishment-system.md §9).
+            sellerUnavailableReason: row.sellerUnavailableReason || null,
+
+            sellerStanding: row.sellerStanding || null,
+
         };
 
     });
@@ -1263,9 +1292,7 @@ async function submitGigOrderRepository(accountId, gigId, orderData, prohibitedS
 
                     g.freelancer_account_id = ANY($3::uuid[]) AS is_affiliated_listing,
 
-                    (LOWER(COALESCE(seller.type, '')) = 'user'
-                      AND (LOWER(COALESCE(seller.status, '')) = 'deactivated' OR seller.deactivated_at IS NOT NULL)
-                    ) AS seller_deactivated
+                    ${ownerUnavailableReasonSql('seller')} AS seller_unavailable_reason
 
              FROM gigs g
 
@@ -1293,15 +1320,13 @@ async function submitGigOrderRepository(accountId, gigId, orderData, prohibitedS
 
         }
 
-        if (check.rows[0].seller_deactivated) {
+        // Deactivated, suspended, locked, banned, or a team whose leader is restricted.
+        if (check.rows[0].seller_unavailable_reason) {
 
-            const error = new Error('This seller has deactivated their account, so the gig is not taking orders right now.');
-
-            error.statusCode = 409;
-
-            error.code = 'ACCOUNT_DEACTIVATED';
-
-            throw error;
+            throw ownerUnavailableError(check.rows[0].seller_unavailable_reason, {
+                role: 'seller',
+                action: 'taking orders',
+            });
 
         }
 
@@ -2234,7 +2259,11 @@ async function getGigByIdRepository(gigId, accountId = null, actorIds = [], affi
 
             (tm.team_id IS NOT NULL) as "isTeam",
 
-            COALESCE(g.included_member_account_ids, '[]'::jsonb) as "includedMemberAccountIds"
+            COALESCE(g.included_member_account_ids, '[]'::jsonb) as "includedMemberAccountIds",
+
+            ${ownerUnavailableReasonSql('a')} as "sellerUnavailableReason",
+
+            ${publicStandingSql('a')} as "sellerStanding"
 
         FROM gigs g
 
@@ -2242,7 +2271,7 @@ async function getGigByIdRepository(gigId, accountId = null, actorIds = [], affi
 
         LEFT JOIN teams tm ON tm.account_id = g.freelancer_account_id AND tm.deleted_at IS NULL
 
-        WHERE g.gig_id = $1 AND LOWER(g.status) != 'archived' AND LOWER(g.status) != 'deleted'
+        WHERE g.gig_id = $1 AND LOWER(g.status) != 'archived' AND LOWER(g.status) != 'deleted' AND g.deleted_at IS NULL
 
     `;
 
@@ -2342,6 +2371,10 @@ async function getGigByIdRepository(gigId, accountId = null, actorIds = [], affi
         teamVisibility: row.teamVisibility || null,
 
         isTeam: Boolean(row.isTeam || row.teamId),
+
+        sellerUnavailableReason: row.sellerUnavailableReason || null,
+
+        sellerStanding: row.sellerStanding || null,
 
         includedMemberAccountIds: Array.isArray(row.includedMemberAccountIds) ? row.includedMemberAccountIds : []
 
@@ -2996,6 +3029,13 @@ async function confirmGigOrderContractRepository(orderId, clientAccountIds) {
 
 
         const { rate_credits, delivery_days, no_of_revisions_max, gig_id, client_account_id, freelancer_account_id: freelancerAccountId, gig_title, linked_project_id: linkedProjectId } = orderRow;
+
+        // Confirming funds escrow. A seller who became suspended, locked or banned (or a team
+        // whose leader did) since accepting cannot deliver, so the credits would be stranded.
+        const sellerReason = await getOwnerUnavailableReason(freelancerAccountId, undefined, client);
+        if (sellerReason) {
+            throw ownerUnavailableError(sellerReason, { role: 'seller', action: 'taking orders' });
+        }
 
         const { addonsPrice, addonsDays } = await getOrderAddonsTotals(client, orderId);
 

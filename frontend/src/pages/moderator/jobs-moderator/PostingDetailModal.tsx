@@ -6,6 +6,8 @@ import {
   Clock,
   Coins,
   ExternalLink,
+  Eye,
+  EyeOff,
   FileSignature,
   FileText,
   Flag,
@@ -13,6 +15,7 @@ import {
   Inbox,
   Layers,
   Loader2,
+  Lock,
   Paperclip,
   PlusCircle,
   ShieldCheck,
@@ -24,11 +27,15 @@ import api from "@/lib/axios";
 import { useStaffLive } from "@/lib/staffLive";
 import { staffPlatformViewHref } from "@/lib/staffRoutes";
 import { showErrorToast, showSuccessToast } from "@/components/utility/toast.ts";
-import type { JobsGigsPostingDetail, UserJobsHistory } from "../shared/moderatorTypes";
+import type { JobsGigsPosting, JobsGigsPostingDetail, UserJobsHistory } from "../shared/moderatorTypes";
 import { StaffPunishmentChips } from "@/components/account/MeritStatus";
+import { SubscriptionIcon } from "@/components/ui/SubscriptionIcon";
+import { VerificationIcon } from "@/components/ui/VerificationIcon";
+import { LastStaffActionNote, OwnerAvatar, PostingMemberPreview } from "./PostingMemberCard";
 import {
   DEFAULT_JOBS_API_BASE,
   POSTING_ACTIONS,
+  POSTING_STATUS_GUIDE,
   PostingReasonDialog,
   actionsForPostingStatus,
   apiErrorMessage,
@@ -36,13 +43,112 @@ import {
   formatDate,
   formatDateTime,
   initials,
+  memberViewFor,
   relativeTime,
   statusPill,
   typeBadge,
   type PostingAction,
+  type PostingStatus,
 } from "./postingUi";
 
 const CLOSED_REPORT = new Set(["resolved", "closed", "dismissed", "denied", "archived", "sanctioned"]);
+
+/** The review record in the shape of a board card, so the modal can show the member view. */
+function postingFromDetail(detail: JobsGigsPostingDetail): JobsGigsPosting {
+  const tierRates = detail.type === "gig" ? detail.tiers.map((t) => t.rateCredits) : [];
+  const latest = detail.moderationHistory?.[0];
+  return {
+    id: String(detail.id),
+    postNumber: detail.postNumber,
+    type: detail.type,
+    title: detail.title,
+    description: detail.description,
+    status: detail.status,
+    paymentType: detail.paymentType,
+    category: detail.category,
+    experienceLevel: detail.type === "job" ? detail.experienceLevel : null,
+    rateCreditsMin: detail.type === "job" ? detail.rateCreditsMin : tierRates.length ? Math.min(...tierRates) : null,
+    rateCreditsMax: detail.type === "job" ? detail.rateCreditsMax : tierRates.length ? Math.max(...tierRates) : null,
+    applicantCount: detail.type === "job" ? detail.proposals.length : detail.requests.length,
+    contractCount: detail.contracts.length,
+    tags: detail.tags,
+    thumbnailPath: detail.thumbnailPath,
+    savesCount: detail.savesCount,
+    slots: detail.type === "job" ? detail.noOfHires : detail.noOfConcurrentMax,
+    staffHoldAt: detail.staffHoldAt,
+    author: detail.author,
+    lastStaffAction: latest
+      ? {
+          status: latest.status,
+          previousStatus: latest.previousStatus,
+          reason: latest.reason,
+          reportNumber: null,
+          at: latest.createdAt,
+        }
+      : null,
+    createdAt: detail.createdAt,
+    updatedAt: detail.updatedAt,
+    lastViewedAt: detail.lastViewedAt,
+    archivedAt: detail.archivedAt,
+  };
+}
+
+/** The posting as members see it now, beside what that means for members and the owner. */
+function MemberViewSection({ detail }: { detail: JobsGigsPostingDetail }) {
+  const posting = postingFromDetail(detail);
+  const view = memberViewFor(detail.status);
+  const statusKey = (detail.status in POSTING_STATUS_GUIDE ? detail.status : "active") as PostingStatus;
+  const guide = POSTING_STATUS_GUIDE[statusKey];
+  const held = Boolean(detail.staffHoldAt) && detail.status !== "active";
+
+  return (
+    <div>
+      <SectionHeading icon={Eye}>Member view</SectionHeading>
+      <div className="grid gap-4 md:grid-cols-[minmax(0,300px)_minmax(0,1fr)]">
+        <div className="overflow-hidden rounded-2xl border border-white/[0.08] bg-[#14151c]">
+          <PostingMemberPreview posting={posting} />
+        </div>
+        <div className="space-y-3">
+          <div
+            className={`rounded-xl border px-4 py-3 ${
+              view.onBoard ? "border-emerald-500/20 bg-emerald-500/[0.05]" : "border-amber-500/25 bg-amber-500/[0.06]"
+            }`}
+          >
+            <p className="flex items-center gap-1.5 text-xs font-semibold text-white">
+              {view.onBoard ? <Eye className="h-3.5 w-3.5 text-emerald-300" /> : <EyeOff className="h-3.5 w-3.5 text-amber-300" />}
+              {view.onBoard ? "Members can see this posting" : detail.status === "archived" ? "Removed for members" : "Hidden from members"}
+            </p>
+            <p className="mt-1 text-xs leading-relaxed text-zinc-400">{guide.members}</p>
+          </div>
+          <div className="rounded-xl border border-white/10 bg-white/[0.02] px-4 py-3">
+            <p className="flex items-center gap-1.5 text-xs font-semibold text-white">
+              <User className="h-3.5 w-3.5 text-sky-300" />
+              The owner
+            </p>
+            <p className="mt-1 text-xs leading-relaxed text-zinc-400">{guide.owner}</p>
+            {held && (
+              <p className="mt-2 flex items-center gap-1.5 text-[11px] text-amber-200">
+                <Lock className="h-3 w-3" />
+                Staff hold since {formatDateTime(detail.staffHoldAt)}: only staff can reopen it.
+              </p>
+            )}
+            <div className="mt-2">
+              {posting.lastStaffAction ? (
+                <LastStaffActionNote posting={posting} />
+              ) : (
+                <p className="text-[11px] text-zinc-600">No staff action yet, so no moderation notice was sent.</p>
+              )}
+            </div>
+          </div>
+          <p className="text-[11px] leading-relaxed text-zinc-500">
+            <span className="font-medium text-zinc-400">Purpose of “{guide.title}”:</span> {guide.purpose}
+            {guide.undo !== "—" ? ` ${guide.undo}` : ""}
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function publicPostingPath(type: "job" | "gig", id: string) {
   return type === "job" ? `/jobs/${id}/page` : `/gigs/services/${id}/page`;
@@ -313,6 +419,8 @@ export default function PostingDetailModal({
                 </div>
               )}
 
+              <MemberViewSection detail={detail} />
+
               <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
                 <MiniStat
                   icon={Coins}
@@ -342,10 +450,12 @@ export default function PostingDetailModal({
 
               <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/10 bg-white/[0.02] px-4 py-3">
                 <div className="flex items-center gap-3">
-                  <Avatar name={detail.author.name} size="md" />
+                  <OwnerAvatar owner={detail.author} size="md" />
                   <div>
-                    <p className="text-sm font-semibold text-white">
-                      {detail.author.name}{" "}
+                    <p className="flex items-center gap-1.5 text-sm font-semibold text-white">
+                      {detail.author.name}
+                      <VerificationIcon verified={detail.author.isVerified} />
+                      <SubscriptionIcon plan={detail.author.subscriptionPlan} />
                       <span className="font-normal text-zinc-500">@{detail.author.handle}</span>
                     </p>
                     <p className="flex items-center gap-1.5 text-xs text-zinc-500">
@@ -615,7 +725,7 @@ export default function PostingDetailModal({
                           {h.reason ? h.reason : <span className="italic text-zinc-600">No reason recorded</span>}
                         </p>
                         <p className="mt-0.5 text-[11px] text-zinc-600">
-                          {h.actor ? `${h.actor.name} · ${h.actor.role}` : "Staff"}
+                          {h.actor ? `${h.actor.name} · ${h.actor.role}` : "Staff"} · owner notified
                         </p>
                       </li>
                     ))}

@@ -280,6 +280,11 @@ Each subsection is: where it lives, how a punishment starts, what standing does,
 
 - Suspended/banned owner: staff close or freeze the post. Do not leave an Open job that nobody can hire on.
 - Sanctioned job or gig report: staff choose to pause (default) or archive the reported posting with the sanction. Any staff pause / close / archive puts the posting on a staff hold: the owner cannot reopen it, is notified with the reason, and is pointed to a support ticket ("Appeal a jobs action"). Staff reopening it lifts the hold.
+- What each staff status means for jobs and gigs (Jobs & Gigs Control shows this as its status guide and member view):
+  - **Paused**: a temporary hold while staff investigate. It leaves the board and search (the owner still sees it in their own posts, and a direct link shows it as Closed). No new proposals or orders. Staff then reopen it or archive it.
+  - **Closed**: stays on the board marked Closed and takes no new proposals or orders.
+  - **Archived**: a confirmed violation. `deleted_at` is set and the posting is gone from the board, search, saved lists and its own page for everyone, the owner included. Staff can restore it.
+  - Running proposals, orders and contracts continue in every case.
 - Proposal submission fees (credits) are charged only when the proposal is **accepted by the backend**. A blocked proposal must not take credits.
 
 ### 8.4 Gigs and orders

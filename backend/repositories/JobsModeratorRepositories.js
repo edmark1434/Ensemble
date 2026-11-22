@@ -91,6 +91,12 @@ function mapPostingRow(row) {
     // Unresolved reports filed against this exact posting — the triage signal.
     openReportCount: Number(row.open_report_count || 0),
     tags: row.tags || [],
+    // Storage path of the card picture members see; the console resolves it like the member site.
+    thumbnailPath: row.thumbnail_path || null,
+    savesCount: Number(row.saves_count || 0),
+    // Jobs: hires needed; gigs: concurrent order slots.
+    slots: row.slots === null || row.slots === undefined ? null : Number(row.slots),
+    staffHoldAt: row.staff_hold_at || null,
     author: {
       accountId: row.author_account_id,
       name: row.author_name || 'Unknown',
@@ -101,6 +107,91 @@ function mapPostingRow(row) {
     lastViewedAt: row.last_viewed_at,
     archivedAt: row.deleted_at,
   };
+}
+
+/** The owner's current plan, as the member boards rank and badge it. */
+const OWNER_PLAN_SQL = `COALESCE((
+    SELECT p.name
+    FROM subscriptions s
+    JOIN users u ON u.user_id = s.user_id
+    JOIN plans p ON p.plan_id = s.plan_id
+    WHERE u.account_id = a.account_id
+      AND (s.status IS NULL OR UPPER(s.status) IN ('ACTIVE', 'TRIALING'))
+      AND (s.current_period_end IS NULL OR s.current_period_end > CURRENT_TIMESTAMP)
+    ORDER BY
+      CASE WHEN LOWER(p.name) = 'business' THEN 1 WHEN LOWER(p.name) = 'premium' THEN 2 ELSE 3 END,
+      s.updated_at DESC, s.created_at DESC
+    LIMIT 1
+  ), 'Free')`;
+
+/**
+ * How posting owners appear on the member boards: avatar (storage path), verification and plan.
+ * Read in one batch after the page is chosen, so the queue query stays as it is.
+ */
+async function getPostingOwnerIdentities(accountIds) {
+  const ids = [...new Set((accountIds || []).filter(Boolean).map(String))];
+  if (!ids.length) return new Map();
+  const { rows } = await pool.query(
+    `SELECT a.account_id,
+            (SELECT f.path FROM files f WHERE f.file_id = a.avatar_file_id LIMIT 1) AS avatar_path,
+            EXISTS (SELECT 1 FROM verifications v WHERE v.account_id = a.account_id AND v.is_verified = TRUE) AS is_verified,
+            ${OWNER_PLAN_SQL} AS subscription_plan
+       FROM accounts a
+      WHERE a.account_id::text = ANY($1::text[])`,
+    [ids]
+  );
+  return new Map(
+    rows.map((row) => [
+      String(row.account_id),
+      {
+        avatarPath: row.avatar_path || null,
+        isVerified: Boolean(row.is_verified),
+        subscriptionPlan: row.subscription_plan || 'Free',
+      },
+    ])
+  );
+}
+
+/** The latest staff status change on each posting (what the owner was last told, and why). */
+async function getLatestPostingActions(postingIds) {
+  const ids = [...new Set((postingIds || []).filter(Boolean).map(String))];
+  if (!ids.length) return new Map();
+  const { rows } = await pool.query(
+    `SELECT DISTINCT ON (aa.reference_id) aa.reference_id, aa.created_at, aa.metadata
+       FROM account_activity aa
+      WHERE aa.reference_id = ANY($1::text[])
+        AND aa.event_code IN ('JOBS_POSTING_STATUS_CHANGED', 'JOBS_POSTING_ARCHIVED')
+      ORDER BY aa.reference_id, aa.created_at DESC`,
+    [ids]
+  );
+  return new Map(
+    rows.map((row) => {
+      const metadata = typeof row.metadata === 'string' ? safeJson(row.metadata) : row.metadata || {};
+      return [
+        String(row.reference_id),
+        {
+          status: metadata?.status || null,
+          previousStatus: metadata?.previousStatus || null,
+          reason: metadata?.reason || null,
+          reportNumber: metadata?.reportNumber || null,
+          at: row.created_at,
+        },
+      ];
+    })
+  );
+}
+
+/** Adds owner identity and the latest staff action; a failed lookup leaves the plain rows. */
+async function decoratePostings(postings) {
+  const [identities, actions] = await Promise.all([
+    getPostingOwnerIdentities(postings.map((p) => p.author.accountId)).catch(() => new Map()),
+    getLatestPostingActions(postings.map((p) => p.id)).catch(() => new Map()),
+  ]);
+  return postings.map((posting) => ({
+    ...posting,
+    author: { ...posting.author, ...(identities.get(String(posting.author.accountId)) || {}) },
+    lastStaffAction: actions.get(String(posting.id)) || null,
+  }));
 }
 
 /**
@@ -192,6 +283,11 @@ async function getJobsGigsPostings({ type, status, search, sort, limit } = {}) {
         (SELECT COALESCE(ARRAY_AGG(t.name ORDER BY t.name), '{}')
            FROM job_tags jt JOIN tags t ON t.tag_id = jt.tag_id
           WHERE jt.job_id = j.job_id) AS tags,
+        (SELECT f.path FROM job_attachments ja JOIN files f ON f.file_id = ja.file_id
+          WHERE ja.job_id = j.job_id AND ja.index = 0 LIMIT 1) AS thumbnail_path,
+        (SELECT COUNT(*)::int FROM job_saves js WHERE js.job_id = j.job_id) AS saves_count,
+        j.no_of_hires AS slots,
+        j.staff_hold_at,
         j.created_at, j.updated_at, j.last_viewed_at, j.deleted_at,
         j.client_account_id AS author_account_id
       FROM jobs j
@@ -218,6 +314,11 @@ async function getJobsGigsPostings({ type, status, search, sort, limit } = {}) {
         (SELECT COALESCE(ARRAY_AGG(t.name ORDER BY t.name), '{}')
            FROM gig_tags gg JOIN tags t ON t.tag_id = gg.tag_id
           WHERE gg.gig_id = g.gig_id) AS tags,
+        (SELECT f.path FROM gig_attachments ga JOIN files f ON f.file_id = ga.file_id
+          WHERE ga.gig_id = g.gig_id AND ga.index = 0 LIMIT 1) AS thumbnail_path,
+        (SELECT COUNT(*)::int FROM gig_saves gs WHERE gs.gig_id = g.gig_id) AS saves_count,
+        g.no_of_concurrent_max AS slots,
+        g.staff_hold_at,
         g.created_at, g.updated_at, g.last_viewed_at, g.deleted_at,
         g.freelancer_account_id AS author_account_id
       FROM gigs g
@@ -230,7 +331,7 @@ async function getJobsGigsPostings({ type, status, search, sort, limit } = {}) {
     `,
     params
   );
-  return result.rows.map(mapPostingRow);
+  return decoratePostings(result.rows.map(mapPostingRow));
 }
 
 /** Reports filed against one posting, so the review modal shows why it was flagged. */
@@ -361,7 +462,7 @@ async function getJobsGigsPostingDetail(type, id) {
         [id]
       ),
       pool.query(
-        `SELECT f.file_id, f.name, f.mime_type, f.size_bytes
+        `SELECT f.file_id, f.name, f.mime_type, f.size_bytes, f.path, ja.index
          FROM job_attachments ja JOIN files f ON f.file_id = ja.file_id
          WHERE ja.job_id = $1 ORDER BY ja.index`,
         [id]
@@ -369,6 +470,11 @@ async function getJobsGigsPostingDetail(type, id) {
       getPostingReports(id),
       getPostingModerationHistory(id),
     ]);
+    const [savesResult, identities] = await Promise.all([
+      pool.query(`SELECT COUNT(*)::int AS n FROM job_saves WHERE job_id = $1`, [id]),
+      getPostingOwnerIdentities([j.client_account_id]).catch(() => new Map()),
+    ]);
+    const cover = attachmentsResult.rows.find((r) => Number(r.index) === 0);
 
     return {
       type: 'job',
@@ -391,12 +497,16 @@ async function getJobsGigsPostingDetail(type, id) {
       updatedAt: j.updated_at,
       lastViewedAt: j.last_viewed_at,
       archivedAt: j.deleted_at,
+      staffHoldAt: j.staff_hold_at || null,
+      thumbnailPath: cover?.path || null,
+      savesCount: Number(savesResult.rows[0]?.n || 0),
       author: {
         accountId: j.client_account_id,
         name: j.author_name || 'Unknown',
         handle: j.author_handle || '—',
         status: j.author_status,
         warningPoints: null,
+        ...(identities.get(String(j.client_account_id)) || {}),
       },
       tags: tagsResult.rows.map((r) => r.name),
       attachments: attachmentsResult.rows.map((r) => ({
@@ -498,7 +608,7 @@ async function getJobsGigsPostingDetail(type, id) {
           [id]
         ),
         pool.query(
-          `SELECT f.file_id, f.name, f.mime_type, f.size_bytes
+          `SELECT f.file_id, f.name, f.mime_type, f.size_bytes, f.path, ga.index
            FROM gig_attachments ga JOIN files f ON f.file_id = ga.file_id
            WHERE ga.gig_id = $1 ORDER BY ga.index`,
           [id]
@@ -506,6 +616,11 @@ async function getJobsGigsPostingDetail(type, id) {
         getPostingReports(id),
         getPostingModerationHistory(id),
       ]);
+    const [savesResult, identities] = await Promise.all([
+      pool.query(`SELECT COUNT(*)::int AS n FROM gig_saves WHERE gig_id = $1`, [id]),
+      getPostingOwnerIdentities([g.freelancer_account_id]).catch(() => new Map()),
+    ]);
+    const cover = attachmentsResult.rows.find((r) => Number(r.index) === 0);
 
     return {
       type: 'gig',
@@ -521,12 +636,16 @@ async function getJobsGigsPostingDetail(type, id) {
       updatedAt: g.updated_at,
       lastViewedAt: g.last_viewed_at,
       archivedAt: g.deleted_at,
+      staffHoldAt: g.staff_hold_at || null,
+      thumbnailPath: cover?.path || null,
+      savesCount: Number(savesResult.rows[0]?.n || 0),
       author: {
         accountId: g.freelancer_account_id,
         name: g.author_name || 'Unknown',
         handle: g.author_handle || '—',
         status: g.author_status,
         warningPoints: null,
+        ...(identities.get(String(g.freelancer_account_id)) || {}),
       },
       tags: tagsResult.rows.map((r) => r.name),
       attachments: attachmentsResult.rows.map((r) => ({

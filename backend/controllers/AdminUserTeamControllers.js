@@ -94,8 +94,15 @@ async function patchAdminAccountStatus(req, res) {
       memberAccountIds: Array.isArray(req.body?.memberAccountIds)
         ? req.body.memberAccountIds.slice(0, 501).map(String)
         : undefined,
+      // Unban only: also put back the jobs, gigs and listings the ban closed.
+      restoreBanItems: req.body?.restoreBanItems === true,
     });
     const { describeSummary } = require('../services/BanCleanupServices');
+    const restoreNote = data.banRestore && Array.isArray(data.banRestore.restored)
+      ? ` Restored ${data.banRestore.restored.length} item${data.banRestore.restored.length === 1 ? '' : 's'} the ban closed${
+          data.banRestore.skipped?.length ? `; ${data.banRestore.skipped.length} stayed closed` : ''
+        }.`
+      : '';
     const message = data.isTeam && data.summary
       ? data.summary
       : data.forumTimeout
@@ -104,12 +111,48 @@ async function patchAdminAccountStatus(req, res) {
         ? 'Timeout cleared'
         : data.banCleanup && Array.isArray(data.banCleanup.failures) && 'jobsClosed' in data.banCleanup
           ? `Account set to ${data.status}. ${describeSummary(data.banCleanup)}.`
-          : `Account set to ${data.status}`;
+          : `Account set to ${data.status}.${restoreNote}`;
     res.status(200).json({ success: true, data, message });
   } catch (err) {
     console.error('Error updating account status:', err);
     const code = err.statusCode === 403 ? 403 : 400;
     res.status(code).json({ success: false, message: err.message || 'Failed to update account status' });
+  }
+}
+
+/** GET /api/admin/accounts/:accountId/ban-items — what bans closed, and what came back. */
+async function getAdminBanClosedItems(req, res) {
+  try {
+    const { listBanClosedItems } = require('../services/BanRestoreServices');
+    const data = await listBanClosedItems(req.params.accountId);
+    res.status(200).json({ success: true, data });
+  } catch (err) {
+    console.error('Error loading ban-closed items:', err);
+    res.status(err.statusCode || 500).json({ success: false, message: err.message || 'Failed to load closed items' });
+  }
+}
+
+/** POST /api/admin/accounts/:accountId/ban-items/restore — `{ itemIds?: string[] }` (default all). */
+async function postAdminRestoreBanItems(req, res) {
+  try {
+    const { restoreBanClosedItems } = require('../services/BanRestoreServices');
+    const itemIds = Array.isArray(req.body?.itemIds) ? req.body.itemIds.slice(0, 500).map(String) : null;
+    const data = await restoreBanClosedItems(req.params.accountId, {
+      source: 'staff',
+      staffId: staffIdFromSession(req.session),
+      itemIds,
+    });
+    const message = `Restored ${data.restored.length} item${data.restored.length === 1 ? '' : 's'}${
+      data.skipped.length ? `; ${data.skipped.length} stayed closed` : ''
+    }.`;
+    res.status(200).json({ success: true, data, message });
+  } catch (err) {
+    console.error('Error restoring ban-closed items:', err);
+    res.status(err.statusCode || 500).json({
+      success: false,
+      code: err.code,
+      message: err.message || 'Failed to restore closed items',
+    });
   }
 }
 
@@ -464,6 +507,8 @@ async function getAdminAccountProfileDetails(req, res) {
 }
 
 module.exports = {
+  getAdminBanClosedItems,
+  postAdminRestoreBanItems,
   getAdminAccountProfileDetails,
   getAdminTeamsManagement,
   getAdminUsersManagement,

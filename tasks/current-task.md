@@ -1,5 +1,54 @@
 # Current Task
 
+# Parallel task: Jobs & Gigs Control member view, paused / archived visibility
+
+## Objective
+
+Moderators see each job and gig the way members see it on the board, with moderator details underneath. Pause and archive do what the console says they do on the member side, and owners are told every time.
+
+## Acceptance Criteria
+
+- **Member view.** Jobs & Gigs Control defaults to cards laid out like the member board (cover, Open / Closed chip, price, title, description, skills, owner avatar with verification and plan). Each card adds post number, moderator status, staff hold, open reports, what members see now, the last staff action and its reason ("owner notified"), pipeline counts and the actions menu. The Table layout is kept per browser.
+- **Payload.** `GET …/jobs/postings` rows carry `thumbnailPath`, `savesCount`, `slots`, `staffHoldAt`, `author.avatarPath / isVerified / subscriptionPlan` and `lastStaffAction`; the posting detail carries `thumbnailPath`, `savesCount`, `staffHoldAt` and the same owner fields.
+- **Review modal.** A "Member view" section shows the card preview, what members and the owner see for this status, the staff hold and the last notice sent.
+- **Status guide.** The desk explains the purpose of Active, Paused, Closed and Archived (members, owner, what comes next); the reason dialog says the owner is notified with the reason and an appeal link.
+- **Board visibility.** Staff-paused jobs and gigs leave browse (owners still see their own). Staff-archived gigs (`deleted_at`) leave browse, saved gigs and the gig page, as archived jobs already did.
+- **Notices.** Every staff pause / close / archive / reopen notifies the owner (already in place); the closed notice no longer claims the posting is hidden.
+
+# Parallel task: forum comment edit and delete history for staff
+
+## Objective
+
+When a member edits or deletes their own forum comment, moderators and admins can still read what it said before, for moderation. Members never see that history.
+
+## Acceptance Criteria
+
+- **Stored.** Each comment keeps a staff-only `revisions` list (`{ kind: 'edited' | 'deleted', comment, attachments, by_user_id, recorded_at }`). An edit that changes the text or attachments adds the version being replaced, and an author's own delete adds the comment as it was before its text is wiped (`ForumDiscussionServices.updateForumDiscussionCommentsServices`, `softDeleteForumDiscussionComment`).
+- **Hidden from members.** `publicForumComment` / `publicForumDiscussion` strip `revisions`, so no member read or socket payload carries it.
+- **Staff read.** `getModeratorForumDiscussionDetail` returns `comments[].revisions` (`kind`, `comment`, `images`, `by`, `recordedAt`, oldest first).
+- **Desk UI.** In the Forum Control / admin Forum discussion dialog, an author-deleted comment shows its deleted text and images marked "staff only", and an edited comment has a "Show edit history" toggle listing the earlier versions, newest first.
+- **Limits.** Edits and deletes made before this change have no history.
+
+# Parallel task: ticket case file shows every linked record
+
+## Objective
+
+Whatever a ticket names (listing, asset, purchase, contract, job, gig, proposal, team, project, forum post or group, payout, a person) shows up in the staff Case tab with the details staff need, and can be opened. Members see their picked records as links in Cases.
+
+## Acceptance Criteria
+
+- **Listings.** The case listing card shows scheduled go-live time, "Permanently rejected", the seller's account status and the latest review-thread entries. "Appeal a marketplace action" shows what happened (`action_taken`).
+- **Reviews.** "Asset reviews" lists the asset's reviews (the named reviewer's first) and treats a seller filing about their own asset as the seller. Contract cards show the ratings both sides left ("Gig reviews").
+- **Reported owners.** A reported listing, job, gig, forum post or group shows its owner's standing.
+- **Postings.** Staff hold and the requester's proposals (or a named proposal) on a job. Area appeals list actions on team-owned listings and postings too.
+- **People and places.** Named usernames (other person, collaborator, affected member, reviewer) resolve to standing; Teams show the requester's and affected member's membership; projects show their roster; forum groups resolve from a link and show the requester's membership.
+- **Copyright.** Linked jobs, gigs and forum posts resolve, not only listings.
+- **Billing.** Payout references match cashout reference / disbursement ids; invoice ids match subscription invoices.
+- **Every area.** All five desks (Admin, Support, Forum, Jobs & Gigs, Marketplace) share the panel. "Seller verification" / "Listing review" show selling eligibility; "Uploads and storage" shows the member's recent uploads; sections for a record the type never asks for (listing, contract, project) are left out instead of saying "none named".
+- **Links.** Case records open in platform view; Details form answers and the member's "What you reported" link to the picked record (`formValues[].href`).
+
+# Earlier task
+
 ## Objective
 
 Marketplace submissions get a full review loop with a conversation per listing. A seller submits an asset, staff approve it (live now, in 24 hours, in 7 days, or on a chosen date) or send it back with a message, and the seller answers by resubmitting with a message. Every decision, resubmission and reply is kept in one thread both sides can read. See docs/api.md "Marketplace submission review".

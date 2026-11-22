@@ -628,6 +628,30 @@ async function reverseModerationActivity(activityId, staffSession = null) {
         reason: 'Account status change was reversed by moderation',
       });
     } catch (_e) {}
+    // The other side of each live contract hears about the change, as with any standing change.
+    {
+      const RESTRICTED = new Set(['suspended', 'locked', 'banned']);
+      const to = String(restoreTo || '').toLowerCase();
+      const from = String(meta.status || '').toLowerCase();
+      const { notifyLiveWorkCounterparties } = require('../services/RestrictedWorkServices');
+      if (RESTRICTED.has(to) && to !== from) {
+        await notifyLiveWorkCounterparties(accountId, restoreTo, {
+          endsAt: ends.Suspended || ends.Locked || ends.Banned || null,
+        });
+      } else if (to === 'active' && RESTRICTED.has(from)) {
+        await notifyLiveWorkCounterparties(accountId, 'Active');
+      }
+    }
+    // Undoing an unban brings the ban back: close what the member posted in between, exactly as
+    // a ban from the Users desk does. Problems are logged, never undo the reversal.
+    if (String(restoreTo).toLowerCase() === 'banned') {
+      try {
+        const { closeBannedAccountListings } = require('../services/BanCleanupServices');
+        await closeBannedAccountListings(accountId, { staffId, permanent: !ends.Banned });
+      } catch (err) {
+        console.error('Ban clean-up after reversal failed:', err.message);
+      }
+    }
   } else if (code === 'ACCOUNT_WARNED' || code === 'VIOLATION_ISSUED') {
     const violationId = activity.referenceId;
     let reversedId = null;

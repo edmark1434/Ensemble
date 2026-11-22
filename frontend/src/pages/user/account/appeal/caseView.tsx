@@ -61,7 +61,8 @@ export type TicketCaseInfo = {
   people?: number;
   assignee?: { name: string; role?: string | null } | null;
   requester?: { accountId: string; name: string; username?: string | null } | null;
-  formValues?: { label: string; value: string }[];
+  /** `href`: the page of the record the member picked (their listing, the job, the team…). */
+  formValues?: { label: string; value: string; href?: string | null }[];
   satisfactionScore?: number | null;
 };
 
@@ -557,7 +558,22 @@ export function TicketSidePanels({
           {reported ? <ReportedText text={reported} /> : null}
           {answers.length ? (
             <div className="mt-3 border-t border-gray-100 pt-3 dark:border-white/5">
-              <InfoRows rows={answers.map((answer) => ({ label: answer.label, value: answer.value }))} />
+              <InfoRows
+                rows={answers.map((answer) => ({
+                  label: answer.label,
+                  value: answer.href ? (
+                    <Link
+                      to={answer.href}
+                      title="Open it"
+                      className="text-gray-900 underline decoration-gray-300 underline-offset-2 hover:decoration-gray-600 dark:text-white dark:decoration-zinc-600 dark:hover:decoration-zinc-300"
+                    >
+                      {answer.value}
+                    </Link>
+                  ) : (
+                    answer.value
+                  ),
+                }))}
+              />
             </div>
           ) : null}
         </Panel>

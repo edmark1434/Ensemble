@@ -26,6 +26,8 @@ const {
   getAdminAccountActivity,
   getAdminAccountProfileDetails,
   postAdminTeamTransferOwnership,
+  getAdminBanClosedItems,
+  postAdminRestoreBanItems,
 } = require('../controllers/AdminUserTeamControllers');
 
 /** Admin + Support: full User & Team. Forum/Marketplace/Jobs: read + limited enforcement. */
@@ -117,6 +119,9 @@ router.get('/users-management', [checkSession, requireUserTeamAccess], getAdminU
 router.get('/accounts/:accountId/verification-details', [checkSession, requireUserTeamFullWrite], getAdminUserVerificationDetails);
 router.get('/user-team-overview', [checkSession, requireUserTeamAccess], getAdminUserTeamOverview);
 router.patch('/accounts/:accountId/status', [checkSession, requireUserTeamAccess], patchAdminAccountStatus);
+// What a ban closed, and putting it back (bans are Admin and Support's: docs/punishment-system.md §4.6).
+router.get('/accounts/:accountId/ban-items', [checkSession, requireUserTeamAccess], getAdminBanClosedItems);
+router.post('/accounts/:accountId/ban-items/restore', [checkSession, requireUserTeamFullWrite], postAdminRestoreBanItems);
 router.patch('/accounts/:accountId/verification', [checkSession, requireUserTeamFullWrite], patchAdminAccountVerification);
 router.patch('/accounts/:accountId/verification/approve', [checkSession, requireUserTeamFullWrite], approveAdminAccountVerification);
 router.patch('/accounts/:accountId/verification/decline', [checkSession, requireUserTeamFullWrite], declineAdminAccountVerification);

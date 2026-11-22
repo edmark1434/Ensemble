@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Briefcase, ClipboardList, Copy, CornerDownRight, FileText, Hand, Loader2, Lock, MessageSquare, Paperclip, Send, ShieldAlert, Trash2, UserMinus, UserPlus, UserRound, X } from 'lucide-react';
-import TicketCasePanel, { AppealStandingBrief, CASE_TAB_LABEL } from './TicketCasePanel';
+import TicketCasePanel, { AppealStandingBrief, CASE_TAB_LABEL, CaseOpenLink, staffViewablePath } from './TicketCasePanel';
 import type { AppealDecisionCardData, TicketCaseContext } from './ticketTypes';
 import AppealDecisionDialog, { type AppealChoice, type AppealDecisionPayload } from './AppealDecisionDialog';
 import AppealDecisionCard from '@/pages/user/account/appeal/AppealDecisionCard';
@@ -1751,7 +1751,13 @@ export default function TicketDetailModalShell({
                             value={
                               <>
                                 {answer.value}
-                                {answer.id ? <span className="mt-0.5 block break-all text-[11px] text-zinc-600">{answer.id}</span> : null}
+                                {answer.id ? (
+                                  <span className="mt-0.5 flex flex-wrap items-center gap-2 break-all text-[11px] text-zinc-600">
+                                    {answer.id}
+                                    {/* Contracts and projects are members-only; the Case tab shows them instead. */}
+                                    <CaseOpenLink path={staffViewablePath(answer.href)} />
+                                  </span>
+                                ) : null}
                               </>
                             }
                           />

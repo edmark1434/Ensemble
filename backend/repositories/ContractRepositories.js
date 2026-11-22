@@ -46,19 +46,14 @@ async function sendJobOffer(clientIds, proposalId, rateCredits, startsAt, custom
             throw new Error("Cannot extend offer: this job posting is closed.");
         }
 
-        // An offer locks the client's credits in escrow until it is answered. A deactivated
-        // freelancer cannot answer, so the offer would only strand those credits.
-        const freelancerState = await client.query(
-            `SELECT 1 FROM accounts
-             WHERE account_id = $1
-               AND LOWER(COALESCE(type, '')) = 'user'
-               AND (LOWER(COALESCE(status, '')) = 'deactivated' OR deactivated_at IS NOT NULL)`,
-            [freelancer_account_id]
-        );
-        if (freelancerState.rows.length) {
-            const error = new Error("Cannot extend offer: this freelancer has deactivated their account.");
-            error.statusCode = 409;
-            error.code = 'ACCOUNT_DEACTIVATED';
+        // An offer locks the client's credits in escrow until it is answered. A freelancer who is
+        // deactivated, suspended, locked or banned (or a team whose leader is) cannot sign, so
+        // the offer would only strand those credits.
+        const { getOwnerUnavailableReason, ownerUnavailableError } = require('../lib/OwnerAvailability');
+        const freelancerReason = await getOwnerUnavailableReason(freelancer_account_id, undefined, client);
+        if (freelancerReason) {
+            const error = ownerUnavailableError(freelancerReason, { role: 'freelancer', action: 'able to accept offers' });
+            error.message = `Cannot extend offer: ${error.message.charAt(0).toLowerCase()}${error.message.slice(1)}`;
             throw error;
         }
 
@@ -219,6 +214,17 @@ async function acceptJobOffer(freelancerIds, contractId) {
         const transferAmount = Number(contractRes.rows[0].rate_credits);
         if (!Number.isSafeInteger(transferAmount) || transferAmount <= 0) {
             throw new Error("Contract has an invalid rate");
+        }
+
+        // A client who became suspended, locked or banned (or a team whose leader did) after
+        // sending the offer cannot approve work. The offer waits; its escrow stays the client's
+        // and returns through the normal reject path or the ban clean-up.
+        {
+            const { getOwnerUnavailableReason, ownerUnavailableError } = require('../lib/OwnerAvailability');
+            const clientReason = await getOwnerUnavailableReason(client_account_id, undefined, client);
+            if (clientReason) {
+                throw ownerUnavailableError(clientReason, { role: 'client', action: 'able to start a contract' });
+            }
         }
 
         // Verify if position quota is already filled by another candidate

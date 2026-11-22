@@ -388,9 +388,11 @@ export default function CaseInbox({
                     }
                   : null,
                 formValues: Array.isArray(data.formValues)
-                  ? data.formValues.map((answer: { label?: string; key?: string; value?: unknown }) => ({
+                  ? data.formValues.map((answer: { label?: string; key?: string; value?: unknown; href?: unknown }) => ({
                       label: String(answer.label || answer.key || ''),
                       value: String(answer.value ?? ''),
+                      // Only site paths: the server builds them, but a link never leaves the site.
+                      href: typeof answer.href === 'string' && /^\/[^/\\]/.test(answer.href) ? answer.href : null,
                     }))
                   : [],
                 satisfactionScore: t.satisfactionScore ?? null,

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Archive, Briefcase, Gem, Loader2, Pause, Play, RotateCcw, XCircle } from "lucide-react";
+import { Archive, Bell, Briefcase, Gem, Loader2, Pause, Play, RotateCcw, XCircle } from "lucide-react";
 
 export const DEFAULT_JOBS_API_BASE = "/api/moderator/jobs";
 
@@ -33,7 +33,8 @@ export const POSTING_ACTIONS: Record<PostingAction, PostingActionMeta> = {
     danger: false,
     requiresReason: false,
     dialogTitle: "Reopen posting",
-    dialogHint: "The posting goes back on the board and can take new proposals or orders again.",
+    dialogHint:
+      "The posting goes back on the board and can take new proposals or orders again. The staff hold is lifted, so the owner can manage its status themselves.",
     placeholder: "Optional note for the activity log…",
     confirmLabel: "Reopen",
     successMessage: "Posting reopened",
@@ -46,7 +47,8 @@ export const POSTING_ACTIONS: Record<PostingAction, PostingActionMeta> = {
     danger: false,
     requiresReason: false,
     dialogTitle: "Restore archived posting",
-    dialogHint: "The posting is un-archived and returns to the board as active.",
+    dialogHint:
+      "The posting is un-archived and returns to the board as active, for example after an appeal is accepted. The staff hold is lifted.",
     placeholder: "Optional note, e.g. appeal APL-204 accepted…",
     confirmLabel: "Restore",
     successMessage: "Posting restored",
@@ -60,7 +62,7 @@ export const POSTING_ACTIONS: Record<PostingAction, PostingActionMeta> = {
     requiresReason: true,
     dialogTitle: "Pause posting",
     dialogHint:
-      "Hides the posting from the board while you investigate. Existing proposals, orders and contracts are kept.",
+      "A temporary hold while you investigate, for example an open report. The posting leaves the board and search, nobody can send new proposals or orders, and the owner cannot reopen it. Existing proposals, orders and contracts carry on. Reopen it when the review is done, or archive it if the violation is confirmed.",
     placeholder: "Why the posting is paused, e.g. checking report RPT-…",
     confirmLabel: "Pause posting",
     successMessage: "Posting paused",
@@ -74,7 +76,7 @@ export const POSTING_ACTIONS: Record<PostingAction, PostingActionMeta> = {
     requiresReason: true,
     dialogTitle: "Close posting",
     dialogHint:
-      "Stops new proposals or orders. Contracts already running continue and are handled through disputes if needed.",
+      "Stays visible on the board marked Closed, but takes no new proposals or orders, and the owner cannot reopen it. Use it when the posting is fine to show but should stop hiring, such as a duplicate or misleading terms. Running contracts continue and go through disputes if needed.",
     placeholder: "Why the posting is closed…",
     confirmLabel: "Close posting",
     successMessage: "Posting closed",
@@ -88,7 +90,7 @@ export const POSTING_ACTIONS: Record<PostingAction, PostingActionMeta> = {
     requiresReason: true,
     dialogTitle: "Archive posting",
     dialogHint:
-      "Removes the posting from the board entirely (soft delete). Use this for policy violations such as scams, prohibited work or spam. It can be restored later.",
+      "For a confirmed policy violation such as a scam, prohibited work or spam. The posting is removed from Ensemble (board, search, saved lists and its link), and the owner can no longer see or edit it. The record is kept as evidence and it can be restored later.",
     placeholder: "Policy reason, e.g. off-platform payment request confirmed in RPT-…",
     confirmLabel: "Archive posting",
     successMessage: "Posting archived",
@@ -102,6 +104,80 @@ export function actionsForPostingStatus(status: string): PostingAction[] {
   if (s === "paused") return ["activate", "close", "archive"];
   if (s === "closed") return ["activate", "archive"];
   return ["pause", "close", "archive"];
+}
+
+/**
+ * What each moderator status means, from the members' side and the owner's side.
+ * Matches the server: member boards hide staff-paused postings (owners still see their own),
+ * and archived postings are gone everywhere.
+ */
+export const POSTING_STATUS_GUIDE: Record<
+  PostingStatus,
+  { title: string; purpose: string; members: string; owner: string; undo: string }
+> = {
+  active: {
+    title: "Active",
+    purpose: "Normal state. Nothing is wrong with the posting.",
+    members: "On the board and in search. Members can send proposals or orders.",
+    owner: "Can edit it, close it and reopen it themselves.",
+    undo: "—",
+  },
+  paused: {
+    title: "Paused",
+    purpose: "A temporary hold while staff investigate, usually because of a report. Nothing is decided yet.",
+    members: "Hidden from the board and search. An existing link shows it as Closed and takes no new proposals or orders.",
+    owner: "Notified with your reason. Still sees it in their own posts but cannot reopen it, and is pointed to a support ticket.",
+    undo: "Reopen when it checks out, or archive if the violation is confirmed.",
+  },
+  closed: {
+    title: "Closed",
+    purpose: "Stop new hiring but keep the posting visible, such as duplicates, misleading terms or a posting that should not take more work.",
+    members: "Still on the board, marked Closed. No new proposals or orders.",
+    owner: "Notified with your reason. Cannot reopen it.",
+    undo: "Reopen.",
+  },
+  archived: {
+    title: "Archived",
+    purpose: "A confirmed policy violation such as a scam, prohibited work or spam. The posting is removed from Ensemble.",
+    members: "Gone from the board, search, saved lists and its link.",
+    owner: "Notified with your reason and an appeal link. Can no longer see or edit it.",
+    undo: "Restore, for example after an appeal is accepted.",
+  },
+};
+
+export type MemberView = {
+  /** The status chip members see on the card. */
+  chip: "Open" | "Closed" | "Removed";
+  /** Whether the posting shows on the public board and in search. */
+  onBoard: boolean;
+  /** One line on what members experience right now. */
+  summary: string;
+};
+
+/** What members see for a posting in this moderator status. */
+export function memberViewFor(status: string): MemberView {
+  switch (String(status || "").toLowerCase()) {
+    case "paused":
+      return { chip: "Closed", onBoard: false, summary: "Hidden from the board · the owner and anyone with the link see it as Closed" };
+    case "closed":
+      return { chip: "Closed", onBoard: true, summary: "On the board as Closed · no new proposals or orders" };
+    case "archived":
+      return { chip: "Removed", onBoard: false, summary: "Removed from Ensemble · members and the owner cannot open it" };
+    default:
+      return { chip: "Open", onBoard: true, summary: "On the board · taking proposals or orders" };
+  }
+}
+
+/** Plain-text excerpt of a rich-text posting description, for cards. */
+export function plainExcerpt(value: string | null | undefined, max = 220) {
+  const text = String(value || "")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/[*_`#>~]+/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  return text.length > max ? `${text.slice(0, max - 1)}…` : text;
 }
 
 export function postingStatusClass(status: string) {
@@ -270,6 +346,12 @@ export function PostingReasonDialog({
         </div>
         <div className="space-y-3 px-5 py-4">
           <p className="text-xs leading-relaxed text-zinc-400">{meta.dialogHint}</p>
+          <p className="flex items-start gap-2 rounded-lg border border-sky-500/20 bg-sky-500/[0.06] px-3 py-2 text-[11px] leading-relaxed text-sky-100">
+            <Bell className="mt-0.5 h-3.5 w-3.5 shrink-0 text-sky-300" />
+            {meta.status === "active"
+              ? "The owner gets a notification that their posting is visible again, with a link to it."
+              : "The owner gets an in-app notification with this reason, and a link to open a support ticket (“Appeal a jobs action”) if they disagree."}
+          </p>
           <label className="block text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
             Reason {meta.requiresReason ? "(required)" : "(optional)"}
           </label>

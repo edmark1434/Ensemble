@@ -49,6 +49,15 @@ const { getPunishmentCatalog } = require('../controllers/PunishmentDefController
 router.get('/warning-catalog', [checkSession, restrictionDeskStaff], getWarningCatalog);
 router.get('/punishment-catalog', [checkSession, restrictionDeskStaff], getPunishmentCatalog);
 
+// Live contracts whose other side is suspended, locked or banned: staff settle these so the
+// active party's escrow is never stranded (docs/punishment-system.md §9).
+const restrictedWorkStaff = requireStaffRole(['Admin', 'Support Moderator', 'Jobs N Gigs Moderator']);
+router.get(
+  '/restricted-work',
+  [checkSession, restrictedWorkStaff],
+  require('../controllers/RestrictedWorkControllers').getRestrictedWork
+);
+
 // ─── Marketplace Moderator ───────────────────────────────────────────────
 router.get('/marketplace/overview', [checkSession, marketplaceModerator], getOverview);
 router.get('/marketplace/listings', [checkSession, marketplaceModerator], getListings);

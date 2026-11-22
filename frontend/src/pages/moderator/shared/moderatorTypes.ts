@@ -718,11 +718,39 @@ export type JobsGigsPosting = {
   /** Unresolved reports filed against this posting. */
   openReportCount?: number;
   tags: string[];
-  author: { accountId: string; name: string; handle: string };
+  /** Storage path of the card picture members see (resolve with `getImageUrl`). */
+  thumbnailPath?: string | null;
+  savesCount?: number;
+  /** Jobs: hires needed. Gigs: concurrent order slots. */
+  slots?: number | null;
+  /** Set while staff hold the posting: the owner cannot reopen it themselves. */
+  staffHoldAt?: string | null;
+  author: PostingOwner;
+  /** Latest staff status change, which is what the owner's last notice said. */
+  lastStaffAction?: PostingStaffAction | null;
   createdAt: string;
   updatedAt: string;
   lastViewedAt: string | null;
   archivedAt: string | null;
+};
+
+/** A posting owner as the member boards show them. */
+export type PostingOwner = {
+  accountId: string;
+  name: string;
+  handle: string;
+  /** Storage path (resolve with `resolveAvatarPath`). */
+  avatarPath?: string | null;
+  isVerified?: boolean;
+  subscriptionPlan?: string | null;
+};
+
+export type PostingStaffAction = {
+  status: string | null;
+  previousStatus: string | null;
+  reason: string | null;
+  reportNumber: string | null;
+  at: string;
 };
 
 export type PostingAttachment = { fileId: string; name: string; mimeType: string; sizeBytes: number };
@@ -783,7 +811,10 @@ export type JobPostingDetail = {
   updatedAt: string;
   lastViewedAt: string | null;
   archivedAt: string | null;
-  author: { accountId: string; name: string; handle: string; status: string; warningPoints: number | null };
+  staffHoldAt?: string | null;
+  thumbnailPath?: string | null;
+  savesCount?: number;
+  author: PostingOwner & { status: string; warningPoints: number | null };
   tags: string[];
   attachments: PostingAttachment[];
   proposals: {
@@ -814,7 +845,10 @@ export type GigPostingDetail = {
   updatedAt: string;
   lastViewedAt: string | null;
   archivedAt: string | null;
-  author: { accountId: string; name: string; handle: string; status: string; warningPoints: number | null };
+  staffHoldAt?: string | null;
+  thumbnailPath?: string | null;
+  savesCount?: number;
+  author: PostingOwner & { status: string; warningPoints: number | null };
   tags: string[];
   attachments: PostingAttachment[];
   tiers: {

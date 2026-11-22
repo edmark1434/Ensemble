@@ -43,9 +43,13 @@ function buildOwnerNotice({ type, title, status, reason, reportNumber, held }) {
     : { paused: 'was paused', closed: 'was closed', archived: 'was archived' }[status] + ' by the Ensemble team';
   const cause = reportNumber ? ` after report ${reportNumber} was reviewed` : '';
   const why = reason ? ` Reason: ${clip(reason, 300)}` : '';
-  const effect = status === 'archived'
-    ? ' It no longer appears on Ensemble.'
-    : ' It is hidden from the board and you cannot reopen it yourself.';
+  // Matches what members see (docs/punishment-system.md §8.3): paused leaves the board while the
+  // team reviews it, closed stays visible but takes no new work, archived is removed.
+  const effect = {
+    archived: ' It no longer appears on Ensemble.',
+    paused: ' It is hidden from the board while the team reviews it, and you cannot reopen it yourself.',
+    closed: ' It no longer takes new proposals or orders, and you cannot reopen it yourself.',
+  }[status];
   return `Your ${noun}${name} ${verb}${cause}.${why}${why && !/[.!?]$/.test(why) ? '.' : ''}${effect} `
     + `If you think this is a mistake or you have fixed the problem, open a support ticket (“${APPEAL_TICKET_TYPE}”) to ask for a review.`;
 }

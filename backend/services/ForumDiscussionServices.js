@@ -1,5 +1,7 @@
 const {
     REMOVED_BY,
+    COMMENT_REVISION_KIND,
+    commentRevision,
     createForumDiscussionRepositories,
     getPaginatedForumDiscussions,
     getForumDiscussionByGroupId: getForumDiscussionByGroupIdRepository,
@@ -1026,6 +1028,8 @@ async function updateForumDiscussionCommentsServices(payload = {}, session = {})
                 session,
             }),
             removedByUserId: actorId,
+            // Kept for staff review when the author's delete wipes the text.
+            snapshot: commentToUpdate,
         });
         const updatedDiscussion = deleted
             ? await getForumDiscussionByIdRepository(discussionId)
@@ -1075,6 +1079,18 @@ async function updateForumDiscussionCommentsServices(payload = {}, session = {})
         updateDoc.$set['comments.$.attachments'] = validateCommentAttachments(payload.attachments);
     }
 
+    // Keep the version being replaced so moderators can see what it said before.
+    const nextText = updateDoc.$set['comments.$.comment'];
+    const nextAttachments = updateDoc.$set['comments.$.attachments'];
+    const textChanged = nextText !== undefined && nextText !== commentToUpdate.comment;
+    const attachmentsChanged = nextAttachments !== undefined
+        && JSON.stringify(nextAttachments.map((a) => a.file_path))
+            !== JSON.stringify((commentToUpdate.attachments || []).map((a) => a?.file_path));
+    let editRevision = null;
+    if (textChanged || attachmentsChanged) {
+        editRevision = commentRevision(COMMENT_REVISION_KIND.edited, commentToUpdate, actorId);
+    }
+
     const commentWasLiked = commentToUpdate.likes?.some(
         (like) => String(like.user_id) === String(actorId)
     );
@@ -1095,6 +1111,9 @@ async function updateForumDiscussionCommentsServices(payload = {}, session = {})
         && !updateDoc.$push
     ) {
         throw new Error('No valid comment fields provided for update');
+    }
+    if (editRevision) {
+        updateDoc.$push = { ...(updateDoc.$push || {}), 'comments.$.revisions': editRevision };
     }
 
     const updatedDiscussion = await updateForumDiscussionComments({

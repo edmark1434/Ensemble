@@ -74,7 +74,10 @@ async function getPublicForumUserIdentities(userIds = []) {
             a.handle,
             f.path AS avatar_preset_url,
             COALESCE(v.is_verified, false) AS is_verified,
-            COALESCE(p.name, 'Free') AS subscription_plan
+            COALESCE(p.name, 'Free') AS subscription_plan,
+            -- Public standing chip on forum posts, comments and member lists: Banned /
+            -- Suspended / Locked / Timeout only (docs/punishment-system.md §11).
+            ${require('../lib/OwnerAvailability').publicStandingSql('a')} AS standing
         FROM requested_ids
         INNER JOIN users u
             ON u.user_id::text = requested_ids.requested_id

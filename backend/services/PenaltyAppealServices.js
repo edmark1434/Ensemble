@@ -496,6 +496,9 @@ function normalizeDecisionOptions(ticket, decision, body = {}) {
     if (body?.followUp?.action && body.followUp.action !== 'none') {
       throw appealError('Further action is only for denied appeals.');
     }
+    // An accepted ban appeal puts back the jobs, gigs and listings the ban closed unless staff
+    // untick it (BanRestoreServices). Ignored for every other penalty.
+    options.restoreClosedItems = body?.restoreClosedItems !== false;
     return options;
   }
 
