@@ -127,13 +127,15 @@ export function PortfolioClipModal() {
   if (!picker) return null;
 
   const isFailed = !!picker.error;
-  const { queuePosition } = picker;
+  const { queuePosition, publishing } = picker;
   const buttonLabel = isFailed
     ? "Export failed"
     : exporting
-      ? queuePosition
-        ? "Export queued"
-        : "Export in progress"
+      ? publishing
+        ? "Attaching to portfolio"
+        : queuePosition
+          ? "Export queued"
+          : "Export in progress"
       : "Export portfolio clip";
 
   const handlePopoverOpenChange = (nextOpen: boolean) => {
@@ -337,7 +339,17 @@ export function PortfolioClipModal() {
               </div>
             ) : (
               <div className="flex flex-col items-center justify-center gap-4 py-4 text-center">
-                {queuePosition ? (
+                {publishing ? (
+                  <>
+                    <div className="text-xl font-semibold">
+                      Attaching clip to portfolio
+                    </div>
+                    <div className="text-muted-foreground text-sm">
+                      <div>Render complete. Preparing and saving your clip…</div>
+                      <div>Closing the browser will not cancel this.</div>
+                    </div>
+                  </>
+                ) : queuePosition ? (
                   <>
                     <div className="text-4xl font-semibold">
                       #{queuePosition.position}
@@ -354,7 +366,7 @@ export function PortfolioClipModal() {
                     </div>
                     <div className="text-muted-foreground text-sm">
                       <div>Closing the browser will not cancel the export.</div>
-                      <div>The video will be saved in your space.</div>
+                      <div>The video will be saved in your portfolio.</div>
                     </div>
                   </>
                 )}

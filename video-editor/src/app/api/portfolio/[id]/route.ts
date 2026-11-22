@@ -77,9 +77,13 @@ export async function POST(request: NextRequest, { params }: Context) {
     const targetResolution = policy.plan === "Free" ? 720 : 1080;
     const resolution = Math.min(targetResolution, policy.maxHeight);
     const fps = Math.min(30, policy.maxFps);
-    const firstFrame = Math.round(startMs * fps / 1000);
-    const endFrame = Math.min(Math.round(endMs * fps / 1000),
-      terms.maxSeconds == null ? Infinity : firstFrame + Math.floor(terms.maxSeconds * fps));
+    const maxDurationFrames = Math.max(1, Math.floor(content.duration * fps / 1000));
+    const firstFrame = Math.min(Math.round(startMs * fps / 1000), maxDurationFrames - 1);
+    const endFrame = Math.min(
+      Math.round(endMs * fps / 1000),
+      maxDurationFrames,
+      terms.maxSeconds == null ? Infinity : firstFrame + Math.floor(terms.maxSeconds * fps),
+    );
     if (endFrame <= firstFrame) throw new PortfolioError("Select at least one video frame.", 400);
     const response = await submitRender(request, session.userId, { ...content.snapshot,
       id: crypto.randomUUID(), projectId: id, projectName: name.trim(), marketDraft: Boolean(marketDraft), ensembleWatermark: false,

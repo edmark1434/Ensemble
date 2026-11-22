@@ -5,27 +5,49 @@ import {
   createCollabSchema,
   readStateFromDoc,
 } from "@/features/editor/collab/ydoc-schema";
+import { mediaSources } from "@/features/editor/utils/media-sources";
 import { loadLatestProjectState } from "@/lib/collab/persistence-store";
-import { sanitizeRenderTransitions } from "@/lib/filter-render-media";
+import { missingUploadSources } from "@/lib/db/upload-usage";
+import {
+  filterRenderMedia,
+  sanitizeRenderTransitions,
+} from "@/lib/filter-render-media";
 
 export const THUMBNAIL_SHORT_SIDE_PX = 480;
 
-function isVisualItem(item: ITrackItem): boolean {
+function isValidRemoteMediaSrc(src: unknown): src is string {
+  return typeof src === "string" && /^https?:\/\//i.test(src);
+}
+
+function isVisualItem(
+  item: ITrackItem,
+  missing: ReadonlySet<string> = new Set(),
+): boolean {
   if (item.type === "audio") return false;
   if ((item.details as any)?.hidden) return false;
+  if (!(item.display?.to > item.display?.from)) return false;
   const src = (item.details as any)?.src;
-  if (typeof src === "string" && src.startsWith("pending-upload:")) return false;
+  if (item.type === "image" || item.type === "video") {
+    if (!isValidRemoteMediaSrc(src) || missing.has(src)) return false;
+  } else if (typeof src === "string" && src.startsWith("pending-upload:")) {
+    return false;
+  }
   return true;
 }
 
 export function pickThumbnailTimeMs(
   trackItemsMap: Record<string, ITrackItem>,
   durationMs: number,
+  trackItemIds?: string[],
+  missing: ReadonlySet<string> = new Set(),
 ): number | null {
   let earliest: ITrackItem | null = null;
+  const candidates = trackItemIds
+    ? trackItemIds.map((id) => trackItemsMap[id]).filter(Boolean)
+    : Object.values(trackItemsMap);
 
-  for (const item of Object.values(trackItemsMap)) {
-    if (!isVisualItem(item)) continue;
+  for (const item of candidates) {
+    if (!isVisualItem(item, missing)) continue;
     if (!earliest || item.display.from < earliest.display.from) {
       earliest = item;
     }
@@ -83,21 +105,34 @@ export async function buildThumbnailJob(
     if (!snap.size) return null;
 
     const fps = snap.fps ?? 30;
-    const duration = snap.duration ?? 0;
+    const duration = snap.trackItemIds.reduce(
+      (end, id) => Math.max(end, snap.trackItemsMap[id]?.display.to || 0),
+      snap.duration || 0,
+    );
+    if (duration <= 0) return null;
     const background = snap.background ?? { type: "color", value: "#000000" };
+    const missing = new Set(
+      await missingUploadSources(mediaSources(snap), projectId),
+    );
 
-    const timeMs = pickThumbnailTimeMs(snap.trackItemsMap, duration);
+    const timeMs = pickThumbnailTimeMs(
+      snap.trackItemsMap,
+      duration,
+      snap.trackItemIds,
+      missing,
+    );
     if (timeMs === null) return null;
 
     const visibleIds = snap.trackItemIds.filter((id) => {
       const item = snap.trackItemsMap[id];
       return (
         !!item &&
-        isVisualItem(item) &&
+        isVisualItem(item, missing) &&
         item.display.from <= timeMs &&
         timeMs < item.display.to
       );
     });
+    if (!visibleIds.length) return null;
 
     // Keep only items visible at timeMs (plus any real transition neighbor whose
     // transition overlaps timeMs) so off-frame GIFs/videos never stall Lambda.
@@ -106,7 +141,14 @@ export async function buildThumbnailJob(
       if (!transition || transition.kind === "none") continue;
       const fromItem = snap.trackItemsMap[transition.fromId];
       const toItem = snap.trackItemsMap[transition.toId];
-      if (!fromItem || !toItem || !isVisualItem(fromItem) || !isVisualItem(toItem)) continue;
+      if (
+        !fromItem ||
+        !toItem ||
+        !isVisualItem(fromItem, missing) ||
+        !isVisualItem(toItem, missing)
+      ) {
+        continue;
+      }
       const half = (transition.duration ?? 0) / 2;
       const seam = fromItem.display.to;
       if (timeMs >= seam - half && timeMs <= seam + half) {
@@ -116,8 +158,10 @@ export async function buildThumbnailJob(
     }
 
     const filteredTrackItemIds = snap.trackItemIds.filter((id) => includedIds.has(id));
-    const filteredTrackItemsMap = Object.fromEntries(
-      filteredTrackItemIds.map((id) => [id, snap.trackItemsMap[id]]),
+    const filteredTrackItemsMap = structuredClone(
+      Object.fromEntries(
+        filteredTrackItemIds.map((id) => [id, snap.trackItemsMap[id]]),
+      ),
     );
     const filteredTracks = snap.tracks
       .map((track) => ({
@@ -125,27 +169,16 @@ export async function buildThumbnailJob(
         items: track.items.filter((id) => includedIds.has(id)),
       }))
       .filter((track) => track.items.length > 0);
-    const filteredTransitionsMap = Object.fromEntries(
-      Object.entries(snap.transitionsMap).filter(
-        ([, t]) => t && t.kind !== "none" && includedIds.has(t.fromId) && includedIds.has(t.toId),
+    const filteredTransitionsMap = structuredClone(
+      Object.fromEntries(
+        Object.entries(snap.transitionsMap).filter(
+          ([, t]) => t && t.kind !== "none" && includedIds.has(t.fromId) && includedIds.has(t.toId),
+        ),
       ),
     );
     const filteredTransitionIds = snap.transitionIds.filter(
       (id) => !!filteredTransitionsMap[id],
     );
-
-    const hash = createHash("sha1")
-      .update(
-        stableStringify({
-          renderVersion: 2, // Media fills the resized layer in the render composition.
-          timeMs,
-          size: snap.size,
-          background,
-          order: visibleIds,
-          items: visibleIds.map((id) => snap.trackItemsMap[id]),
-        }),
-      )
-      .digest("hex");
 
     const payload = {
       id: `thumb-${projectId}`,
@@ -166,7 +199,32 @@ export async function buildThumbnailJob(
       currentTime: timeMs,
     };
 
+    filterRenderMedia(
+      payload,
+      (item) =>
+        item.type === "audio" ||
+        !!(item.details as any)?.hidden ||
+        !isValidRemoteMediaSrc((item.details as any)?.src) ||
+        missing.has((item.details as any).src),
+    );
     sanitizeRenderTransitions(payload);
+    if (!payload.trackItemIds.length) return null;
+
+    const remainingVisibleIds = visibleIds.filter(
+      (id) => id in payload.trackItemsMap,
+    );
+    const hash = createHash("sha1")
+      .update(
+        stableStringify({
+          renderVersion: 2, // Media fills the resized layer in the render composition.
+          timeMs,
+          size: snap.size,
+          background,
+          order: remainingVisibleIds,
+          items: remainingVisibleIds.map((id) => payload.trackItemsMap[id]),
+        }),
+      )
+      .digest("hex");
 
     return { payload, hash, timeMs };
   } finally {

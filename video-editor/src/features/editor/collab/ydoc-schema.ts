@@ -194,7 +194,8 @@ export function readStateFromDoc(schema: CollabSchema): DocSnapshot {
     if (!canonical || canonical.fromId !== info.transition.fromId || canonical.toId !== info.transition.toId) {
       delete (item as any).transitionInfo;
     } else {
-      info.transition = canonical; // keep item and map pointing at the same object
+      // Clone instead of mutating in place: Yjs can return frozen nested JSON values.
+      (item as any).transitionInfo = { ...info, transition: canonical };
     }
   }
 

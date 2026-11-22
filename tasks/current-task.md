@@ -2,21 +2,17 @@
 
 ## Objective
 
-1. **Canvas media actions & Canva-style Replace**:
-   - Convert the canvas "Remove watermarks" button to icon-only with a tooltip for its label.
-   - Add a **Replace** button beside it for selected canvas images and videos.
-   - Clicking **Replace** opens a Canva-style replace menu showing only **Videos**, **Images**, and **Uploads** (excluding audio) with a **Replace** header at the top; clicking any image/video replaces the target item's media source while preserving layout, sizing, position, transform, styling, animations, and timeline slot (regardless of new media aspect ratio).
-2. **Timeline drag-to-replace**:
-   - Dragging a video/image from the menu over an existing timeline video/image highlights that timeline item with `[icon] Replace` and replaces its media on drop while preserving layout/sizing.
-3. **Thumbnail generation timeout**:
-   - Fix `TimeoutError` in `thumbnail-service.ts` by filtering thumbnail payloads to items relevant to the target frame (skipping audio, hidden, and `pending-upload:` items), increasing the thumbnail fetch timeout, and aborting server work when a thumbnail request disconnects.
-4. **Pending export check**:
-   - Treat an export as active/blocking only while `queued` or `in-progress` (not after it has already `completed`), rather than blocking until the download modal is closed.
+1. **Portfolio export attaching state**:
+   - Once the portfolio clip render finishes (`status === "publishing"`), transition the portfolio export modal and navbar button to an "Attaching clip to portfolio" state (similar to the queued state) instead of remaining stuck at 100%.
+2. **Portfolio clip post-render processing**:
+   - Fix false duration-check failures in `makePortfolioPoster` (use video stream duration rather than container duration with AAC padding, widen the 150ms tolerance to 1000ms, and clamp portfolio frame ranges to the composition duration).
+   - Validate portfolio project terms before downloading and log sanitized stage/code/message diagnostics in `PortfolioClipJob.js` instead of only `error.name`.
+3. **Project thumbnail 502 failures**:
+   - Fix `thumbnail-payload.ts` to compute effective project duration from timeline items, exclude missing/deleted uploads and non-HTTP(S) media sources (including inside nested scenes), and ignore orphaned or zero-length items before picking the thumbnail frame.
 
 ## Acceptance Criteria
 
-- Selected watermarked canvas media shows an icon-only button with a tooltip ("Remove watermarks" or "This asset was taken down") alongside the **Replace** button; non-watermarked selected images/videos also show **Replace**.
-- Clicking **Replace** opens the sidebar in Replace mode with only Videos, Images, and Uploads (no Audio tab) and a "Replace" header + close button; clicking any image/video (stock, marketplace, bundle, collection, or upload) replaces the item in place without changing its canvas box dimensions/position/transform.
-- Dragging an image/video from the menu onto a timeline image/video shows an overlay with icon + "Replace" on that timeline item and replaces it on drop without adding a duplicate clip.
-- Thumbnail generation no longer processes off-frame/audio/pending items or prematurely times out at 60s.
-- Starting a new export or refreshing after an export succeeds is not blocked with a pending-export 409 just because the previous download modal wasn't closed.
+- After a portfolio clip render reaches 100%, the modal transitions to an "Attaching clip to portfolio" view and the export button reads "Attaching to portfolio" until publishing succeeds or fails.
+- `makePortfolioPoster` checks the video stream duration with a 1000ms tolerance and checks against `portfolioUseDurationSeconds` when applicable, and `PortfolioClipJob.js` logs the failing stage, error code, and sanitized error message.
+- `POST /api/portfolio/[id]` clamps `firstFrame` and `endFrame` within the composition's frame count.
+- `buildThumbnailJob` filters out deleted uploads, non-HTTP(S) media URLs, zero-length/orphaned items, and derives duration from timeline items when `snap.duration` is stale or 0.

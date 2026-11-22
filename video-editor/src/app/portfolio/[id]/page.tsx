@@ -29,6 +29,9 @@ export default async function PortfolioPage({ params }: { params: Promise<{ id: 
       <SnapshotPreview {...preview} scenes={{}} />
     </PortfolioPicker>;
   } catch (error) {
+    if (!(error instanceof PortfolioError)) {
+      console.error("[portfolio-page] failed to load project", id, error);
+    }
     return <main className="grid min-h-dvh place-content-center gap-3 p-6">
       <h1 className="font-semibold">Portfolio clip unavailable</h1>
       <p>{error instanceof PortfolioError ? error.message : "Unable to load this project. Please try again."}</p>

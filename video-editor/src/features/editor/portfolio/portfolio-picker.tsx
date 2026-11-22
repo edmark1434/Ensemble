@@ -92,6 +92,7 @@ export function PortfolioPicker({ children, ...props }: PickerProps & { children
   const sending = useRef(false);
   const cancelledRef = useRef(false);
   const queuePositionRef = useRef<QueuePosition | null>(null);
+  const publishingRef = useRef(false);
   const [job, setJob] = useState("");
   const [progress, setProgress] = useState(0);
   const [publishing, setPublishing] = useState(false);
@@ -130,6 +131,7 @@ export function PortfolioPicker({ children, ...props }: PickerProps & { children
           const message = data.error || data.message || (response.status === 404 ? "This export is no longer available." : "Clip export failed.");
           sessionStorage.removeItem(storageKey);
           setJob("");
+          publishingRef.current = false;
           setPublishing(false);
           queuePositionRef.current = null;
           setQueuePosition(null);
@@ -141,17 +143,22 @@ export function PortfolioPicker({ children, ...props }: PickerProps & { children
         }
         if (response.ok) {
           const wasQueued = queuePositionRef.current !== null;
+          const wasPublishing = publishingRef.current;
+          const isPublishing = data.status === "publishing" || (data.status === "pending" && wasPublishing);
           const nextQueue: QueuePosition | null = data.status === "queued" ? (data.queuePosition ?? null) : null;
           queuePositionRef.current = nextQueue;
+          publishingRef.current = isPublishing;
           setQueuePosition(nextQueue);
-          if (wasQueued && data.status === "in-progress") {
+          if (!wasPublishing && isPublishing) {
+            setExportStartedAt(Date.now());
+          } else if (wasQueued && data.status === "in-progress") {
             setExportStartedAt(Date.now());
           } else if (typeof data.createdAt === "number") {
             setExportStartedAt((prev) => prev ?? data.createdAt);
           }
-          setProgress(typeof data.progress === "number" ? data.progress : 0);
-          setPublishing(data.status === "publishing");
-          setStatus("Exporting to your portfolio…");
+          setProgress(isPublishing ? 1 : (typeof data.progress === "number" ? data.progress : 0));
+          setPublishing(isPublishing);
+          setStatus(isPublishing ? "Attaching clip to your portfolio…" : "Exporting to your portfolio…");
         } else {
           setStatus("Reconnecting to the export…");
         }
@@ -190,6 +197,7 @@ export function PortfolioPicker({ children, ...props }: PickerProps & { children
     sessionStorage.removeItem(storageKey);
     setJob("");
     setSubmitting(false);
+    publishingRef.current = false;
     setPublishing(false);
     setProgress(0);
     queuePositionRef.current = null;
@@ -214,6 +222,7 @@ export function PortfolioPicker({ children, ...props }: PickerProps & { children
     sending.current = true;
     cancelledRef.current = false;
     setSubmitting(true);
+    publishingRef.current = false;
     setPublishing(false);
     setProgress(0);
     queuePositionRef.current = null;

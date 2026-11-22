@@ -34,15 +34,28 @@ async function releaseRender(renderUrl, headers) {
   return response.ok || response.status === 404 || response.status === 410;
 }
 
-async function processClip(job, renderUrl, headers) {
+function sanitizeErrorMessage(message) {
+  return String(message || '').replace(/https?:\/\/[^\s"'<>]+/g, (raw) => {
+    try {
+      const parsed = new URL(raw);
+      return `${parsed.origin}${parsed.pathname}`;
+    } catch {
+      return '<url>';
+    }
+  });
+}
+
+async function processClip(job, renderUrl, headers, state) {
   if (job.status !== 'pending') {
+    state.stage = 'release-render';
     return await releaseRender(renderUrl, headers) ? { released: true } : { retry: true };
   }
+  state.stage = 'fetch-status';
   const status = await fetch(renderUrl, {
     headers, signal: AbortSignal.timeout(15000),
   });
   if (status.status === 404 || status.status === 410) return { error: 'The source export expired. Please export the clip again.', released: true };
-  if (!status.ok) throw new Error('Render status unavailable');
+  if (!status.ok) throw new Error(`Render status unavailable (${status.status})`);
   const render = await status.json();
   if (render.status === 'failed' || render.status === 'cancelled') {
     return { error: render.errorCode === 'RENDER_TIMEOUT'
@@ -51,21 +64,27 @@ async function processClip(job, renderUrl, headers) {
   if (render.status !== 'completed') return {};
   if (!Array.isArray(render.data?.portfolioFrameRange)) return { error: 'The renderer did not confirm a clip range.' };
 
+  state.stage = 'validate-project';
+  const project = await portfolioProject(job.account_id, job.project_id);
+  validateRange(project, job.start_ms, job.end_ms);
+
+  state.stage = 'download-output';
   const outputUrl = new URL(render.videoUrl, renderUrl.origin);
   const workDir = await makeWorkDir();
   try {
     const clip = path.join(workDir, 'clip.mp4');
     const poster = path.join(workDir, 'poster.jpg');
     const output = await fetchRenderOutput(outputUrl, renderUrl.origin, headers);
-    if (!output.ok || !output.body) throw new Error('Render output unavailable');
+    if (!output.ok || !output.body) throw new Error(`Render output unavailable (${output.status})`);
     await pipeline(Readable.fromWeb(output.body), fs.createWriteStream(clip));
-    await makePortfolioPoster(clip, poster, job.start_ms, job.end_ms);
-    const project = await portfolioProject(job.account_id, job.project_id);
-    validateRange(project, job.start_ms, job.end_ms);
+    state.stage = 'make-poster';
+    await makePortfolioPoster(clip, poster, job.start_ms, job.end_ms, project.portfolioUseDurationSeconds);
     const prefix = `profile/portfolio-clips/${job.account_id}/${job.attachment_id}`;
     const key = prefix + '.mp4';
     const posterKey = prefix + '.jpg';
+    state.stage = 'upload-clip';
     const size = await saveFile(key, clip, 'video/mp4');
+    state.stage = 'upload-poster';
     await saveFile(posterKey, poster, 'image/jpeg');
     return { file: { key, size }, metadata: { project_id: project.id, project_name: project.name,
       role: project.role, shared_by: project.clientName, contract_title: project.contractTitle,
@@ -78,13 +97,21 @@ exports.processNextPortfolioClip = () => withDueClip(async job => {
   const base = process.env.RENDER_SERVER_URL || 'http://localhost:3001';
   const headers = { 'x-user-id': job.user_id, 'x-internal-secret': process.env.INTERNAL_API_SECRET };
   const renderUrl = new URL('/renders/' + encodeURIComponent(job.render_id), base);
+  const state = { stage: 'init' };
   let result;
-  try { result = await processClip(job, renderUrl, headers); }
+  try { result = await processClip(job, renderUrl, headers, state); }
   catch (error) {
     if (job.status !== 'pending') return { retry: true };
     if (error.statusCode) result = { error: error.message };
     else {
-      console.error('Portfolio clip processing failed', { renderId: job.render_id, error: error.name });
+      console.error('Portfolio clip processing failed', {
+        renderId: job.render_id,
+        stage: state.stage,
+        attempt: job.failures + 1,
+        error: error?.name || 'Error',
+        code: error?.code || error?.cause?.code || null,
+        message: sanitizeErrorMessage(error?.message),
+      });
       if (job.failures < 4) return { retry: true };
       result = { error: 'Unable to prepare the portfolio video. Please try exporting again.' };
     }

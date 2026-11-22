@@ -44,7 +44,8 @@ async function probe(inputPath) {
   const info = JSON.parse(output);
   const video = (info.streams || []).find((stream) => stream.codec_type === 'video');
   const audio = (info.streams || []).find((stream) => stream.codec_type === 'audio');
-  const duration = Number(info.format?.duration) || Number(video?.duration) || Number(audio?.duration) || 0;
+  const videoDuration = Number(video?.duration) || 0;
+  const duration = Number(info.format?.duration) || videoDuration || Number(audio?.duration) || 0;
   let width = Number(video?.width) || 0;
   let height = Number(video?.height) || 0;
   const rotation = Math.abs(Number(
@@ -52,7 +53,7 @@ async function probe(inputPath) {
     ?? video?.tags?.rotate ?? 0
   ));
   if (rotation === 90 || rotation === 270) [width, height] = [height, width];
-  return { width, height, duration, rotation, sampleAspectRatio: video?.sample_aspect_ratio,
+  return { width, height, duration, videoDuration, rotation, sampleAspectRatio: video?.sample_aspect_ratio,
     hasVideo: Boolean(video), hasAudio: Boolean(audio), videoCodec: video?.codec_name, formatName: info.format?.format_name || '' };
 }
 
@@ -224,10 +225,13 @@ async function processAudio({ inputPath, workDir, tagPath }) {
   return { proxyPath, thumbnailPath, durationSeconds: Math.max(1, Math.round(info.duration)), tagCount: delays.length };
 }
 
-async function makePortfolioPoster(clip, poster, startMs, endMs) {
+async function makePortfolioPoster(clip, poster, startMs, endMs, maxAllowedSeconds = null) {
   const info = await probe(clip);
-  if (!info.hasVideo || !info.duration || Math.abs(info.duration * 1000 - (endMs - startMs)) > 150) {
-    throw new Error('Rendered clip does not cover the selected range.');
+  const expectedMs = endMs - startMs;
+  const clipDurationMs = (info.videoDuration || info.duration) * 1000;
+  const exceedsLimit = maxAllowedSeconds != null && clipDurationMs > maxAllowedSeconds * 1000 + 1000;
+  if (!info.hasVideo || !clipDurationMs || Math.abs(clipDurationMs - expectedMs) > 1000 || exceedsLimit) {
+    throw new Error(`Rendered clip duration (${Math.round(clipDurationMs)}ms) does not match selected range (${expectedMs}ms).`);
   }
   await run(ffmpegBinary(), ['-y', '-v', 'error', '-i', clip, '-frames:v', '1',
     '-vf', 'scale=640:640:force_original_aspect_ratio=decrease', poster]);
