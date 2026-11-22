@@ -59,6 +59,7 @@ export interface ProposalItemData {
   freelancerName?: string;
   freelancerAvatar?: string;
   rating?: number;
+  ratingCount?: number;
   freelancerRating?: number;
   bidAmount: number;
   additionalWorkRate: number;
@@ -508,6 +509,11 @@ export const ProposalsList: React.FC<ProposalsListProps> = ({
                             <span className="font-bold text-gray-700 dark:text-zinc-200">
                               {item.rating != null ? Number(item.rating).toFixed(1) : "5.0"}
                             </span>
+                            {item.ratingCount != null && (
+                              <span className="text-[11px] font-medium text-gray-400 dark:text-zinc-500">
+                                ({item.ratingCount})
+                              </span>
+                            )}
                           </div>
                         </div>
 
@@ -943,6 +949,11 @@ export const ProposalsList: React.FC<ProposalsListProps> = ({
                             <span className="font-bold text-gray-700 dark:text-zinc-200">
                               {item.rating != null ? Number(item.rating).toFixed(1) : "5.0"}
                             </span>
+                            {item.ratingCount != null && (
+                              <span className="text-[11px] font-medium text-gray-400 dark:text-zinc-500">
+                                ({item.ratingCount})
+                              </span>
+                            )}
                           </div>
                         </div>
                       </div>

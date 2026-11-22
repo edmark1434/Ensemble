@@ -491,23 +491,15 @@ export const GigList: React.FC<GigListProps> = ({
                     </div>
                   )}
 
-                  {/* Top-left: Orders, Completed, and Ordered status tag */}
-                  <div className="absolute top-2 left-2 flex items-center gap-1.5 z-10 flex-wrap">
-                    <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-black/50 backdrop-blur-sm text-white text-[10px] font-semibold border border-white/10">
-                      <ShoppingCart className="h-3 w-3" />
-                      <span>{gig.ordersCount || 0} Orders</span>
-                    </div>
-                    <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-black/50 backdrop-blur-sm text-white text-[10px] font-semibold border border-white/10">
-                      <CircleCheck className="h-3 w-3 text-emerald-400" />
-                      <span>{gig.completedOrdersCount || 0} Completed</span>
-                    </div>
-                    {gig.hasPendingOrder && (
+                  {/* Top-left: Ordered status tag */}
+                  {gig.hasPendingOrder && (
+                    <div className="absolute top-2 left-2 flex items-center gap-1.5 z-10">
                       <div className="flex items-center gap-1 px-2 py-1 rounded-md bg-emerald-600/90 backdrop-blur-sm text-white text-[10px] font-bold border border-emerald-400/30 shadow-xs">
                         <Check className="h-3 w-3" />
                         <span>Ordered</span>
                       </div>
-                    )}
-                  </div>
+                    </div>
+                  )}
 
                   {/* Bottom-left Tiers Count & Service Rating Tags on Thumbnail */}
                   <div className="absolute bottom-2 left-2 z-10 flex items-center gap-1.5">
@@ -526,7 +518,6 @@ export const GigList: React.FC<GigListProps> = ({
                   </div>
 
                   <div className="absolute top-2 right-2 flex items-center gap-1.5 z-10">
-                    {rankInfo.isNewListing && <NewListingBadge />}
                     {!gig.isOwnGig && !isGuestMode && (
                       <button
                         type="button"
@@ -611,6 +602,7 @@ export const GigList: React.FC<GigListProps> = ({
 
                         </button>
                       )}
+                      {rankInfo.isNewListing && <NewListingBadge />}
                     </div>
 
                     <div>
@@ -697,6 +689,9 @@ export const GigList: React.FC<GigListProps> = ({
                       </span>
                       <span className="bg-gray-100 dark:bg-white/5 px-2.5 py-1 rounded-md border border-gray-200 dark:border-white/10 flex items-center gap-1">
                         <ShoppingCart className="h-3 w-3 text-gray-400 dark:text-zinc-500" /> {gig.ordersCount || 0} Orders
+                      </span>
+                      <span className="bg-gray-100 dark:bg-white/5 px-2.5 py-1 rounded-md border border-gray-200 dark:border-white/10 flex items-center gap-1">
+                        <CircleCheck className="h-3 w-3 text-emerald-500" /> {gig.completedOrdersCount || 0} Completed
                       </span>
                       <span className="bg-gray-100 dark:bg-white/5 px-2.5 py-1 rounded-md border border-gray-200 dark:border-white/10 flex items-center gap-1">
                         <Heart className="h-3 w-3 text-gray-400 dark:text-zinc-500" /> {gig.savesCount || 0} Saves

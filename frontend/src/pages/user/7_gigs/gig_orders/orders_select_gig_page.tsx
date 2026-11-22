@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate, useOutletContext } from "react-router-dom";
 import api from "@/lib/axios";
-import { Users, Clock, Briefcase, ChevronRight, Plus } from "lucide-react";
+import { Users, Clock, Briefcase, ChevronRight, Plus, CheckCircle2 } from "lucide-react";
 import { DotLottieReact } from "@lottiefiles/dotlottie-react";
 import { motion } from "framer-motion";
 import { CreditIcon } from "@/components/ui/credit-icon";
@@ -156,14 +156,22 @@ export const OrdersSelectGigPage: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 text-xs font-bold border border-blue-100 dark:border-blue-500/20">
-                  <Users className="h-3.5 w-3.5" />
-                  <span>{gig.ordersCount || 0} Orders</span>
-                  {Number(gig.pendingOrdersCount || 0) > 0 && (
-                    <span className="ml-1 px-1.5 py-0.2 bg-amber-500 text-white text-[10px] rounded-full">
-                      {gig.pendingOrdersCount} new
-                    </span>
-                  )}
+                <div className="flex items-center gap-2 flex-wrap">
+                  <div
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border ${
+                      Number(gig.pendingOrdersCount || 0) > 0
+                        ? "bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-500/20"
+                        : "bg-gray-50 dark:bg-white/5 text-gray-600 dark:text-zinc-400 border-gray-200 dark:border-white/10"
+                    }`}
+                  >
+                    <Clock className="h-3.5 w-3.5" />
+                    <span>{gig.pendingOrdersCount || 0} Pending</span>
+                  </div>
+
+                  <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 text-xs font-bold border border-emerald-200 dark:border-emerald-500/20">
+                    <CheckCircle2 className="h-3.5 w-3.5" />
+                    <span>{gig.completedOrdersCount || 0} Completed</span>
+                  </div>
                 </div>
 
                 <div className="flex items-center gap-1 text-xs font-bold text-blue-600 dark:text-blue-400 group-hover:translate-x-1 transition-transform">
@@ -237,8 +245,8 @@ export const OrdersSelectGigPage: React.FC = () => {
                   </p>
                 </div>
 
-                {/* Financial Stats */}
-                <div className="grid grid-cols-2 gap-2.5 pt-2">
+                {/* Financial & Order Stats */}
+                <div className="grid grid-cols-3 gap-2.5 pt-2">
                   <div className="p-2.5 rounded-xl bg-amber-50/80 dark:bg-amber-500/10 border border-amber-200/90 dark:border-amber-500/20">
                     <span className="text-[10px] font-bold text-amber-900/80 dark:text-amber-400/80 uppercase tracking-wider block truncate">
                       Starting
@@ -254,8 +262,18 @@ export const OrdersSelectGigPage: React.FC = () => {
                       Pending
                     </span>
                     <span className="font-black text-gray-900 dark:text-white flex items-center gap-1 text-sm mt-0.5">
-                      <Clock className="h-3.5 w-3.5 shrink-0 text-gray-500 dark:text-zinc-400" />
+                      <Clock className="h-3.5 w-3.5 shrink-0 text-amber-500" />
                       {gig.pendingOrdersCount || 0}
+                    </span>
+                  </div>
+
+                  <div className="p-2.5 rounded-xl bg-emerald-50/70 dark:bg-emerald-500/10 border border-emerald-200/80 dark:border-emerald-500/20">
+                    <span className="text-[10px] font-bold text-emerald-800/80 dark:text-emerald-400/80 uppercase tracking-wider block truncate">
+                      Completed
+                    </span>
+                    <span className="font-black text-emerald-700 dark:text-emerald-400 flex items-center gap-1 text-sm mt-0.5">
+                      <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" />
+                      {gig.completedOrdersCount || 0}
                     </span>
                   </div>
                 </div>

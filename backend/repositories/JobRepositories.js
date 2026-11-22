@@ -953,7 +953,12 @@ async function getProposalsByJobIdRepositories(jobId, accountIds) {
                     SELECT COALESCE(AVG(r.stars_out_of_five), 5.0)::float
                     FROM ratings r
                     WHERE r.account_id = p.freelancer_account_id AND r.deleted_at IS NULL
-                ) as freelancer_rating
+                ) as freelancer_rating,
+                (
+                    SELECT COUNT(*)::int
+                    FROM ratings r
+                    WHERE r.account_id = p.freelancer_account_id AND r.deleted_at IS NULL
+                ) as freelancer_rating_count
             FROM proposals p
             LEFT JOIN accounts a ON p.freelancer_account_id = a.account_id
             LEFT JOIN jobs j ON p.job_id = j.job_id
@@ -1070,7 +1075,12 @@ async function getProposalsByFreelancerRepositories(accountIds) {
                     SELECT COALESCE(AVG(r.stars_out_of_five), 5.0)::float
                     FROM ratings r
                     WHERE r.account_id = p.freelancer_account_id AND r.deleted_at IS NULL
-                ) as freelancer_rating
+                ) as freelancer_rating,
+                (
+                    SELECT COUNT(*)::int
+                    FROM ratings r
+                    WHERE r.account_id = p.freelancer_account_id AND r.deleted_at IS NULL
+                ) as freelancer_rating_count
             FROM proposals p
             LEFT JOIN jobs j ON p.job_id = j.job_id
             LEFT JOIN accounts c ON j.client_account_id = c.account_id
@@ -1217,6 +1227,11 @@ async function getProposalByIdRepositories(proposalId, accountIds) {
                     FROM ratings r
                     WHERE r.account_id = p.freelancer_account_id AND r.deleted_at IS NULL
                 ) as freelancer_rating,
+                (
+                    SELECT COUNT(*)::int
+                    FROM ratings r
+                    WHERE r.account_id = p.freelancer_account_id AND r.deleted_at IS NULL
+                ) as freelancer_rating_count,
                 (SELECT jc.contract_id FROM job_contracts jc JOIN contracts ct ON jc.contract_id = ct.contract_id WHERE jc.proposal_id = p.proposal_id ORDER BY ct.created_at DESC LIMIT 1) as contract_id,
                 (
                     SELECT COALESCE(

@@ -14,7 +14,9 @@ import {
   Tag,
   ChevronDown,
   ChevronUp,
+  ArrowUpDown,
 } from "lucide-react";
+import GlideSelect, { type GlideSelectOption } from "@/components/ui/GlideSelect";
 import { useNavigate, useParams, useOutletContext } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { CreditIcon } from "@/components/ui/credit-icon";
@@ -23,7 +25,71 @@ import { stripMarkdown } from "@/lib/markdownPaste";
 import { constructAvatarUrl } from "@/lib/accountAvatars";
 import { computeAcceptanceDeadlineMs, formatRemainingDuration } from "./orders_components/OrderLifecycleTracker";
 
-type OrderSubTab = "all" | "pending" | "inContract" | "inactive";
+type OrderSubTab = "all" | "pending" | "inContract" | "completed" | "inactive";
+type OrderSortMode = "default" | "earliest" | "cheapest" | "high_rate" | "best";
+
+const ORDER_SORT_OPTIONS: GlideSelectOption[] = [
+  { value: "default", label: "Sort: Latest" },
+  { value: "earliest", label: "Earliest" },
+  { value: "cheapest", label: "Cheapest" },
+  { value: "high_rate", label: "High Rate" },
+  { value: "best", label: "Best (Cheap + High Rate)" },
+];
+
+function sortIncomingOrders(list: any[], sortBy: OrderSortMode): any[] {
+  if (sortBy === "default" || list.length <= 1) return list;
+
+  const sorted = [...list];
+  const getTime = (o: any) => (o.created_at ? new Date(o.created_at).getTime() : 0);
+  const getPrice = (o: any) => Number(o.price) || 0;
+  const getRating = (o: any) => (o.client_rating != null ? Number(o.client_rating) : 5.0);
+
+  if (sortBy === "earliest") {
+    return sorted.sort((a, b) => getTime(a) - getTime(b));
+  }
+  if (sortBy === "cheapest") {
+    return sorted.sort((a, b) => {
+      const priceDiff = getPrice(a) - getPrice(b);
+      if (priceDiff !== 0) return priceDiff;
+      const ratingDiff = getRating(b) - getRating(a);
+      if (ratingDiff !== 0) return ratingDiff;
+      return getTime(a) - getTime(b);
+    });
+  }
+  if (sortBy === "high_rate") {
+    return sorted.sort((a, b) => {
+      const ratingDiff = getRating(b) - getRating(a);
+      if (ratingDiff !== 0) return ratingDiff;
+      const priceDiff = getPrice(a) - getPrice(b);
+      if (priceDiff !== 0) return priceDiff;
+      return getTime(a) - getTime(b);
+    });
+  }
+
+  // "best": balanced score combining low price and high rating
+  const prices = sorted.map(getPrice);
+  const minPrice = Math.min(...prices);
+  const maxPrice = Math.max(...prices);
+  const priceSpan = maxPrice - minPrice;
+
+  const bestScore = (o: any) => {
+    const price = getPrice(o);
+    const rating = Math.max(0, Math.min(5, getRating(o)));
+    const priceScore = priceSpan > 0 ? (maxPrice - price) / priceSpan : 1;
+    const ratingScore = rating / 5;
+    return ratingScore * 0.5 + priceScore * 0.5;
+  };
+
+  return sorted.sort((a, b) => {
+    const scoreDiff = bestScore(b) - bestScore(a);
+    if (Math.abs(scoreDiff) > 1e-9) return scoreDiff;
+    const ratingDiff = getRating(b) - getRating(a);
+    if (ratingDiff !== 0) return ratingDiff;
+    const priceDiff = getPrice(a) - getPrice(b);
+    if (priceDiff !== 0) return priceDiff;
+    return getTime(a) - getTime(b);
+  });
+}
 
 const SUB_TAB_META: Record<
   OrderSubTab,
@@ -56,6 +122,11 @@ const SUB_TAB_META: Record<
         label: "IN CONTRACT",
         className: "bg-purple-50 text-purple-900 border-purple-300 dark:bg-purple-500/20 dark:text-purple-300 dark:border-purple-400/50",
       },
+    ],
+  },
+  completed: {
+    description: "Finished service orders whose deliverables and contract terms are completed.",
+    tags: [
       {
         label: "COMPLETED",
         className: "bg-emerald-50 text-emerald-900 border-emerald-300 dark:bg-emerald-500/20 dark:text-emerald-300 dark:border-emerald-400/50",
@@ -132,7 +203,8 @@ export const IncomingOrders: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [nowMs, setNowMs] = useState<number>(() => Date.now());
   const [targetGig, setTargetGig] = useState<any>(null);
-  const [activeSubTab, setActiveSubTab] = useState<OrderSubTab>("all");
+  const [activeSubTab, setActiveSubTab] = useState<OrderSubTab>("pending");
+  const [sortBy, setSortBy] = useState<OrderSortMode>("default");
   const [showLifecycleGuide, setShowLifecycleGuide] = useState<boolean>(() => {
     const saved = localStorage.getItem("ensemble_gig_orders_show_guide");
     return saved !== null ? saved === "true" : true;
@@ -233,31 +305,34 @@ export const IncomingOrders: React.FC = () => {
       all: orders.length,
       pending: 0,
       inContract: 0,
+      completed: 0,
       inactive: 0,
     };
 
     orders.forEach((o) => {
       const status = (o.status || "Pending").toLowerCase();
       if (status === "pending") counts.pending++;
-      else if (status === "accepted" || status === "in contract" || status === "completed") counts.inContract++;
+      else if (status === "accepted" || status === "in contract") counts.inContract++;
+      else if (status === "completed") counts.completed++;
       else if (status === "rejected" || status === "cancelled" || status === "withdrawn") counts.inactive++;
     });
 
     return counts;
   }, [orders]);
 
-  // Filter orders by sub-tab and search query
+  // Filter orders by sub-tab and search query, then sort
   const filteredOrders = useMemo(() => {
-    return orders.filter((order) => {
+    const base = orders.filter((order) => {
       const status = (order.status || "Pending").toLowerCase();
 
       // Sub-tab filter
       if (activeSubTab === "pending" && status !== "pending") return false;
       if (
         activeSubTab === "inContract" &&
-        !["accepted", "in contract", "completed"].includes(status)
+        !["accepted", "in contract"].includes(status)
       )
         return false;
+      if (activeSubTab === "completed" && status !== "completed") return false;
       if (
         activeSubTab === "inactive" &&
         !["rejected", "cancelled", "withdrawn"].includes(status)
@@ -275,7 +350,8 @@ export const IncomingOrders: React.FC = () => {
 
       return true;
     });
-  }, [orders, activeSubTab, searchQuery]);
+    return sortIncomingOrders(base, sortBy);
+  }, [orders, activeSubTab, searchQuery, sortBy]);
 
   if (loading) {
     return (
@@ -381,6 +457,7 @@ export const IncomingOrders: React.FC = () => {
               { key: "all", label: "All", count: subTabCounts.all },
               { key: "pending", label: "Pending", count: subTabCounts.pending },
               { key: "inContract", label: "Accepted & In Contract", count: subTabCounts.inContract },
+              { key: "completed", label: "Completed", count: subTabCounts.completed },
               { key: "inactive", label: "Inactive", count: subTabCounts.inactive },
             ] as const
           ).map((tab) => {
@@ -410,16 +487,30 @@ export const IncomingOrders: React.FC = () => {
           })}
         </div>
 
-        {/* Toggle Lifecycle Helper Guide */}
-        <button
-          type="button"
-          onClick={toggleLifecycleGuide}
-          className="inline-flex items-center gap-1.5 text-xs font-semibold text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white self-start sm:self-auto cursor-pointer"
-        >
-          <Info className="h-3.5 w-3.5" />
-          <span>Stage Info</span>
-          {showLifecycleGuide ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
-        </button>
+        {/* Sort & Toggle Lifecycle Helper Guide */}
+        <div className="flex items-center gap-3 self-start sm:self-auto shrink-0">
+          <div className="flex items-center gap-1.5">
+            <ArrowUpDown className="h-3.5 w-3.5 text-zinc-400 shrink-0 hidden sm:block" />
+            <GlideSelect
+              options={ORDER_SORT_OPTIONS}
+              value={sortBy}
+              onChange={(val) => setSortBy(val as OrderSortMode)}
+              size="sm"
+              align="right"
+              menuWidth={210}
+            />
+          </div>
+
+          <button
+            type="button"
+            onClick={toggleLifecycleGuide}
+            className="inline-flex items-center gap-1.5 text-xs font-semibold text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white cursor-pointer"
+          >
+            <Info className="h-3.5 w-3.5" />
+            <span>Stage Info</span>
+            {showLifecycleGuide ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+          </button>
+        </div>
       </div>
 
       {/* =========================================================================
@@ -521,7 +612,12 @@ export const IncomingOrders: React.FC = () => {
                       </h3>
                       <div className="flex items-center gap-1 text-[11px] font-bold text-amber-500">
                         <Star className="w-3 h-3 fill-current" />
-                        <span>5.0</span>
+                        <span>{order.client_rating != null ? Number(order.client_rating).toFixed(1) : "5.0"}</span>
+                        {order.client_rating_count != null && (
+                          <span className="text-[11px] font-medium text-gray-400 dark:text-zinc-500">
+                            ({order.client_rating_count})
+                          </span>
+                        )}
                       </div>
                     </div>
 
@@ -618,7 +714,12 @@ export const IncomingOrders: React.FC = () => {
                         </p>
                         <div className="flex items-center gap-1 text-[11px] font-bold text-amber-500">
                           <Star className="w-3 h-3 fill-current" />
-                          <span>5.0</span>
+                          <span>{order.client_rating != null ? Number(order.client_rating).toFixed(1) : "5.0"}</span>
+                          {order.client_rating_count != null && (
+                            <span className="text-[11px] font-medium text-gray-400 dark:text-zinc-500">
+                              ({order.client_rating_count})
+                            </span>
+                          )}
                         </div>
                       </div>
                       <p className="text-[11px] text-gray-500 dark:text-zinc-400 truncate">

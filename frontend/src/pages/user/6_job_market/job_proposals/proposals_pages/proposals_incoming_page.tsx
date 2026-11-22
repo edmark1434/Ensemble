@@ -28,7 +28,9 @@ import {
   FileText,
   Layers,
   Lock,
+  ArrowUpDown,
 } from "lucide-react";
+import GlideSelect, { type GlideSelectOption } from "@/components/ui/GlideSelect";
 import { motion, AnimatePresence } from "framer-motion";
 import useGlobalState from "@/lib/global_state";
 import { CreditIcon } from "@/components/ui/credit-icon";
@@ -46,6 +48,66 @@ import { SlideCommit } from "@/components/ui/SlideCommit";
 import { ApplicationWindowTimer } from "@/pages/user/6_job_market/job_components/job_utilities/ApplicationWindowTimer";
 
 type ProposalSubTab = "all" | "pending" | "shortlisted" | "offersAndHired" | "inactive";
+type ProposalSortMode = "default" | "earliest" | "cheapest" | "high_rate" | "best";
+
+const PROPOSAL_SORT_OPTIONS: GlideSelectOption[] = [
+  { value: "default", label: "Sort: Latest" },
+  { value: "earliest", label: "Earliest" },
+  { value: "cheapest", label: "Cheapest" },
+  { value: "high_rate", label: "High Rate" },
+  { value: "best", label: "Best (Cheap + High Rate)" },
+];
+
+function sortIncomingProposals(list: any[], sortBy: ProposalSortMode): any[] {
+  if (sortBy === "default" || list.length <= 1) return list;
+
+  const sorted = [...list];
+  if (sortBy === "earliest") {
+    return sorted.sort((a, b) => (a.createdAtMs || 0) - (b.createdAtMs || 0));
+  }
+  if (sortBy === "cheapest") {
+    return sorted.sort((a, b) => {
+      const bidDiff = (a.bidAmount || 0) - (b.bidAmount || 0);
+      if (bidDiff !== 0) return bidDiff;
+      const ratingDiff = (b.freelancerRating || 0) - (a.freelancerRating || 0);
+      if (ratingDiff !== 0) return ratingDiff;
+      return (a.createdAtMs || 0) - (b.createdAtMs || 0);
+    });
+  }
+  if (sortBy === "high_rate") {
+    return sorted.sort((a, b) => {
+      const ratingDiff = (b.freelancerRating || 0) - (a.freelancerRating || 0);
+      if (ratingDiff !== 0) return ratingDiff;
+      const bidDiff = (a.bidAmount || 0) - (b.bidAmount || 0);
+      if (bidDiff !== 0) return bidDiff;
+      return (a.createdAtMs || 0) - (b.createdAtMs || 0);
+    });
+  }
+
+  // "best": balanced score combining low bid and high rating
+  const bids = sorted.map((p) => Number(p.bidAmount) || 0);
+  const minBid = Math.min(...bids);
+  const maxBid = Math.max(...bids);
+  const bidSpan = maxBid - minBid;
+
+  const bestScore = (p: any) => {
+    const bid = Number(p.bidAmount) || 0;
+    const rating = Math.max(0, Math.min(5, Number(p.freelancerRating) || 0));
+    const priceScore = bidSpan > 0 ? (maxBid - bid) / bidSpan : 1;
+    const ratingScore = rating / 5;
+    return ratingScore * 0.5 + priceScore * 0.5;
+  };
+
+  return sorted.sort((a, b) => {
+    const scoreDiff = bestScore(b) - bestScore(a);
+    if (Math.abs(scoreDiff) > 1e-9) return scoreDiff;
+    const ratingDiff = (b.freelancerRating || 0) - (a.freelancerRating || 0);
+    if (ratingDiff !== 0) return ratingDiff;
+    const bidDiff = (a.bidAmount || 0) - (b.bidAmount || 0);
+    if (bidDiff !== 0) return bidDiff;
+    return (a.createdAtMs || 0) - (b.createdAtMs || 0);
+  });
+}
 
 const SUB_TAB_META: Record<
   ProposalSubTab,
@@ -135,6 +197,7 @@ export const ProposalsIncomingPage: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isUpdatingJob, setIsUpdatingJob] = useState(false);
   const [viewMode, setViewMode] = useState<"cards" | "matrix">("cards");
+  const [sortBy, setSortBy] = useState<ProposalSortMode>("default");
   const [walletBalance, setWalletBalance] = useState<number>(0);
 
   // Shortlist confirmation modal state
@@ -204,6 +267,7 @@ export const ProposalsIncomingPage: React.FC = () => {
           additionalWorkRate: parseFloat(p.revision_price_credits) || 0,
           status: p.status,
           submittedAt: new Date(p.created_at).toLocaleDateString(),
+          createdAtMs: p.created_at ? new Date(p.created_at).getTime() : 0,
           coverLetter: p.letter || "",
           rejectionReason: p.reject_reason,
           milestones: p.milestones || [],
@@ -216,6 +280,7 @@ export const ProposalsIncomingPage: React.FC = () => {
           attachments: p.attachments || [],
           rating: p.freelancer_rating != null ? Number(p.freelancer_rating) : 5.0,
           freelancerRating: p.freelancer_rating != null ? Number(p.freelancer_rating) : 5.0,
+          ratingCount: p.freelancer_rating_count != null ? Number(p.freelancer_rating_count) : 0,
           viewedAt: p.viewed_at,
           shortlistedAt: p.shortlisted_at,
           type: "incoming",
@@ -478,7 +543,7 @@ export const ProposalsIncomingPage: React.FC = () => {
 
   // Filter Engine
   const filtered = useMemo(() => {
-    return proposals.filter((p) => {
+    const base = proposals.filter((p) => {
       // 1. Must match target job
       if (jobPostId && p.jobId !== jobPostId) return false;
 
@@ -511,7 +576,8 @@ export const ProposalsIncomingPage: React.FC = () => {
       }
       return true; // "all"
     });
-  }, [proposals, jobPostId, selectedMilestoneId, activeMilestone, searchQuery, activeSubTab]);
+    return sortIncomingProposals(base, sortBy);
+  }, [proposals, jobPostId, selectedMilestoneId, activeMilestone, searchQuery, activeSubTab, sortBy]);
 
   const currentMeta = SUB_TAB_META[activeSubTab];
 
@@ -790,8 +856,20 @@ export const ProposalsIncomingPage: React.FC = () => {
           })}
         </div>
 
-        {/* View Mode: Cards vs Matrix */}
-        <div className="flex items-center gap-2 self-start sm:self-auto shrink-0">
+        {/* Sort & View Mode: Cards vs Matrix */}
+        <div className="flex items-center flex-wrap gap-2 self-start sm:self-auto shrink-0">
+          <div className="flex items-center gap-1.5">
+            <ArrowUpDown className="h-3.5 w-3.5 text-zinc-400 shrink-0 hidden sm:block" />
+            <GlideSelect
+              options={PROPOSAL_SORT_OPTIONS}
+              value={sortBy}
+              onChange={(val) => setSortBy(val as ProposalSortMode)}
+              size="sm"
+              align="right"
+              menuWidth={210}
+            />
+          </div>
+
           <div className="flex items-center p-0.5 rounded-xl bg-gray-100 dark:bg-zinc-800/80 border border-gray-200 dark:border-zinc-700 text-xs">
             <button
               type="button"

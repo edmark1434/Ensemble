@@ -122,7 +122,9 @@ export const isCategoryMatch = (gigCategory: string | undefined, filterCategory:
   return false;
 };
 
-export const isSearchMatch = (gig: Gig, query: string): boolean => {
+export type GigSearchScope = "all" | "title" | "creator" | "category";
+
+export const isSearchMatch = (gig: Gig, query: string, scope: GigSearchScope = "all"): boolean => {
   const q = query.trim().toLowerCase();
   if (!q) return true;
 
@@ -132,6 +134,25 @@ export const isSearchMatch = (gig: Gig, query: string): boolean => {
   const desc = (gig.description || "").toLowerCase();
   const skills = (gig.skills || []).map((s) => s.toLowerCase());
   const tags = ((gig as any).tags || []).map((t: string) => String(t).toLowerCase());
+
+  if (scope === "title") {
+    return title.includes(q);
+  }
+  if (scope === "creator") {
+    return postedBy.includes(q);
+  }
+  if (scope === "category") {
+    if (category.includes(q) || isCategoryMatch(gig.category, query)) return true;
+    for (const [catName, aliases] of Object.entries(CATEGORY_ALIASES)) {
+      const allNames = [catName, ...aliases].map((n) => n.toLowerCase());
+      if (allNames.some((n) => n === q || q.includes(n) || n.includes(q))) {
+        if (allNames.includes(category) || isCategoryMatch(gig.category, catName)) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
 
   // Direct whole-query match
   if (
@@ -217,6 +238,7 @@ const GigMain: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [viewType, setViewType] = useState<ViewType>("grid");
   const [searchQuery, setSearchQuery] = useState(location.state?.searchQuery || "");
+  const [searchScope, setSearchScope] = useState<GigSearchScope>("all");
   const [activeCategoryFilter, setActiveCategoryFilter] = useState(location.state?.category || "All");
   const [gigsList, setGigsList] = useState<Gig[]>([]);
   const [showFilters, setShowFilters] = useState(true);
@@ -479,7 +501,7 @@ const GigMain: React.FC = () => {
     const isServicesTab = !location.pathname.includes("/saved-services") && !location.pathname.includes("/my-services");
     const applyBudget = budgetMatch && budgetCredits !== null && isServicesTab;
     let result = tabFilteredGigs.filter((gig) => {
-      const matchesSearch = isSearchMatch(gig, searchQuery);
+      const matchesSearch = isSearchMatch(gig, searchQuery, searchScope);
       const matchesCategory = isCategoryMatch(gig.category, activeCategoryFilter);
       
       if (!matchesSearch || !matchesCategory) return false;
@@ -592,6 +614,7 @@ const GigMain: React.FC = () => {
   }, [
     tabFilteredGigs,
     searchQuery,
+    searchScope,
     activeCategoryFilter,
     minPrice,
     maxPrice,
@@ -641,7 +664,26 @@ const GigMain: React.FC = () => {
       </div>
 
       <div className="mx-auto max-w-7xl p-6 md:p-8 w-full" data-tour="gigs-catalog">
-        <GigSearchBar searchQuery={searchQuery} setSearchQuery={setSearchQuery} />
+        <GigSearchBar
+          searchQuery={searchQuery}
+          setSearchQuery={(q) => {
+            setSearchQuery(q);
+            if (!q.trim()) setSearchScope("all");
+          }}
+          searchScope={searchScope}
+          setSearchScope={setSearchScope}
+          gigs={tabFilteredGigs}
+          onSelectCategory={(cat) => {
+            setActiveCategoryFilter(cat);
+            setSearchQuery("");
+            setSearchScope("all");
+          }}
+          onSelectCreator={(creatorName) => {
+            setActiveCategoryFilter("All");
+            setSearchQuery(creatorName);
+            setSearchScope("creator");
+          }}
+        />
 
         <div className="mb-8 flex flex-wrap items-center justify-between border-b border-gray-200 dark:border-white/10 gap-4">
           <GigTabs />

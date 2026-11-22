@@ -39,6 +39,31 @@ function getTimeAgo(date: Date) {
   return "Just now";
 }
 
+export type JobSearchScope = "all" | "title" | "client" | "category";
+
+const isJobSearchMatch = (job: Job, query: string, scope: JobSearchScope = "all"): boolean => {
+  const q = query.toLowerCase().trim();
+  if (!q) return true;
+
+  const title = (job.title || "").toLowerCase();
+  const postedBy = (job.postedBy || "").toLowerCase();
+  const category = (job.category || "").toLowerCase();
+  const desc = (job.description || "").toLowerCase();
+  const tags = Array.isArray(job.tags) ? job.tags.map((t: string) => String(t).toLowerCase()) : [];
+
+  if (scope === "title") return title.includes(q);
+  if (scope === "client") return postedBy.includes(q);
+  if (scope === "category") return category.includes(q);
+
+  return (
+    title.includes(q) ||
+    postedBy.includes(q) ||
+    category.includes(q) ||
+    desc.includes(q) ||
+    tags.some((t) => t.includes(q))
+  );
+};
+
 export interface JobMainContext {
   jobsList: Job[];
   filteredJobs: Job[];
@@ -82,6 +107,7 @@ const JobMain: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [viewType, setViewType] = useState<ViewType>("grid");
   const [searchQuery, setSearchQuery] = useState(location.state?.searchQuery || "");
+  const [searchScope, setSearchScope] = useState<JobSearchScope>("all");
   const [selectedJob, setSelectedJob] = useState<Job | null>(null);
   const [activeCategoryFilter, setActiveCategoryFilter] = useState(location.state?.category || "All");
   const [jobsList, setJobsList] = useState<Job[]>([]);
@@ -342,14 +368,7 @@ const JobMain: React.FC = () => {
 
   const filteredJobs = useMemo(() => {
     const result = tabFilteredJobs.filter((job) => {
-      const q = searchQuery.toLowerCase().trim();
-      const matchesSearch =
-        !q ||
-        job.title.toLowerCase().includes(q) ||
-        job.postedBy.toLowerCase().includes(q) ||
-        (job.category && job.category.toLowerCase().includes(q)) ||
-        (job.description && job.description.toLowerCase().includes(q)) ||
-        (Array.isArray(job.tags) && job.tags.some((t: string) => t.toLowerCase().includes(q)));
+      const matchesSearch = isJobSearchMatch(job, searchQuery, searchScope);
       const matchesCategory =
         activeCategoryFilter === "All" || job.category === activeCategoryFilter;
       const matchesMinPrice = minPrice === "" || job.minBudget >= parseInt(minPrice);
@@ -419,6 +438,7 @@ const JobMain: React.FC = () => {
   }, [
     tabFilteredJobs,
     searchQuery,
+    searchScope,
     activeCategoryFilter,
     minPrice,
     maxPrice,
@@ -450,7 +470,27 @@ const JobMain: React.FC = () => {
       </div>
 
       <div className="mx-auto max-w-7xl p-6 md:p-8 w-full" data-tour="job-market">
-        <JobSearchbar searchQuery={searchQuery} setSearchQuery={setSearchQuery} />
+        <JobSearchbar
+          searchQuery={searchQuery}
+          setSearchQuery={(q) => {
+            setSearchQuery(q);
+            if (!q.trim()) setSearchScope("all");
+          }}
+          searchScope={searchScope}
+          setSearchScope={setSearchScope}
+          jobs={tabFilteredJobs}
+          onSelectCategory={(cat) => {
+            setActiveCategoryFilter(cat);
+            setSearchQuery("");
+            setSearchScope("all");
+          }}
+          onSelectClient={(clientName) => {
+            setActiveCategoryFilter("All");
+            setSearchQuery(clientName);
+            setSearchScope("client");
+          }}
+          onSelectJob={(jobId) => navigate(`${getParentRoute()}/${jobId}`)}
+        />
 
         <div className="mb-8 flex flex-wrap items-center justify-between border-b border-gray-200 dark:border-white/10 gap-4">
           <JobTabs />
