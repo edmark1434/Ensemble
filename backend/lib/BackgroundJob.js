@@ -329,7 +329,7 @@ let isMilestoneReminderJobRunning = false;
 function startPaymentReconciliationJob() {
 
     let portfolioClipRunning = false;
-    cron.schedule("*/3 * * * * *", async () => {
+    cron.schedule("*/2 * * * * *", async () => {
         if (portfolioClipRunning) return;
         portfolioClipRunning = true;
         try { await require('../jobs/PortfolioClipJob').processNextPortfolioClip(); }

@@ -39,7 +39,7 @@ async function withDueClip(work) {
         [job.attachment_id, job.account_id, job.name, job.description, rows[0].file_id, result.metadata]);
       }
       const failures = result.retry ? job.failures + 1 : 0;
-      const delay = result.file || result.error ? 0 : result.retry ? Math.min(120, 5 * 2 ** failures) : 5;
+      const delay = result.file || result.error ? 0 : result.retry ? Math.min(120, 5 * 2 ** failures) : 2;
       await client.query(`UPDATE portfolio_clip_exports SET status=$2, error=$3, failures=$4, released=$6,
         next_check_at=clock_timestamp()+ $5 * interval '1 second' WHERE render_id=$1`,
       [job.render_id, result.file ? 'published' : result.error ? 'failed' : job.status, result.error || job.error,

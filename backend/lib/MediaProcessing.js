@@ -231,7 +231,9 @@ async function makePortfolioPoster(clip, poster, startMs, endMs, maxAllowedSecon
   const clipDurationMs = (info.videoDuration || info.duration) * 1000;
   const exceedsLimit = maxAllowedSeconds != null && clipDurationMs > maxAllowedSeconds * 1000 + 1000;
   if (!info.hasVideo || !clipDurationMs || Math.abs(clipDurationMs - expectedMs) > 1000 || exceedsLimit) {
-    throw new Error(`Rendered clip duration (${Math.round(clipDurationMs)}ms) does not match selected range (${expectedMs}ms).`);
+    const error = new Error(`Rendered clip duration (${Math.round(clipDurationMs)}ms) does not match selected range (${expectedMs}ms).`);
+    error.code = 'INVALID_CLIP_DURATION';
+    throw error;
   }
   await run(ffmpegBinary(), ['-y', '-v', 'error', '-i', clip, '-frames:v', '1',
     '-vf', 'scale=640:640:force_original_aspect_ratio=decrease', poster]);
