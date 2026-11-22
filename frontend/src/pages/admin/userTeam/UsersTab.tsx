@@ -127,6 +127,8 @@ type UsersTabProps = {
   refreshToken?: number;
   /** Pre-select verification filter (value is lowercased option key, e.g. "pending review"). */
   defaultVerificationFilter?: string;
+  /** Pre-select status filter (lowercased status, e.g. "banned"); the dashboard links with `?status=`. */
+  defaultStatusFilter?: string;
   capabilities?: UserTeamCapabilities;
 };
 
@@ -134,6 +136,7 @@ export default function UsersTab({
   onStatsLoaded,
   refreshToken = 0,
   defaultVerificationFilter = 'all',
+  defaultStatusFilter = 'all',
   capabilities: capabilitiesProp,
 }: UsersTabProps) {
   const capabilities = capabilitiesProp ?? getUserTeamCapabilities('admin');
@@ -153,7 +156,7 @@ export default function UsersTab({
   const [modal, setModal] = useState<ModalKind>(null);
   const [selected, setSelected] = useState<PlatformUserAccount | null>(null);
   const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState('all');
+  const [statusFilter, setStatusFilter] = useState(defaultStatusFilter.toLowerCase());
   const [verificationFilter, setVerificationFilter] = useState(defaultVerificationFilter);
   const [sortBy, setSortBy] = useState('newest');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());

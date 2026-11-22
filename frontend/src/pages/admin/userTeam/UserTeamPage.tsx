@@ -184,6 +184,7 @@ export default function UserTeamPage({ variant = 'admin' }: { variant?: UserTeam
         {tab === 'users' && (
           <UsersTab
             refreshToken={refreshToken}
+            defaultStatusFilter={searchParams.get('status') || undefined}
             onStatsLoaded={setUsersPending}
             capabilities={caps}
           />

@@ -52,3 +52,15 @@ Contract workspaces (`teams.team_type = 'contractual'`) are job/gig scaffolding 
 
 - **Admin dashboard.** `GET /api/admin/dashboard-overview` leaves contract workspaces out of `verificationQueue`, the `pendingVerifications` KPI / alert and the `pending_review` fallback count (`backend/repositories/AdminRepositories.js`).
 - **Moderation desk.** The identity queue (users only) and business-verification queue keep excluding contract workspaces (`AdminModerationRepositories.js`), as do the Team accounts lists every moderator console reuses (`fetchTeamsFromDatabase`).
+
+# Parallel task: admin dashboard Members card
+
+## Objective
+
+The admin dashboard's member breakdown shows member health, not one lone bar.
+
+## Acceptance Criteria
+
+- **Server.** `GET /api/admin/dashboard-overview` adds `memberHealth` (`fetchMemberSummary` from Analytics plus `pulse`: signups this week and the week before, members active in 7 days, members with active warnings, running forum timeouts). Either read failing gives null figures, never a failed dashboard; `breakdowns.usersByStatus` stays as the fallback.
+- **Members card.** A stacked standing bar and every standing (zeros dimmed); rows with members open User & Team → Users filtered by `?status=`. ID-verified and complete-profile meters, a link to the identity queue when IDs wait, and four last-7-days tiles linking to Users, Analytics → Members and Restrictions.
+- **Staff by role.** Each role shows how many are online now, and the card names roles with nobody online.
