@@ -1,7 +1,10 @@
-import type { ReactNode } from 'react';
+import { createContext, useContext, useState, type ReactNode } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { AlertTriangle, ExternalLink, FileWarning, Gavel, Info, Loader2, Star } from 'lucide-react';
+import { AlertTriangle, Eye, EyeOff, ExternalLink, FileWarning, Gavel, Info, Loader2, Star } from 'lucide-react';
 import { staffPlatformViewHref } from '@/lib/staffRoutes';
+import { mediaUrl } from '@/pages/user/5_assets/assetTypes';
+import ListingFileInspector, { FileTypeIcon } from '@/pages/moderator/marketplace-moderator/ListingFileInspector';
+import type { ListingAssetMediaFile } from '@/pages/moderator/marketplace-moderator/marketplaceTypes';
 import { BTN, EmptyNote, Fact, PanelSection, Pill } from '@/pages/moderator/shared/staffCaseUi';
 import GigOrderSummary from '@/pages/moderator/shared/GigOrderSummary';
 import { StaffPunishmentChips } from '@/components/account/MeritStatus';
@@ -740,6 +743,103 @@ function ListingThread({ thread }: { thread: NonNullable<CaseListing['thread']> 
   );
 }
 
+/**
+ * Marketplace moderation base the viewer may open seller originals through, picked from the
+ * ticket desk they are on. null: preview only (their role cannot reach the original endpoint).
+ */
+const ListingMediaBaseContext = createContext<string | null>(null);
+
+function listingMediaBaseFor(endpointBase: string | undefined) {
+  const base = String(endpointBase || '');
+  if (base.startsWith('/api/admin/')) return '/api/admin/moderation/marketplace';
+  if (base.startsWith('/api/moderator/marketplace/')) return '/api/moderator/marketplace';
+  return null;
+}
+
+type CaseListingFile = NonNullable<CaseListing['asset']>['files'][number];
+
+function inspectorFile(file: CaseListingFile & { mediaAssetId: string }): ListingAssetMediaFile {
+  return {
+    mediaAssetId: file.mediaAssetId,
+    name: file.name,
+    originalName: file.name,
+    type: file.type || 'image',
+    mimeType: file.mimeType,
+    sizeBytes: file.sizeBytes,
+    width: file.width,
+    height: file.height,
+    durationSeconds: file.durationSeconds,
+    proxyPath: file.proxyPath,
+    thumbnailPath: file.thumbnailPath,
+    processingStatus: file.processingStatus || 'ready',
+    processingError: file.processingError,
+    position: file.position,
+  };
+}
+
+function ListingFiles({ listingId, files, brokenCount }: { listingId: string; files: CaseListingFile[]; brokenCount: number }) {
+  const apiBase = useContext(ListingMediaBaseContext);
+  const [openId, setOpenId] = useState<string | null>(null);
+  const opened = files.find((f) => f.mediaAssetId && f.mediaAssetId === openId);
+  return (
+    <div className="mt-3">
+      <p className="text-[10px] uppercase tracking-wide text-zinc-500">
+        Files ({files.length}){brokenCount ? ` · ${brokenCount} failed processing` : ''}
+      </p>
+      <ul className="mt-1 space-y-1">
+        {files.map((f, i) => {
+          const thumb = f.thumbnailPath || (f.processingStatus === 'ready' ? f.proxyPath : null);
+          const isOpen = Boolean(f.mediaAssetId) && f.mediaAssetId === openId;
+          return (
+            <li key={`${f.mediaAssetId || f.name}-${i}`} className="flex flex-wrap items-center justify-between gap-2 text-xs text-zinc-300">
+              <span className="flex min-w-0 items-center gap-2">
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-md bg-white/[0.04] text-zinc-400 ring-1 ring-white/10">
+                  {thumb && f.type !== 'audio' ? (
+                    <img src={mediaUrl(thumb)} alt="" className="h-full w-full object-cover" />
+                  ) : (
+                    <FileTypeIcon type={f.type || 'image'} />
+                  )}
+                </span>
+                <span className="min-w-0 truncate">
+                  {f.name}
+                  {f.sizeBytes ? <span className="text-zinc-500"> · {(f.sizeBytes / 1024 / 1024).toFixed(1)} MB</span> : null}
+                </span>
+              </span>
+              <span className="flex items-center gap-1.5">
+                {f.processingError ? <span className="text-red-300">{f.processingError}</span> : null}
+                <StatusPill status={f.processingStatus} />
+                {f.mediaAssetId ? (
+                  <button
+                    type="button"
+                    onClick={() => setOpenId(isOpen ? null : f.mediaAssetId)}
+                    className={`inline-flex items-center gap-1 rounded-lg border px-2 py-1 text-[11px] transition ${
+                      isOpen
+                        ? 'border-amber-500/30 bg-amber-500/10 text-amber-100'
+                        : 'border-white/10 text-zinc-300 hover:text-white'
+                    }`}
+                  >
+                    {isOpen ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
+                    {isOpen ? 'Hide' : 'View'}
+                  </button>
+                ) : null}
+              </span>
+            </li>
+          );
+        })}
+      </ul>
+      {opened?.mediaAssetId ? (
+        <div className="mt-2">
+          <ListingFileInspector
+            listingId={listingId}
+            apiBase={apiBase}
+            target={{ kind: 'file', file: inspectorFile({ ...opened, mediaAssetId: opened.mediaAssetId }) }}
+          />
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function ListingCard({ listing }: { listing: CaseListing }) {
   const brokenFiles = listing.asset?.files.filter((f) => f.processingError || /fail|error/i.test(f.processingStatus || '')) || [];
   const sellerStatus = listing.seller.status && !/^active$/i.test(listing.seller.status) ? listing.seller.status : null;
@@ -827,25 +927,7 @@ function ListingCard({ listing }: { listing: CaseListing }) {
       </dl>
 
       {listing.asset?.files.length ? (
-        <div className="mt-3">
-          <p className="text-[10px] uppercase tracking-wide text-zinc-500">
-            Files ({listing.asset.files.length}){brokenFiles.length ? ` · ${brokenFiles.length} failed processing` : ''}
-          </p>
-          <ul className="mt-1 space-y-1">
-            {listing.asset.files.map((f, i) => (
-              <li key={`${f.name}-${i}`} className="flex flex-wrap items-center justify-between gap-2 text-xs text-zinc-300">
-                <span className="min-w-0 truncate">
-                  {f.name}
-                  {f.sizeBytes ? <span className="text-zinc-500"> · {(f.sizeBytes / 1024 / 1024).toFixed(1)} MB</span> : null}
-                </span>
-                <span className="flex items-center gap-1.5">
-                  {f.processingError ? <span className="text-red-300">{f.processingError}</span> : null}
-                  <StatusPill status={f.processingStatus} />
-                </span>
-              </li>
-            ))}
-          </ul>
-        </div>
+        <ListingFiles listingId={listing.id} files={listing.asset.files} brokenCount={brokenFiles.length} />
       ) : null}
 
       {listing.asset?.tags?.length ? (
@@ -1848,11 +1930,14 @@ export default function TicketCasePanel({
   context,
   loading,
   onRetry,
+  endpointBase,
 }: {
   /** undefined: not loaded yet; null: the server could not build it. */
   context: TicketCaseContext | null | undefined;
   loading: boolean;
   onRetry: () => void;
+  /** The ticket desk's API base; decides whether listing originals can be opened from here. */
+  endpointBase?: string;
 }) {
   if (loading && context === undefined) {
     return (
@@ -1874,6 +1959,7 @@ export default function TicketCasePanel({
   }
 
   return (
+    <ListingMediaBaseContext.Provider value={listingMediaBaseFor(endpointBase)}>
     <div className="min-h-0 flex-1 space-y-6 overflow-y-auto px-5 py-5">
       {context.notes.length ? (
         <div className="space-y-1.5 rounded-xl border border-amber-500/25 bg-amber-500/[0.05] p-3">
@@ -1918,5 +2004,6 @@ export default function TicketCasePanel({
 
       <TicketRefs title="Requester's other open tickets" items={context.otherOpenTickets} empty="No other open tickets." />
     </div>
+    </ListingMediaBaseContext.Provider>
   );
 }

@@ -856,7 +856,22 @@ export type CaseListing = {
       reviews: number;
       averageRating: number | null;
     } | null;
-    files: { name: string; type: string | null; sizeBytes: number | null; processingStatus: string | null; processingError: string | null }[];
+    files: {
+      mediaAssetId: string | null;
+      name: string;
+      type: string | null;
+      mimeType: string | null;
+      sizeBytes: number | null;
+      width: number | null;
+      height: number | null;
+      durationSeconds: number | null;
+      /** Watermarked public preview; null until processing finishes. */
+      proxyPath: string | null;
+      thumbnailPath: string | null;
+      processingStatus: string | null;
+      processingError: string | null;
+      position: number;
+    }[];
   } | null;
   reports: { open: number; total: number; items: { id: string; number: string; type: string; status: string; isOpen: boolean; createdAt: string }[] };
   history: { id: string; action: string; actorName?: string | null; status: string | null; reason: string | null; createdAt: string }[];

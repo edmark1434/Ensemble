@@ -1519,7 +1519,12 @@ export default function TicketDetailModalShell({
               />
 
               {tab === 'case' ? (
-                <TicketCasePanel context={caseContext} loading={caseLoading} onRetry={() => void loadCase()} />
+                <TicketCasePanel
+                  context={caseContext}
+                  loading={caseLoading}
+                  onRetry={() => void loadCase()}
+                  endpointBase={endpointBase}
+                />
               ) : tab === 'conversation' ? (
                 <>
                   <div ref={threadRef} className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-4">

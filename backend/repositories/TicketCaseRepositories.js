@@ -873,12 +873,21 @@ async function listingSummary(listingId) {
           status: listing.asset.status,
           tags: Array.isArray(listing.asset.tags) ? listing.asset.tags.slice(0, 12) : [],
           stats: listing.asset.stats || null,
-          files: (Array.isArray(files) ? files : []).slice(0, 12).map((file) => ({
+          // Carries the same public preview paths the listing desk uses, so staff can open the file here.
+          files: (Array.isArray(files) ? files : []).slice(0, 12).map((file, index) => ({
+            mediaAssetId: file.mediaAssetId || null,
             name: file.originalName || file.name || 'File',
             type: file.type || file.mimeType || null,
+            mimeType: file.mimeType || null,
             sizeBytes: file.sizeBytes ?? null,
+            width: file.width ?? null,
+            height: file.height ?? null,
+            durationSeconds: file.durationSeconds ?? null,
+            proxyPath: file.proxyPath || null,
+            thumbnailPath: file.thumbnailPath || null,
             processingStatus: file.processingStatus || null,
             processingError: file.processingError || null,
+            position: file.position ?? index,
           })),
         }
       : null,

@@ -141,9 +141,11 @@ export default function ListingFileInspector({
   target,
 }: {
   listingId: string;
-  apiBase: string;
+  /** Marketplace moderation base; null when this staff role cannot open originals (preview only). */
+  apiBase: string | null;
   target: InspectorTarget;
 }) {
+  const canOpenOriginal = Boolean(apiBase);
   const file = target.kind === 'file' ? target.file : null;
   const mediaAssetId = file ? file.mediaAssetId : target.kind === 'showcase' ? target.thumb.mediaAssetId : '';
   const name =
@@ -159,7 +161,7 @@ export default function ListingFileInspector({
   const previewUrl = previewPath ? mediaUrl(previewPath) : '';
   const fileKind = kindFor(file?.type || 'image', file?.mimeType);
 
-  const [mode, setMode] = useState<ViewMode>(previewUrl ? 'preview' : 'original');
+  const [mode, setMode] = useState<ViewMode>(previewUrl || !canOpenOriginal ? 'preview' : 'original');
   const [original, setOriginal] = useState<(ListingOriginalAccess & { fetchedAt: number }) | null>(
     null
   );
@@ -170,7 +172,7 @@ export default function ListingFileInspector({
 
   // A new target starts clean; the original is only requested when the reviewer asks for it.
   useEffect(() => {
-    setMode(previewUrl ? 'preview' : 'original');
+    setMode(previewUrl || !canOpenOriginal ? 'preview' : 'original');
     setOriginal(null);
     setFailed(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -193,6 +195,7 @@ export default function ListingFileInspector({
     original !== null && Date.now() - original.fetchedAt > (original.expiresIn - 30) * 1000;
 
   const requestOriginal = async (download: boolean) => {
+    if (!apiBase) throw new Error('Opening the original upload needs marketplace moderation access');
     const res = await api.get(`${apiBase}/listings/${listingId}/media/${mediaAssetId}/original`, {
       params: download ? { download: 1 } : undefined,
     });
@@ -281,14 +284,16 @@ export default function ListingFileInspector({
                 {file.processingError}
               </p>
             )}
-            <button
-              type="button"
-              onClick={() => void openOriginal()}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs font-medium text-amber-200 hover:bg-amber-500/20"
-            >
-              <Lock className="h-3.5 w-3.5" />
-              Inspect the original upload instead
-            </button>
+            {canOpenOriginal ? (
+              <button
+                type="button"
+                onClick={() => void openOriginal()}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs font-medium text-amber-200 hover:bg-amber-500/20"
+              >
+                <Lock className="h-3.5 w-3.5" />
+                Inspect the original upload instead
+              </button>
+            ) : null}
           </div>
         );
       }
@@ -339,10 +344,12 @@ export default function ListingFileInspector({
             <ShieldCheck className="h-3.5 w-3.5" />
             {target.kind === 'showcase' ? 'Showcase image' : 'Watermarked preview'}
           </button>
-          <button type="button" onClick={() => void openOriginal()} className={tabClass(mode === 'original')}>
-            <Lock className="h-3.5 w-3.5" />
-            Original upload
-          </button>
+          {canOpenOriginal ? (
+            <button type="button" onClick={() => void openOriginal()} className={tabClass(mode === 'original')}>
+              <Lock className="h-3.5 w-3.5" />
+              Original upload
+            </button>
+          ) : null}
         </div>
         <div className="flex flex-wrap items-center gap-1.5">
           {stageSrc && !failed && (
@@ -367,15 +374,17 @@ export default function ListingFileInspector({
               New tab
             </a>
           )}
-          <button
-            type="button"
-            onClick={() => void downloadOriginal()}
-            disabled={downloading}
-            className="inline-flex items-center gap-1 rounded-lg border border-white/10 px-2.5 py-1.5 text-[11px] text-zinc-300 hover:text-white disabled:opacity-50"
-          >
-            {downloading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Download className="h-3 w-3" />}
-            Download original
-          </button>
+          {canOpenOriginal ? (
+            <button
+              type="button"
+              onClick={() => void downloadOriginal()}
+              disabled={downloading}
+              className="inline-flex items-center gap-1 rounded-lg border border-white/10 px-2.5 py-1.5 text-[11px] text-zinc-300 hover:text-white disabled:opacity-50"
+            >
+              {downloading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Download className="h-3 w-3" />}
+              Download original
+            </button>
+          ) : null}
         </div>
       </div>
 

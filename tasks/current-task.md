@@ -1,5 +1,17 @@
 # Current Task
 
+# Parallel task: view listing files from the ticket case file
+
+## Objective
+
+Staff can open the listing's files from a ticket's Case tab (e.g. "Appeal a marketplace action") instead of seeing only file names.
+
+## Acceptance Criteria
+
+- **Payload.** Case listing `asset.files[]` carries `mediaAssetId`, `mimeType`, `width`, `height`, `durationSeconds`, `proxyPath`, `thumbnailPath`, `position`.
+- **Case card.** Each file row shows a thumbnail and a View / Hide button that opens `ListingFileInspector` inline (watermarked preview, expand).
+- **Originals.** Admin and Marketplace desks can also open / download the original upload (logged, existing endpoints); other moderator desks get the watermarked preview only.
+
 # Parallel task: platform revenue and profit in Admin → Analytics
 
 ## Objective
