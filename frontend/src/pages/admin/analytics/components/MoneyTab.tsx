@@ -16,6 +16,7 @@ import { MetricRows, Notice, Panel, SimpleTable, StatTile } from '../analyticsUi
 import { InfoButton } from '../analyticsInfo';
 import { LineChart, VerticalBarChart } from './AnalyticsCharts';
 import FinanceLedger from './FinanceLedger';
+import EarningsSection from './EarningsSection';
 
 const FEE_LABELS: Record<string, string> = {
   Fee: 'Contract, gig & marketplace commissions',
@@ -50,6 +51,8 @@ export default function MoneyTab({
 
   return (
     <div className="space-y-6">
+      <EarningsSection data={data} />
+
       <div className="console-stagger grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
         <StatTile
           label="Cash in"

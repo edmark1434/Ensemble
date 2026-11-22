@@ -122,6 +122,51 @@ export const GLOSSARY = {
   },
 
   // ── Money ─────────────────────────────────────────────────────────────────
+  platformRevenue: {
+    term: 'Platform revenue',
+    what: 'Money Ensemble earned and keeps in this period, as opposed to money that still belongs to members.',
+    calc: 'Subscriptions + platform fees (credits × credit value) + cashout fees + top-up markup',
+    source: 'Paid subscription invoices and upgrade payments, Completed fee entries net of refunds, the fee on succeeded cashouts, and paid top-ups compared with the credits they issued.',
+    note: 'Top-up sales are not revenue: those pesos became credits members can still spend or cash out. Only the markup, when a package costs more than its credits are worth, is kept.',
+  },
+  platformCosts: {
+    term: 'Platform costs',
+    what: 'Credits Ensemble handed out without being paid for them, valued in pesos. They can be spent or cashed out like bought credits.',
+    calc: 'staff credit grants + credits paid out by the platform wallet + top-up bonus credits − staff deductions',
+    source: 'Credit ledger: staff balance adjustments, and platform wallet → member, team or escrow wallet entries that are not top-ups or refunds (fee refunds are already taken off fee revenue). A reversed entry and its reversal cancel out. Staff wallets are left out.',
+    note: 'Payment-provider charges (Xendit), hosting and other running costs are not recorded in Ensemble, so they are not included.',
+  },
+  netProfit: {
+    term: 'Net profit',
+    what: 'What Ensemble kept after the credits it gave away. Negative means more was given away than earned.',
+    calc: 'Platform revenue − Platform costs',
+    note: 'Before payment-provider charges and running costs, which Ensemble does not record. Not the same as Net cash: cash also moves when members top up or cash out their own credits.',
+  },
+  profitMargin: {
+    term: 'Profit margin',
+    what: 'How much of each peso of revenue Ensemble kept.',
+    calc: 'Net profit ÷ Platform revenue',
+    note: 'Shown as — when there was no revenue in the period.',
+  },
+  earningsStatement: {
+    term: 'Platform earnings',
+    what: 'A profit and loss view for the period: every source of revenue, every cost, and the profit that leaves, with the previous period and the lifetime total beside it.',
+    note: 'Credit amounts are converted at today’s credit value.',
+  },
+  topupMarkup: {
+    term: 'Top-up markup and bonus credits',
+    what: 'The difference between what members paid for top-ups and what the credits they got are worth. When packages cost more than their credits, the extra is revenue; when they include bonus credits, the extra credits are a cost.',
+    calc: 'paid top-up pesos − credits issued × credit value',
+    note: 'Worked out over the whole period at today’s credit value.',
+  },
+  lifetimeEarnings: {
+    term: 'Lifetime',
+    what: 'Revenue, costs and profit over everything Ensemble has recorded up to today, whatever range is picked.',
+  },
+  earningsChart: {
+    term: 'Revenue, costs and profit over time',
+    what: 'Platform revenue, platform costs and net profit for each interval. Adds up to the tiles above.',
+  },
   cashIn: {
     term: 'Cash in',
     what: 'Real pesos that came in from members in this period.',
@@ -140,7 +185,7 @@ export const GLOSSARY = {
     what: 'How much more money came in than went out in this period. Negative means more was paid out to members than came in.',
     calc: 'Cash in − Cash out',
     source: 'Top-ups, subscription payments and succeeded cashouts in this period.',
-    note: 'This is not profit. Most top-up pesos still belong to members as credits they can spend or cash out later (see Credits outstanding), and payment-provider charges and running costs are not taken off.',
+    note: 'This is not profit (see Net profit). Most top-up pesos still belong to members as credits they can spend or cash out later (see Credits outstanding), and payment-provider charges and running costs are not taken off.',
   },
   topupSales: {
     term: 'Top-up sales',
@@ -411,7 +456,7 @@ export const GLOSSARY_SECTIONS: GlossarySection[] = [
   {
     id: 'overview',
     title: 'Overview',
-    ids: ['newMembers', 'activeMembers', 'topupSales', 'subscriptionRevenue', 'feeRevenue', 'cashoutsPaid', 'needsAttention', 'moneyChart', 'volumeChart'],
+    ids: ['newMembers', 'activeMembers', 'platformRevenue', 'netProfit', 'topupSales', 'subscriptionRevenue', 'feeRevenue', 'cashoutsPaid', 'needsAttention', 'moneyChart', 'volumeChart'],
   },
   {
     id: 'members',
@@ -427,6 +472,14 @@ export const GLOSSARY_SECTIONS: GlossarySection[] = [
     id: 'money',
     title: 'Revenue & credits',
     ids: [
+      'platformRevenue',
+      'platformCosts',
+      'netProfit',
+      'profitMargin',
+      'earningsStatement',
+      'topupMarkup',
+      'lifetimeEarnings',
+      'earningsChart',
       'cashIn',
       'cashOut',
       'netCash',

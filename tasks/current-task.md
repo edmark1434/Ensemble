@@ -1,5 +1,18 @@
 # Current Task
 
+# Parallel task: platform revenue and profit in Admin → Analytics
+
+## Objective
+
+Admin → Analytics shows what Ensemble itself earns: total platform revenue, costs, net profit and margin for the picked range, the previous period and lifetime.
+
+## Acceptance Criteria
+
+- **Server.** `GET /api/admin/analytics-overview` adds `summary.platformRevenuePhp` / `platformProfitPhp` (KPIs), `money.earnings` (revenue lines, cost lines, profit, margin, `previous`), `money.lifetime`, and per-bucket `revenuePhp` / `costPhp` / `profitPhp` (docs/api.md). Cache key is `analytics:overview:v3`.
+- **Revenue.** Subscriptions + fee credits × credit value + cashout fees + top-up markup. **Costs.** Staff grants + platform-wallet payouts (not top-ups or refunds) + top-up bonus credits − staff deductions. A failed cost read shows costs and profit as unavailable, never a failed page.
+- **Money tab.** Revenue, costs, net profit and margin tiles; a Platform earnings statement with previous period and lifetime; a Lifetime revenue panel; a revenue / costs / profit chart (the line chart now handles negative values).
+- **Overview.** Platform revenue and Net profit tiles. Every new figure has a glossary entry.
+
 # Parallel task: every reason for reporting a person
 
 ## Objective

@@ -31,6 +31,42 @@ export type SeriesPoint = {
   subscriptionPhp: number;
   feeCredits: number;
   cashoutPhp: number;
+  topupCredits: number;
+  cashoutFeePhp: number;
+  /** Platform earnings for the bucket (see `PlatformEarnings`); cost and profit are null when costs could not be read. */
+  revenuePhp: number;
+  costPhp: number | null;
+  profitPhp: number | null;
+};
+
+/** What Ensemble itself earned in a period (AdminAnalyticsServices `platformEarnings`). */
+export type EarningsTotals = {
+  revenuePhp: number;
+  costPhp: number | null;
+  profitPhp: number | null;
+  /** Profit as a percentage of revenue; null when there was no revenue. */
+  marginPct: number | null;
+};
+
+export type EarningsRevenue = {
+  subscriptionsPhp: number;
+  feesPhp: number;
+  cashoutFeesPhp: number;
+  topupMarkupPhp: number;
+};
+
+export type PlatformEarnings = EarningsTotals & {
+  revenue: EarningsRevenue;
+  costs: {
+    grantsPhp: number;
+    payoutsPhp: number;
+    topupBonusPhp: number;
+    deductionsPhp: number;
+    grantCredits: number;
+    payoutCredits: number;
+    deductionCredits: number;
+  } | null;
+  previous: EarningsTotals | null;
 };
 
 export type MemberSummary = {
@@ -182,6 +218,9 @@ export type PlatformAnalytics = {
     subscriptionRevenuePhp: Kpi;
     feeRevenueCredits: Kpi;
     cashoutsPaidPhp: Kpi;
+    platformRevenuePhp: Kpi;
+    /** Null when platform costs could not be read. */
+    platformProfitPhp: Kpi | null;
     tickets: Kpi;
     reports: Kpi;
     disputes: Kpi;
@@ -194,6 +233,9 @@ export type PlatformAnalytics = {
   money: {
     creditValuePhp: number;
     cash: { inPhp: number; outPhp: number; netPhp: number };
+    earnings: PlatformEarnings;
+    /** Everything recorded up to today, whatever the range. Null when it could not be read. */
+    lifetime: (EarningsTotals & { revenue: EarningsRevenue }) | null;
     topups: TopupBreakdown | null;
     subscriptions: SubscriptionBreakdown | null;
     fees: FeeBreakdown | null;

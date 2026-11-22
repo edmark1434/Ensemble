@@ -15,7 +15,13 @@ const { CLOSED_REPORT_STATUSES } = require('../lib/ReportEnums');
  *   it stored cents were saved in pesos; `INVOICE_CENTS_SQL` scales those back up when the
  *   stored value is exactly the plan price / 100.
  * - Fee revenue: Completed fee rows minus Completed fee refunds, in credits.
- * - Cashouts: net PHP of SUCCEEDED rows, dated by request (`created_at`).
+ * - Cashouts: net PHP of SUCCEEDED rows, dated by request (`created_at`). Their
+ *   `fee_php_cents` is the cashout fee Ensemble keeps.
+ * - Platform earnings (worked out in AdminAnalyticsServices `platformEarnings`): revenue is
+ *   subscriptions + fee credits × credit value + cashout fees + top-up markup (paid pesos −
+ *   credits issued × credit value, when positive); costs are staff credit grants + credits the
+ *   platform wallet paid out (`fetchPlatformCosts`) + top-up bonus credits (the markup when
+ *   negative) − staff deductions. Profit = revenue − costs.
  */
 
 const MEMBER = `a.type = 'User' AND a.deleted_at IS NULL`;
@@ -239,6 +245,9 @@ async function fetchPeriodTotals({ from, to }) {
       (SELECT COALESCE(SUM(p.amount), 0) FROM payments p
         WHERE p.payment_type = 'TOPUP' AND UPPER(COALESCE(p.status, '')) = ANY($3::text[])
           AND ${inPeriod('COALESCE(p.processed_at, p.created_at)', 1, 2)})::numeric(14,2) AS topup_php,
+      (SELECT COALESCE(SUM(p.credits), 0) FROM payments p
+        WHERE p.payment_type = 'TOPUP' AND UPPER(COALESCE(p.status, '')) = ANY($3::text[])
+          AND ${inPeriod('COALESCE(p.processed_at, p.created_at)', 1, 2)})::bigint AS topup_credits,
       (SELECT COALESCE(SUM(p.amount), 0) FROM payments p
         WHERE p.payment_type = 'SUBSCRIPTION' AND UPPER(COALESCE(p.status, '')) = ANY($3::text[])
           AND ${inPeriod('COALESCE(p.processed_at, p.created_at)', 1, 2)})::numeric(14,2) AS upgrade_php,
@@ -253,7 +262,9 @@ async function fetchPeriodTotals({ from, to }) {
           AND (ct.type::text = ANY($5::text[]) OR ct.type::text = ANY($6::text[]))
           AND ${inPeriod('ct.created_at', 1, 2)})::bigint AS fee_credits,
       (SELECT COALESCE(SUM(c.net_amount_php_cents), 0) FROM cashouts c
-        WHERE UPPER(COALESCE(c.status, '')) = ANY($7::text[]) AND ${inPeriod('c.created_at', 1, 2)})::bigint AS cashout_cents
+        WHERE UPPER(COALESCE(c.status, '')) = ANY($7::text[]) AND ${inPeriod('c.created_at', 1, 2)})::bigint AS cashout_cents,
+      (SELECT COALESCE(SUM(c.fee_php_cents), 0) FROM cashouts c
+        WHERE UPPER(COALESCE(c.status, '')) = ANY($7::text[]) AND ${inPeriod('c.created_at', 1, 2)})::bigint AS cashout_fee_cents
     `,
     [from, to, TOPUP_STATUSES.paid, INVOICE_STATUSES.paid, FEE_TYPES, FEE_REFUND_TYPES, CASHOUT_STATUSES.paid]
   );
@@ -266,9 +277,11 @@ async function fetchPeriodTotals({ from, to }) {
     listings: num(r.listings),
     topupCount: num(r.topup_count),
     topupPhp: num(r.topup_php),
+    topupCredits: num(r.topup_credits),
     subscriptionPhp: Math.round((num(r.upgrade_php) + phpFromCents(r.invoice_cents)) * 100) / 100,
     feeCredits: num(r.fee_credits),
     cashoutPhp: phpFromCents(r.cashout_cents),
+    cashoutFeePhp: phpFromCents(r.cashout_fee_cents),
   };
 }
 
@@ -302,7 +315,8 @@ async function fetchSeries({ from, to, bucket }) {
     ),
     topups AS (
       SELECT date_trunc($3::text, COALESCE(p.processed_at, p.created_at)::timestamp) AS b,
-        COUNT(*)::int AS n, COALESCE(SUM(p.amount), 0)::numeric(14,2) AS php
+        COUNT(*)::int AS n, COALESCE(SUM(p.amount), 0)::numeric(14,2) AS php,
+        COALESCE(SUM(p.credits), 0)::bigint AS credits
       FROM payments p
       WHERE p.payment_type = 'TOPUP' AND UPPER(COALESCE(p.status, '')) = ANY($4::text[])
         AND ${inPeriod('COALESCE(p.processed_at, p.created_at)', 1, 2)}
@@ -334,7 +348,8 @@ async function fetchSeries({ from, to, bucket }) {
       GROUP BY 1
     ),
     cashouts AS (
-      SELECT date_trunc($3::text, c.created_at::timestamp) AS b, COALESCE(SUM(c.net_amount_php_cents), 0)::bigint AS cents
+      SELECT date_trunc($3::text, c.created_at::timestamp) AS b, COALESCE(SUM(c.net_amount_php_cents), 0)::bigint AS cents,
+        COALESCE(SUM(c.fee_php_cents), 0)::bigint AS fee_cents
       FROM cashouts c
       WHERE UPPER(COALESCE(c.status, '')) = ANY($8::text[]) AND ${inPeriod('c.created_at', 1, 2)}
       GROUP BY 1
@@ -347,10 +362,12 @@ async function fetchSeries({ from, to, bucket }) {
       COALESCE(li.n, 0) AS listings,
       COALESCE(tu.n, 0) AS topup_count,
       COALESCE(tu.php, 0) AS topup_php,
+      COALESCE(tu.credits, 0) AS topup_credits,
       COALESCE(up.php, 0) AS upgrade_php,
       COALESCE(inv.cents, 0) AS invoice_cents,
       COALESCE(fe.credits, 0) AS fee_credits,
-      COALESCE(co.cents, 0) AS cashout_cents
+      COALESCE(co.cents, 0) AS cashout_cents,
+      COALESCE(co.fee_cents, 0) AS cashout_fee_cents
     FROM spine s
     LEFT JOIN signups su ON su.b = s.b
     LEFT JOIN tickets ti ON ti.b = s.b
@@ -382,10 +399,73 @@ async function fetchSeries({ from, to, bucket }) {
     listings: num(r.listings),
     topupCount: num(r.topup_count),
     topupPhp: num(r.topup_php),
+    topupCredits: num(r.topup_credits),
     subscriptionPhp: Math.round((num(r.upgrade_php) + phpFromCents(r.invoice_cents)) * 100) / 100,
     feeCredits: num(r.fee_credits),
     cashoutPhp: phpFromCents(r.cashout_cents),
+    cashoutFeePhp: phpFromCents(r.cashout_fee_cents),
   }));
+}
+
+// ── Platform costs (credits the platform gave out without being paid) ───────
+
+const PLATFORM_COST_REFUND_TYPES = ['Escrow Refund', 'Asset Refund', 'Cashout Refund', ...FEE_REFUND_TYPES];
+const SELF_ADJUSTMENT = `(ct.source_wallet_id = ct.destination_wallet_id AND ct.type::text = 'Fund Transfer')`;
+const FROM_PLATFORM = `(COALESCE(sw.type, '') = 'platform wallets' AND COALESCE(dw.type, '') <> 'platform wallets'
+  AND COALESCE(ct.reference_table, '') <> 'payments' AND NOT (ct.type::text = ANY($4::text[])))`;
+
+/**
+ * Credits created or handed out by Ensemble in the period, for platform profit. Same wallet
+ * rules as the Credits desk flow (`AdminEconomyRepositories.FLOW_KIND_SQL`):
+ * - grants / deductions: staff balance adjustments (a wallet's own `Fund Transfer` with a
+ *   `CREDITS_ADJUSTED` delta above / below zero);
+ * - payouts: platform wallet → member, team or escrow wallets that are not top-ups and not
+ *   refunds (fee refunds are already netted from fee revenue).
+ * Only Completed rows that do not reverse another row count, so a reversed entry and its
+ * reversal cancel out. Rows touching a staff wallet are left out, as in Credits outstanding.
+ * Returns totals and a per-bucket map keyed like `fetchSeries` (`start` day).
+ */
+async function fetchPlatformCosts({ from, to, bucket = 'month' }) {
+  const result = await pool.query(
+    `
+    SELECT date_trunc($3::text, ct.created_at::timestamp) AS b,
+      COALESCE(SUM(ABS(ct.amount_credits)) FILTER (
+        WHERE ${SELF_ADJUSTMENT} AND (adj.metadata->>'delta')::numeric > 0), 0)::bigint AS grants,
+      COALESCE(SUM(ABS(ct.amount_credits)) FILTER (
+        WHERE ${SELF_ADJUSTMENT} AND (adj.metadata->>'delta')::numeric < 0), 0)::bigint AS deductions,
+      COALESCE(SUM(ABS(ct.amount_credits)) FILTER (WHERE ${FROM_PLATFORM}), 0)::bigint AS payouts
+    FROM credit_transactions ct
+    LEFT JOIN wallets sw ON sw.wallet_id = ct.source_wallet_id
+    LEFT JOIN wallets dw ON dw.wallet_id = ct.destination_wallet_id
+    LEFT JOIN LATERAL (
+      SELECT aa.metadata
+      FROM account_activity aa
+      WHERE aa.event_code = 'CREDITS_ADJUSTED' AND aa.reference_id = ct.credit_transaction_id::text
+      ORDER BY aa.created_at DESC
+      LIMIT 1
+    ) adj ON ct.source_wallet_id = ct.destination_wallet_id
+    WHERE ct.status::text = 'Completed'
+      AND ct.reverses_credit_transaction_id IS NULL
+      AND ${inPeriod('ct.created_at', 1, 2)}
+      AND (${SELF_ADJUSTMENT} OR ${FROM_PLATFORM})
+      AND NOT EXISTS (
+        SELECT 1 FROM account_wallets saw INNER JOIN staff ss ON ss.account_id = saw.account_id
+        WHERE saw.wallet_id IN (ct.source_wallet_id, ct.destination_wallet_id)
+      )
+    GROUP BY 1
+    `,
+    [from, to, bucket, PLATFORM_COST_REFUND_TYPES]
+  );
+  const totals = { grants: 0, deductions: 0, payouts: 0 };
+  const byBucket = new Map();
+  for (const r of result.rows) {
+    const row = { grants: num(r.grants), deductions: num(r.deductions), payouts: num(r.payouts) };
+    totals.grants += row.grants;
+    totals.deductions += row.deductions;
+    totals.payouts += row.payouts;
+    byBucket.set(isoDay(r.b), row);
+  }
+  return { ...totals, byBucket };
 }
 
 // ── Engagement (account_active_days) ────────────────────────────────────────
@@ -1306,6 +1386,7 @@ module.exports = {
   fetchStaffRoles,
   fetchPeriodTotals,
   fetchSeries,
+  fetchPlatformCosts,
   fetchTrackingSince,
   fetchActiveSeries,
   fetchEngagementTotals,

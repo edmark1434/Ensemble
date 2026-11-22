@@ -1,4 +1,4 @@
-import { Activity, ArrowUpRight, Coins, CreditCard, UserPlus, Wallet } from 'lucide-react';
+import { Activity, ArrowUpRight, Coins, CreditCard, PiggyBank, TrendingUp, UserPlus, Wallet } from 'lucide-react';
 import type { PlatformAnalytics } from '../analyticsTypes';
 import {
   SERIES_COLORS,
@@ -26,7 +26,7 @@ export default function OverviewTab({ data }: { data: PlatformAnalytics }) {
 
   return (
     <div className="space-y-6">
-      <div className="console-stagger grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
+      <div className="console-stagger grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <StatTile
           label="New members"
           info="newMembers"
@@ -50,6 +50,35 @@ export default function OverviewTab({ data }: { data: PlatformAnalytics }) {
             engagement.available
               ? `${fmtInt(engagement.dau)} today · ${fmtInt(engagement.mau)} in the last 30 days`
               : 'Counted from members’ sign-ins once tracking starts'
+          }
+        />
+        <StatTile
+          label="Platform revenue"
+          info="platformRevenue"
+          icon={TrendingUp}
+          value={summary.platformRevenuePhp.value}
+          format={fmtPhpShort}
+          animate={false}
+          kpi={summary.platformRevenuePhp}
+          spark={series.map((p) => p.revenuePhp)}
+          sparkColor={SERIES_COLORS.revenue}
+          sub={money.lifetime ? `${fmtPhpShort(money.lifetime.revenuePhp)} lifetime` : 'Subscriptions, fees and cashout fees'}
+        />
+        <StatTile
+          label="Net profit"
+          info="netProfit"
+          icon={PiggyBank}
+          value={summary.platformProfitPhp?.value ?? null}
+          format={fmtPhpShort}
+          animate={false}
+          kpi={summary.platformProfitPhp}
+          empty="Could not load"
+          spark={series.map((p) => p.profitPhp)}
+          sparkColor={SERIES_COLORS.profit}
+          sub={
+            money.earnings.marginPct != null
+              ? `${money.earnings.marginPct.toFixed(1)}% margin · ${fmtPhpShort(money.earnings.costPhp ?? 0)} costs`
+              : 'Revenue minus credits given away'
           }
         />
         <StatTile

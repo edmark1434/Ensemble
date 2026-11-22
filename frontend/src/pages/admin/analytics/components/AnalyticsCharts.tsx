@@ -83,14 +83,17 @@ export function LineChart({
   const padB = 36;
   const allValues = visible.flatMap((s) => s.values.filter((v): v is number => v != null));
   const max = Math.max(...allValues, 1);
+  // Below zero only when a series goes negative (for example net profit); otherwise the axis starts at 0.
+  const min = Math.min(...allValues, 0);
+  const span = max - min || 1;
   const n = Math.max(labels.length, 1);
   const plotW = width - padL - padR;
   const plotH = height - padT - padB;
   const dense = n > 40;
 
   const toX = (i: number) => (n === 1 ? padL + plotW / 2 : padL + (i / (n - 1)) * plotW);
-  const toY = (v: number) => padT + plotH - (v / max) * plotH;
-  const yTicks = [0, 0.25, 0.5, 0.75, 1].map((t) => max * (1 - t));
+  const toY = (v: number) => padT + plotH - ((v - min) / span) * plotH;
+  const yTicks = [0, 0.25, 0.5, 0.75, 1].map((t) => max - span * t);
   const labelStep = Math.max(1, Math.ceil(labels.length / 6));
 
   const segmentsOf = (values: (number | null)[]) => {

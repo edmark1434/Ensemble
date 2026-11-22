@@ -16,11 +16,11 @@ class AnalyticsServiceError extends Error {
  *
  * The overview covers one date range (preset or custom) and compares it with the period of
  * the same length right before it. Results are cached in Redis for 60 seconds per range
- * (`analytics:overview:v2:<from>:<to>:<bucket>`); `refresh=1` recomputes. Nothing writes
+ * (`analytics:overview:v3:<from>:<to>:<bucket>`); `refresh=1` recomputes. Nothing writes
  * analytics data, so there is nothing to invalidate.
  */
 
-const CACHE_PREFIX = 'analytics:overview:v2';
+const CACHE_PREFIX = 'analytics:overview:v3';
 const CACHE_TTL_SECONDS = 60;
 const MAX_CUSTOM_DAYS = 3 * 366;
 const RANGE_KEYS = ['7d', '30d', '90d', '12m', 'ytd', 'all', 'custom'];
@@ -176,6 +176,52 @@ function bucketEnd(start, bucket) {
 
 function plural(n, one, many = `${one}s`) {
   return `${n.toLocaleString('en-US')} ${n === 1 ? one : many}`;
+}
+
+// ── Platform earnings ───────────────────────────────────────────────────────
+
+/** Earliest day the lifetime totals read from (before any Ensemble record). */
+const LIFETIME_FROM = '2000-01-01';
+
+/**
+ * What Ensemble itself earned: revenue it keeps, minus credits it handed out without being
+ * paid. `totals` is a `fetchPeriodTotals` (or series) row, `costs` a `fetchPlatformCosts`
+ * row or null when that read failed (costs and profit are then null). Credit amounts are
+ * valued at today's credit value. Payment-provider charges and running costs are not
+ * recorded, so they are not taken off.
+ */
+function platformEarnings(totals, costs, creditValuePhp) {
+  const t = totals || {};
+  const topupMarginPhp = (t.topupPhp || 0) - (t.topupCredits || 0) * creditValuePhp;
+  const revenue = {
+    subscriptionsPhp: round(t.subscriptionPhp || 0, 2),
+    feesPhp: round((t.feeCredits || 0) * creditValuePhp, 2),
+    cashoutFeesPhp: round(t.cashoutFeePhp || 0, 2),
+    topupMarkupPhp: round(Math.max(0, topupMarginPhp), 2),
+  };
+  const revenuePhp = round(revenue.subscriptionsPhp + revenue.feesPhp + revenue.cashoutFeesPhp + revenue.topupMarkupPhp, 2);
+  if (!costs) {
+    return { revenuePhp, revenue, costPhp: null, costs: null, profitPhp: null, marginPct: null };
+  }
+  const costLines = {
+    grantsPhp: round(costs.grants * creditValuePhp, 2),
+    payoutsPhp: round(costs.payouts * creditValuePhp, 2),
+    topupBonusPhp: round(Math.max(0, -topupMarginPhp), 2),
+    deductionsPhp: round(costs.deductions * creditValuePhp, 2),
+    grantCredits: costs.grants,
+    payoutCredits: costs.payouts,
+    deductionCredits: costs.deductions,
+  };
+  const costPhp = round(costLines.grantsPhp + costLines.payoutsPhp + costLines.topupBonusPhp - costLines.deductionsPhp, 2);
+  const profitPhp = round(revenuePhp - costPhp, 2);
+  return {
+    revenuePhp,
+    revenue,
+    costPhp,
+    costs: costLines,
+    profitPhp,
+    marginPct: revenuePhp > 0 ? round((profitPhp / revenuePhp) * 100, 1) : null,
+  };
 }
 
 // ── Engagement ──────────────────────────────────────────────────────────────
@@ -392,6 +438,10 @@ async function assembleOverview(range) {
     supply,
     economy,
     engagement,
+    costs,
+    previousCosts,
+    lifetimeTotals,
+    lifetimeCosts,
   ] = await Promise.all([
     safe('members', repo.fetchMemberSummary()),
     safe('newest members', repo.fetchNewestMembers(8), []),
@@ -419,6 +469,14 @@ async function assembleOverview(range) {
       console.error('Analytics engagement failed:', err.message);
       return { available: false, reason: 'error', activeByBucket: new Map() };
     }),
+    safe('platform costs', repo.fetchPlatformCosts(range)),
+    prev ? safe('previous platform costs', repo.fetchPlatformCosts({ ...prev, bucket: 'month' })) : Promise.resolve(null),
+    range.key === 'all'
+      ? Promise.resolve(null)
+      : safe('lifetime totals', repo.fetchPeriodTotals({ from: LIFETIME_FROM, to: range.today })),
+    range.key === 'all'
+      ? Promise.resolve(null)
+      : safe('lifetime costs', repo.fetchPlatformCosts({ from: LIFETIME_FROM, to: range.today, bucket: 'month' })),
   ]);
 
   if (community?.discussions?.top?.length) {
@@ -436,13 +494,27 @@ async function assembleOverview(range) {
   const { activeByBucket, ...engagementData } = engagement;
   const since = engagement.trackingSince || null;
 
+  const earnings = platformEarnings(current, costs, creditValuePhp);
+  const previousEarnings = before ? platformEarnings(before, prev ? previousCosts : null, creditValuePhp) : null;
+  const lifetime =
+    range.key === 'all'
+      ? earnings
+      : lifetimeTotals
+        ? platformEarnings(lifetimeTotals, lifetimeCosts, creditValuePhp)
+        : null;
+
   const seriesRows = series.map((row) => {
     const end = bucketEnd(row.start, range.bucket);
+    const bucketCosts = costs ? costs.byBucket.get(row.start) || { grants: 0, deductions: 0, payouts: 0 } : null;
+    const bucketEarnings = platformEarnings(row, bucketCosts, creditValuePhp);
     return {
       ...row,
       end,
       partial: row.start < range.from || end > range.to,
       active: engagement.available && since && end >= since ? activeByBucket.get(row.start) || 0 : null,
+      revenuePhp: bucketEarnings.revenuePhp,
+      costPhp: bucketEarnings.costPhp,
+      profitPhp: bucketEarnings.profitPhp,
     };
   });
 
@@ -469,6 +541,9 @@ async function assembleOverview(range) {
       subscriptionRevenuePhp: pick('subscriptionPhp'),
       feeRevenueCredits: pick('feeCredits'),
       cashoutsPaidPhp: pick('cashoutPhp'),
+      platformRevenuePhp: kpi(earnings.revenuePhp, previousEarnings ? previousEarnings.revenuePhp : null),
+      platformProfitPhp:
+        earnings.profitPhp == null ? null : kpi(earnings.profitPhp, previousEarnings ? previousEarnings.profitPhp : null),
       tickets: pick('tickets'),
       reports: pick('reports'),
       disputes: pick('disputes'),
@@ -487,6 +562,26 @@ async function assembleOverview(range) {
         outPhp: totals.cashoutPhp || 0,
         netPhp: round(cashIn - (totals.cashoutPhp || 0), 2),
       },
+      earnings: {
+        ...earnings,
+        previous: previousEarnings
+          ? {
+              revenuePhp: previousEarnings.revenuePhp,
+              costPhp: previousEarnings.costPhp,
+              profitPhp: previousEarnings.profitPhp,
+              marginPct: previousEarnings.marginPct,
+            }
+          : null,
+      },
+      lifetime: lifetime
+        ? {
+            revenuePhp: lifetime.revenuePhp,
+            costPhp: lifetime.costPhp,
+            profitPhp: lifetime.profitPhp,
+            marginPct: lifetime.marginPct,
+            revenue: lifetime.revenue,
+          }
+        : null,
       topups,
       subscriptions,
       fees,

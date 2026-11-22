@@ -135,6 +135,9 @@ export const SERIES_COLORS = {
   tickets: '#60a5fa',
   reports: '#fbbf24',
   listings: '#a78bfa',
+  revenue: '#34d399',
+  costs: '#f87171',
+  profit: '#38bdf8',
   muted: '#52525b',
 } as const;
 
