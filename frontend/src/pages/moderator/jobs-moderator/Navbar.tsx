@@ -1,4 +1,4 @@
-import { Briefcase, Flag, LayoutDashboard, Scale, Ticket, UserX, Users } from 'lucide-react';
+import { Briefcase, Flag, LayoutDashboard, Scale, Ticket, Users } from 'lucide-react';
 import ModeratorNavbar from '../shared/ModeratorNavbar';
 
 const navItems = [
@@ -8,7 +8,6 @@ const navItems = [
   { label: 'Disputes', icon: Scale, to: '/moderator/jobs/disputes' },
   { label: 'Reports', icon: Flag, to: '/moderator/jobs/reports' },
   { label: 'User & Team', icon: Users, to: '/moderator/jobs/user-team' },
-  { label: 'Restricted parties', icon: UserX, to: '/moderator/jobs/restricted-work' },
 ];
 
 const JobsModeratorNavbar = () => (

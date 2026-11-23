@@ -428,11 +428,17 @@ export default function RestrictedWorkDesk({
   accent,
   consoleBase,
   eyebrow = 'Live work',
+  embedded = false,
+  refreshToken,
 }: {
   accent: Accent;
   /** Console home path, e.g. /moderator/jobs or /admin (platform-view links). */
   consoleBase: string;
   eyebrow?: string;
+  /** Rendered as a tab inside another page (no page shell or sticky header). */
+  embedded?: boolean;
+  /** Parent refresh button bumps this to reload. */
+  refreshToken?: number;
 }) {
   const [filter, setFilter] = useState<FilterId>('all');
   const [search, setSearch] = useState('');
@@ -460,7 +466,7 @@ export default function RestrictedWorkDesk({
 
   useEffect(() => {
     void load();
-  }, [load, filter, query]);
+  }, [load, filter, query, refreshToken]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => setQuery(search.trim()), 350);
@@ -472,31 +478,19 @@ export default function RestrictedWorkDesk({
 
   const items = data?.items || [];
 
-  return (
-    <main className="min-h-screen md:pl-[260px]">
-      <header className="sticky top-0 z-20 border-b border-white/[0.06] bg-[#06070c]/90 backdrop-blur-xl">
-        <div className="flex flex-col gap-3 px-6 py-4 md:px-8 lg:flex-row lg:items-center lg:justify-between">
+  const body = (
+      <div className={embedded ? 'space-y-4' : 'space-y-4 px-6 py-6 md:px-8'}>
+        {embedded ? (
           <div>
-            <p className={`text-[10px] font-semibold uppercase tracking-[0.2em] ${accentText(accent)}`}>{eyebrow}</p>
-            <h1 className="flex items-center gap-2 text-xl font-bold text-white">
+            <h2 className="flex items-center gap-2 text-base font-semibold text-white">
               Live work with a restricted party
               <QueueInfo />
-            </h1>
+            </h2>
             <p className="mt-1 max-w-2xl text-xs text-zinc-500">
               Contracts where one side was punished and can't act. Make sure the other side isn't left with stuck credits.
             </p>
           </div>
-          <button
-            type="button"
-            onClick={() => void load()}
-            className="inline-flex items-center gap-1.5 self-start rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs text-zinc-200 transition hover:bg-white/10"
-          >
-            <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} /> Refresh
-          </button>
-        </div>
-      </header>
-
-      <div className="space-y-4 px-6 py-6 md:px-8">
+        ) : null}
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex flex-wrap items-center gap-1.5">
             {FILTERS.map((item) => (
@@ -606,6 +600,34 @@ export default function RestrictedWorkDesk({
           <p className="text-xs text-zinc-500">Showing the oldest {items.length} of {data.total}. Narrow with a filter or search.</p>
         ) : null}
       </div>
+  );
+
+  if (embedded) return body;
+
+  return (
+    <main className="min-h-screen md:pl-[260px]">
+      <header className="sticky top-0 z-20 border-b border-white/[0.06] bg-[#06070c]/90 backdrop-blur-xl">
+        <div className="flex flex-col gap-3 px-6 py-4 md:px-8 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <p className={`text-[10px] font-semibold uppercase tracking-[0.2em] ${accentText(accent)}`}>{eyebrow}</p>
+            <h1 className="flex items-center gap-2 text-xl font-bold text-white">
+              Live work with a restricted party
+              <QueueInfo />
+            </h1>
+            <p className="mt-1 max-w-2xl text-xs text-zinc-500">
+              Contracts where one side was punished and can't act. Make sure the other side isn't left with stuck credits.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => void load()}
+            className="inline-flex items-center gap-1.5 self-start rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs text-zinc-200 transition hover:bg-white/10"
+          >
+            <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} /> Refresh
+          </button>
+        </div>
+      </header>
+      {body}
     </main>
   );
 }

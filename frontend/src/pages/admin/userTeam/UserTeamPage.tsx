@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Activity, RefreshCw, ShieldBan, UserCircle, Users, FileText } from 'lucide-react';
+import { Activity, RefreshCw, ShieldBan, UserCircle, UserX, Users, FileText } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import useGlobalState from '@/lib/global_state';
 import { prefetchStaffTab } from '@/lib/staffPrefetch';
@@ -8,17 +8,28 @@ import UsersTab from './UsersTab';
 import UserTeamOverviewTab from './UserTeamOverviewTab';
 import SurveyResponsesTab from './SurveyResponsesTab';
 import RestrictionsTab from './RestrictionsTab';
+import RestrictedWorkDesk from '@/pages/moderator/shared/RestrictedWorkDesk';
 import { getUserTeamCapabilities, type UserTeamVariant } from './userTeamCapabilities';
 
-type TabId = 'overview' | 'teams' | 'users' | 'restrictions' | 'survey-responses';
+type TabId = 'overview' | 'teams' | 'users' | 'restrictions' | 'restricted-work' | 'survey-responses';
 
 const ALL_TABS: { id: TabId; label: string; icon: typeof Activity }[] = [
   { id: 'overview', label: 'Overview', icon: Activity },
   { id: 'teams', label: 'Team accounts', icon: Users },
   { id: 'users', label: 'Platform users', icon: UserCircle },
   { id: 'restrictions', label: 'Restrictions', icon: ShieldBan },
+  { id: 'restricted-work', label: 'Restricted parties', icon: UserX },
   { id: 'survey-responses', label: 'Survey Responses', icon: FileText },
 ];
+
+/** Consoles that see live work with a restricted party (docs/punishment-system.md §9). */
+const RESTRICTED_WORK: Partial<
+  Record<UserTeamVariant, { accent: 'rose' | 'sky' | 'emerald'; consoleBase: string }>
+> = {
+  admin: { accent: 'rose', consoleBase: '/admin' },
+  support: { accent: 'sky', consoleBase: '/moderator/support' },
+  jobs: { accent: 'emerald', consoleBase: '/moderator/jobs' },
+};
 
 const VARIANT_META: Record<
   UserTeamVariant,
@@ -68,6 +79,7 @@ export default function UserTeamPage({ variant = 'admin' }: { variant?: UserTeam
         if (t.id === 'teams') return caps.showTeamsTab;
         // Restrictions + survey responses are Admin-only (mods use desk-scoped tools).
         if (t.id === 'restrictions' || t.id === 'survey-responses') return variant === 'admin';
+        if (t.id === 'restricted-work') return Boolean(RESTRICTED_WORK[variant]);
         return true;
       }),
     [caps.showTeamsTab, variant]
@@ -100,7 +112,7 @@ export default function UserTeamPage({ variant = 'admin' }: { variant?: UserTeam
   };
 
   const pendingBadge =
-    tab === 'overview' ? overviewPending : tab === 'teams' ? teamsPending : usersPending;
+    tab === 'overview' ? overviewPending : tab === 'teams' ? teamsPending : tab === 'users' ? usersPending : 0;
 
   return (
     <main className={`min-h-screen ${shellPad}`}>
@@ -190,6 +202,14 @@ export default function UserTeamPage({ variant = 'admin' }: { variant?: UserTeam
           />
         )}
         {tab === 'restrictions' && <RestrictionsTab />}
+        {tab === 'restricted-work' && RESTRICTED_WORK[variant] && (
+          <RestrictedWorkDesk
+            embedded
+            refreshToken={refreshToken}
+            accent={RESTRICTED_WORK[variant]!.accent}
+            consoleBase={RESTRICTED_WORK[variant]!.consoleBase}
+          />
+        )}
         {tab === 'survey-responses' && variant === 'admin' && (
           <SurveyResponsesTab refreshToken={refreshToken} />
         )}

@@ -7,7 +7,6 @@ import {
   ShieldAlert,
   Sparkles,
   Ticket,
-  UserX,
   Users,
 } from 'lucide-react';
 import { ADMIN_LOGIN_PATH } from '@/lib/staffRoutes';
@@ -18,7 +17,6 @@ const navItems: ConsoleNavItem[] = [
   { label: 'User & Team', icon: Users, to: '/admin/user-team' },
   { label: 'Credit & Economy', icon: BadgeDollarSign, to: '/admin/credit-economy' },
   { label: 'Moderation', icon: ShieldAlert, to: '/admin/moderation' },
-  { label: 'Restricted parties', icon: UserX, to: '/admin/restricted-work' },
   { label: 'Analytics', icon: BarChart3, to: '/admin/analytics' },
   { label: 'Tickets', icon: Ticket, to: '/admin/ticket-management' },
   { label: 'Settings', icon: Settings2, to: '/admin/system-settings' },
