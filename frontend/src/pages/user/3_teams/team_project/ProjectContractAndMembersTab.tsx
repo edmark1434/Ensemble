@@ -103,6 +103,7 @@ interface ProjectContractAndMembersTabProps {
   currentUserAccountId: string;
   isClient: boolean;
   milestones?: any[];
+  requiredSkills?: string[];
   defaultSubTab?: 'contracts' | 'members';
   onContractsUpdated?: () => void;
   onOpenRateModal?: (contractId: string, targetName: string) => void;
@@ -116,7 +117,8 @@ export const ProjectContractAndMembersTab: React.FC<ProjectContractAndMembersTab
   currentUserAccountId,
   isClient,
   milestones = [],
-  defaultSubTab = 'contracts',
+  requiredSkills = [],
+  defaultSubTab = 'members',
   onContractsUpdated,
   onOpenRateModal,
   onOpenReportModal,
@@ -130,7 +132,7 @@ export const ProjectContractAndMembersTab: React.FC<ProjectContractAndMembersTab
     const paramTab = searchParams.get('tab');
     if (paramTab === 'members') {
       setSubTab('members');
-    } else if (paramTab === 'contract') {
+    } else if (paramTab === 'contracts') {
       setSubTab('contracts');
     } else if (defaultSubTab) {
       setSubTab(defaultSubTab);
@@ -293,100 +295,6 @@ export const ProjectContractAndMembersTab: React.FC<ProjectContractAndMembersTab
 
   return (
     <div className="space-y-6">
-      {/* Sub-tab Switcher: Contracts | Members */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-2 border-b border-zinc-200/80 dark:border-zinc-800">
-        <div className="flex items-center gap-1.5 p-1 bg-zinc-100 dark:bg-zinc-900 rounded-xl w-fit border border-zinc-200/80 dark:border-zinc-800">
-          <button
-            type="button"
-            onClick={() => {
-              setSubTab('contracts');
-              setSearchParams((prev) => {
-                const next = new URLSearchParams(prev);
-                next.set('tab', 'contract');
-                return next;
-              });
-            }}
-            className={`inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-              subTab === 'contracts'
-                ? 'bg-white dark:bg-zinc-900 text-blue-600 dark:text-blue-400 shadow-2xs'
-                : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white'
-            }`}
-          >
-            <Briefcase className="w-3.5 h-3.5" />
-            <span>Contracts ({visibleContracts.length})</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => {
-              setSubTab('members');
-              setSearchParams((prev) => {
-                const next = new URLSearchParams(prev);
-                next.set('tab', 'members');
-                return next;
-              });
-            }}
-            className={`inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-              subTab === 'members'
-                ? 'bg-white dark:bg-zinc-900 text-blue-600 dark:text-blue-400 shadow-2xs'
-                : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white'
-            }`}
-          >
-            <Users className="w-3.5 h-3.5" />
-            <span>Members ({members.length})</span>
-          </button>
-        </div>
-
-        <div className="flex items-center gap-2">
-          {/* Team contract -> Add Team Member as Contributor (Team Leader/Managers only); Solo contract -> Add Subcontractor */}
-          {!isClient && myContract && (
-            myContract.is_team_contract || Boolean(myContract.is_team_gig_member) ? (
-              myContract.can_manage_team_contributors && (
-                <button
-                  type="button"
-                  onClick={() => void openAddTeamMemberModal()}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-900 hover:bg-blue-100 transition shadow-2xs cursor-pointer"
-                >
-                  <UserPlus className="w-3.5 h-3.5" />
-                  <span>Add Team Member as Contributor</span>
-                </button>
-              )
-            ) : (
-              <button
-                type="button"
-                onClick={() => openNominationForContract(myContract)}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-900 hover:bg-blue-100 transition shadow-2xs cursor-pointer"
-              >
-                <UserPlus className="w-3.5 h-3.5" />
-                <span>Add Subcontractor under My Contract</span>
-              </button>
-            )
-          )}
-
-          {subTab === 'contracts' ? (
-            <button
-              type="button"
-              onClick={() => window.open('/contracts', '_blank', 'noopener,noreferrer')}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-zinc-700 dark:text-zinc-300 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 hover:border-zinc-300 dark:hover:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-800/60 transition shadow-2xs shrink-0 self-start sm:self-auto cursor-pointer"
-            >
-              <span>All Contracts</span>
-              <ExternalLink className="w-3.5 h-3.5 text-zinc-400" />
-            </button>
-          ) : (
-            !isClient &&
-            onOpenReportModal && (
-              <button
-                onClick={onOpenReportModal}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 hover:bg-rose-100 transition shadow-2xs cursor-pointer self-start sm:self-auto"
-              >
-                <Flag className="w-3.5 h-3.5" />
-                <span>Report Team Project</span>
-              </button>
-            )
-          )}
-        </div>
-      </div>
-
       {/* Subcontract Proposals & Client Review Queue */}
       <SubcontractRequestsReview
         teamId={teamId}
@@ -396,6 +304,121 @@ export const ProjectContractAndMembersTab: React.FC<ProjectContractAndMembersTab
         onRefreshProposals={fetchProposals}
         onMembersUpdated={onContractsUpdated}
       />
+
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+        {/* Left Column: Sub-tabs, Action Buttons, and Neutral Policy Card */}
+        <div className="lg:col-span-4 lg:sticky lg:top-24 space-y-3">
+          {/* Sub-tab Switcher: Members | Contracts */}
+          <div className="grid grid-cols-2 gap-1.5 p-1 bg-zinc-100 dark:bg-zinc-900 rounded-xl border border-zinc-200/80 dark:border-zinc-800">
+            <button
+              type="button"
+              onClick={() => {
+                setSubTab('members');
+                setSearchParams((prev) => {
+                  const next = new URLSearchParams(prev);
+                  next.set('tab', 'members');
+                  return next;
+                });
+              }}
+              className={`inline-flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                subTab === 'members'
+                  ? 'bg-white dark:bg-zinc-800 text-blue-600 dark:text-blue-400 shadow-2xs'
+                  : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white'
+              }`}
+            >
+              <Users className="w-3.5 h-3.5" />
+              <span>Members ({members.length})</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setSubTab('contracts');
+                setSearchParams((prev) => {
+                  const next = new URLSearchParams(prev);
+                  next.set('tab', 'contracts');
+                  return next;
+                });
+              }}
+              className={`inline-flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                subTab === 'contracts'
+                  ? 'bg-white dark:bg-zinc-800 text-blue-600 dark:text-blue-400 shadow-2xs'
+                  : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white'
+              }`}
+            >
+              <Briefcase className="w-3.5 h-3.5" />
+              <span>Contracts ({visibleContracts.length})</span>
+            </button>
+          </div>
+
+          {/* Action Buttons below Members / Contracts */}
+          <div className="flex items-center gap-2">
+            {/* Team contract -> Add Team Member as Contributor (Team Leader/Managers only); Solo contract -> Add Subcontractor */}
+            {!isClient && myContract && (
+              myContract.is_team_contract || Boolean(myContract.is_team_gig_member) ? (
+                myContract.can_manage_team_contributors && (
+                  <button
+                    type="button"
+                    onClick={() => void openAddTeamMemberModal()}
+                    className="flex-1 min-w-0 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-900 hover:bg-blue-100 dark:hover:bg-blue-900/70 dark:hover:border-blue-700 dark:hover:text-blue-300 transition shadow-2xs cursor-pointer truncate"
+                  >
+                    <UserPlus className="w-3.5 h-3.5 shrink-0" />
+                    <span className="truncate">Add Team Member as Contributor</span>
+                  </button>
+                )
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => openNominationForContract(myContract)}
+                  className="flex-1 min-w-0 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-900 hover:bg-blue-100 dark:hover:bg-blue-900/70 dark:hover:border-blue-700 dark:hover:text-blue-300 transition shadow-2xs cursor-pointer truncate"
+                >
+                  <UserPlus className="w-3.5 h-3.5 shrink-0" />
+                  <span className="truncate">Add Subcontractor under My Contract</span>
+                </button>
+              )
+            )}
+
+            {subTab === 'contracts' ? (
+              <button
+                type="button"
+                onClick={() => window.open('/contracts', '_blank', 'noopener,noreferrer')}
+                className="shrink-0 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-zinc-700 dark:text-zinc-300 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 hover:border-zinc-300 dark:hover:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-800/60 transition shadow-2xs cursor-pointer"
+              >
+                <span>All Contracts</span>
+                <ExternalLink className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
+              </button>
+            ) : (
+              !isClient &&
+              onOpenReportModal && (
+                <button
+                  type="button"
+                  onClick={onOpenReportModal}
+                  title="Report a Member / Team"
+                  className="shrink-0 inline-flex items-center justify-center gap-1.5 px-2.5 py-2 rounded-xl text-xs font-bold text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 hover:bg-rose-100 dark:hover:bg-rose-900/60 dark:hover:border-rose-700 transition shadow-2xs cursor-pointer"
+                >
+                  <Flag className="w-3.5 h-3.5 shrink-0" />
+                  <span>Report</span>
+                </button>
+              )
+            )}
+          </div>
+
+          {/* Neutral Gray Policy Card */}
+          <div className="bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl p-4 flex items-start gap-3">
+            <Info className="w-4 h-4 text-zinc-500 dark:text-zinc-400 shrink-0 mt-0.5" />
+            <div className="text-xs text-zinc-600 dark:text-zinc-400 space-y-1.5">
+              <p className="font-bold text-zinc-900 dark:text-zinc-100">
+                Contractual Team Membership & Subcontracting Policy
+              </p>
+              <p className="leading-relaxed">
+                Membership in this team project is strictly automated and governed by the job contract. Primary contractors can nominate specialists under their contract milestone with client authorization.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Right Column: Contracts or Members Content */}
+        <div className="lg:col-span-8 min-w-0">
 
       {/* ===================== SUBTAB 1: CONTRACTS ===================== */}
       {subTab === 'contracts' && (
@@ -459,7 +482,7 @@ export const ProjectContractAndMembersTab: React.FC<ProjectContractAndMembersTab
                   <div
                     key={contract.contract_id}
                     onClick={() => handleOpenContract(contract.contract_id)}
-                    className="bg-white dark:bg-zinc-900 p-6 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-xs hover:border-blue-400 dark:hover:border-blue-500 hover:shadow-md transition-all duration-200 cursor-pointer group space-y-4"
+                    className="bg-white dark:bg-zinc-900 p-5 sm:p-6 rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-xs hover:border-blue-400 dark:hover:border-blue-500/70 hover:bg-zinc-50/40 dark:hover:bg-zinc-900/80 hover:shadow-md transition-all duration-200 cursor-pointer group space-y-4"
                     role="button"
                     tabIndex={0}
                     onKeyDown={(e) => {
@@ -469,9 +492,9 @@ export const ProjectContractAndMembersTab: React.FC<ProjectContractAndMembersTab
                       }
                     }}
                   >
-                    {/* Header: Member Avatar & Details + Total Escrow & Status */}
+                    {/* Header: Member Avatar & Details + Total Escrow, Status & Click Indicator */}
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-zinc-100 dark:border-zinc-800/80">
-                      <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-3.5 min-w-0">
                         <img
                           src={constructAvatarUrl(
                             contract.freelancer_avatar_path,
@@ -489,10 +512,10 @@ export const ProjectContractAndMembersTab: React.FC<ProjectContractAndMembersTab
                               navigate(`/profile/${contract.freelancer_account_id}`);
                             }
                           }}
-                          className="w-12 h-12 rounded-full object-cover border border-zinc-200 dark:border-zinc-700 shrink-0 group-hover:border-blue-400 transition"
+                          className="w-11 h-11 rounded-full object-cover border border-zinc-200 dark:border-zinc-700 shrink-0 group-hover:border-blue-400 transition"
                         />
-                        <div>
-                          <div className="flex items-center gap-2">
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
                             <h4
                               onClick={(e) => {
                                 if (contract.freelancer_account_id) {
@@ -500,51 +523,59 @@ export const ProjectContractAndMembersTab: React.FC<ProjectContractAndMembersTab
                                   navigate(`/profile/${contract.freelancer_account_id}`);
                                 }
                               }}
-                              className="text-base font-bold text-zinc-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition"
+                              className="text-sm sm:text-base font-bold text-zinc-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition truncate"
                             >
                               {contract.freelancer_name}
                             </h4>
-                            <span className="text-xs text-zinc-500 dark:text-zinc-400">
+                            <span className="text-xs text-zinc-500 dark:text-zinc-400 font-mono">
                               @{contract.freelancer_handle || 'member'}
                             </span>
                           </div>
-                          <p className="text-xs text-zinc-600 dark:text-zinc-400 mt-0.5">
+                          <p className="text-xs text-zinc-600 dark:text-zinc-400 mt-0.5 truncate">
                             Role:{' '}
-                            <span className="font-bold text-blue-600 dark:text-blue-400">
+                            <span className="font-semibold text-blue-600 dark:text-blue-400">
                               {contract.milestone_title || 'Milestone Contributor'}
                             </span>
                           </p>
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-4">
-                        <div className="text-right">
+                      <div className="flex items-center justify-between sm:justify-end gap-3 sm:gap-4 shrink-0">
+                        <div className="sm:text-right">
                           <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400 block">
                             Total Contract Escrow
                           </span>
-                          <span className="text-xl font-bold text-zinc-900 dark:text-white">
+                          <span className="text-lg sm:text-xl font-bold text-zinc-900 dark:text-white tabular-nums">
                             {Number(contract.rate_credits || 0).toLocaleString()} Credits
                           </span>
                         </div>
 
-                        <span
-                          className={`px-3 py-1 rounded-full text-xs font-bold border shrink-0 ${
-                            isActive
-                              ? 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800'
-                              : isCompleted
-                              ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800'
-                              : 'bg-zinc-100 text-zinc-700 border-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:border-zinc-700'
-                          }`}
-                        >
-                          {status}
-                        </span>
+                        <div className="flex items-center gap-2">
+                          <span
+                            className={`px-2.5 py-1 rounded-full text-xs font-bold border shrink-0 ${
+                              isActive
+                                ? 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800'
+                                : isCompleted
+                                ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800'
+                                : 'bg-zinc-100 text-zinc-700 border-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:border-zinc-700'
+                            }`}
+                          >
+                            {status}
+                          </span>
+                          <span
+                            title="Open contract in new tab"
+                            className="inline-flex items-center justify-center w-8 h-8 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950/60 text-zinc-500 dark:text-zinc-400 group-hover:text-blue-600 dark:group-hover:text-blue-400 group-hover:border-blue-300 dark:group-hover:border-blue-500/50 transition"
+                          >
+                            <ExternalLink className="w-3.5 h-3.5" />
+                          </span>
+                        </div>
                       </div>
                     </div>
 
-                    {/* 4 Metadata Columns */}
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 pt-1 text-xs">
-                      <div>
-                        <span className="text-zinc-500 dark:text-zinc-400 block mb-0.5">
+                    {/* 4 Metadata Tiles */}
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-xs">
+                      <div className="rounded-lg bg-zinc-50 dark:bg-zinc-950/60 border border-zinc-200/70 dark:border-zinc-800/80 px-3 py-2.5">
+                        <span className="text-[10px] uppercase tracking-wider font-semibold text-zinc-500 dark:text-zinc-400 block mb-1">
                           Payment Type
                         </span>
                         <span className="font-bold text-zinc-800 dark:text-zinc-200">
@@ -554,8 +585,8 @@ export const ProjectContractAndMembersTab: React.FC<ProjectContractAndMembersTab
                         </span>
                       </div>
 
-                      <div>
-                        <span className="text-zinc-500 dark:text-zinc-400 block mb-0.5">
+                      <div className="rounded-lg bg-zinc-50 dark:bg-zinc-950/60 border border-zinc-200/70 dark:border-zinc-800/80 px-3 py-2.5">
+                        <span className="text-[10px] uppercase tracking-wider font-semibold text-zinc-500 dark:text-zinc-400 block mb-1">
                           Started Date
                         </span>
                         <span className="font-bold text-zinc-800 dark:text-zinc-200">
@@ -565,8 +596,8 @@ export const ProjectContractAndMembersTab: React.FC<ProjectContractAndMembersTab
                         </span>
                       </div>
 
-                      <div>
-                        <span className="text-zinc-500 dark:text-zinc-400 block mb-0.5">
+                      <div className="rounded-lg bg-zinc-50 dark:bg-zinc-950/60 border border-zinc-200/70 dark:border-zinc-800/80 px-3 py-2.5">
+                        <span className="text-[10px] uppercase tracking-wider font-semibold text-zinc-500 dark:text-zinc-400 block mb-1">
                           Sequential Position
                         </span>
                         <span className="font-bold text-zinc-800 dark:text-zinc-200">
@@ -574,12 +605,13 @@ export const ProjectContractAndMembersTab: React.FC<ProjectContractAndMembersTab
                         </span>
                       </div>
 
-                      <div>
-                        <span className="text-zinc-500 dark:text-zinc-400 block mb-0.5">
+                      <div className="rounded-lg bg-zinc-50 dark:bg-zinc-950/60 border border-zinc-200/70 dark:border-zinc-800/80 px-3 py-2.5">
+                        <span className="text-[10px] uppercase tracking-wider font-semibold text-zinc-500 dark:text-zinc-400 block mb-1">
                           Security & Escrow
                         </span>
                         <span className="font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
-                          <ShieldCheck className="w-3.5 h-3.5" /> 100% Protected
+                          <ShieldCheck className="w-3.5 h-3.5 shrink-0" />
+                          <span>100% Protected</span>
                         </span>
                       </div>
                     </div>
@@ -594,7 +626,7 @@ export const ProjectContractAndMembersTab: React.FC<ProjectContractAndMembersTab
                         </span>
                       </div>
 
-                      <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-2.5">
                         {!isClient && isMyContractCard && (
                           contract.is_team_contract || Boolean(contract.is_team_gig_member) ? (
                             contract.can_manage_team_contributors && (
@@ -604,7 +636,7 @@ export const ProjectContractAndMembersTab: React.FC<ProjectContractAndMembersTab
                                   e.stopPropagation();
                                   void openAddTeamMemberModal();
                                 }}
-                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/50 border border-blue-200 dark:border-blue-900 hover:bg-blue-100 transition shadow-2xs cursor-pointer"
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/50 border border-blue-200 dark:border-blue-900 hover:bg-blue-100 dark:hover:bg-blue-900/70 dark:hover:border-blue-700 dark:hover:text-blue-300 transition shadow-2xs cursor-pointer"
                               >
                                 <UserPlus className="w-3.5 h-3.5" />
                                 <span>Add Team Member as Contributor</span>
@@ -617,7 +649,7 @@ export const ProjectContractAndMembersTab: React.FC<ProjectContractAndMembersTab
                                 e.stopPropagation();
                                 openNominationForContract(contract);
                               }}
-                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/50 border border-blue-200 dark:border-blue-900 hover:bg-blue-100 transition shadow-2xs cursor-pointer"
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/50 border border-blue-200 dark:border-blue-900 hover:bg-blue-100 dark:hover:bg-blue-900/70 dark:hover:border-blue-700 dark:hover:text-blue-300 transition shadow-2xs cursor-pointer"
                             >
                               <UserPlus className="w-3.5 h-3.5" />
                               <span>Add Subcontractor</span>
@@ -625,8 +657,8 @@ export const ProjectContractAndMembersTab: React.FC<ProjectContractAndMembersTab
                           )
                         )}
 
-                        <span className="inline-flex items-center gap-1 font-semibold text-xs text-blue-600 dark:text-blue-400 group-hover:underline">
-                          <span>Open in /contracts</span>
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-zinc-100 dark:bg-zinc-800/80 border border-zinc-200 dark:border-zinc-700/80 font-semibold text-xs text-zinc-700 dark:text-zinc-200 group-hover:text-blue-600 dark:group-hover:text-blue-400 group-hover:border-blue-300 dark:group-hover:border-blue-500/50 transition">
+                          <span>View Contract</span>
                           <ExternalLink className="w-3.5 h-3.5" />
                         </span>
                       </div>
@@ -641,19 +673,6 @@ export const ProjectContractAndMembersTab: React.FC<ProjectContractAndMembersTab
 
       {/* ===================== SUBTAB 2: MEMBERS ===================== */}
       {subTab === 'members' && (
-        <div className="space-y-6">
-          {/* Contract-Bound Membership Info Notice */}
-          <div className="bg-blue-50/80 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800/60 rounded-xl p-4 flex items-start gap-3">
-            <Info className="w-5 h-5 text-blue-600 dark:text-blue-400 shrink-0 mt-0.5" />
-            <div className="text-xs text-blue-900 dark:text-blue-200 space-y-1">
-              <p className="font-bold">Contractual Team Membership & Subcontracting Policy</p>
-              <p className="leading-relaxed opacity-90">
-                Membership in this team project is strictly automated and governed by the job contract. Primary contractors can nominate specialists under their contract milestone with client authorization.
-              </p>
-            </div>
-          </div>
-
-          {/* Members List */}
           <div className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-xs divide-y divide-zinc-100 dark:divide-zinc-800">
             <div className="p-5 flex items-center justify-between">
               <div className="flex items-center gap-2">
@@ -776,11 +795,13 @@ export const ProjectContractAndMembersTab: React.FC<ProjectContractAndMembersTab
                     <div className="flex items-center gap-2">
                       {!isMe && (
                         <button
+                          type="button"
                           onClick={() => handleStartDirectChat(member)}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-zinc-700 dark:text-zinc-200 hover:text-blue-600 dark:hover:text-blue-400 bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 transition cursor-pointer"
+                          title={`Direct Message ${member.display_name}`}
+                          aria-label={`Direct Message ${member.display_name}`}
+                          className="p-2 rounded-lg text-zinc-700 dark:text-zinc-200 hover:text-blue-600 dark:hover:text-blue-400 bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition cursor-pointer shrink-0"
                         >
-                          <MessageCircle className="w-3.5 h-3.5" />
-                          <span>Direct Message</span>
+                          <MessageCircle className="w-4 h-4" />
                         </button>
                       )}
 
@@ -801,8 +822,9 @@ export const ProjectContractAndMembersTab: React.FC<ProjectContractAndMembersTab
               })}
             </div>
           </div>
-        </div>
       )}
+        </div>
+      </div>
 
       {/* Remove Contributor Confirmation Modal */}
       {memberToRemove && (
@@ -1024,6 +1046,7 @@ export const ProjectContractAndMembersTab: React.FC<ProjectContractAndMembersTab
           contractId={selectedContractForNomination.contract_id}
           contractTitle={selectedContractForNomination.milestone_title || 'Contract Agreement'}
           milestones={milestones.length > 0 ? milestones : (selectedContractForNomination.milestones || [])}
+          requiredSkills={requiredSkills}
           existingMemberAccountIds={members.map((m) => m.account_id)}
           onProposalCreated={() => {
             fetchProposals();

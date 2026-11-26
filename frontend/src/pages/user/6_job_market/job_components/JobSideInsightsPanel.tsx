@@ -518,6 +518,22 @@ export const JobSideInsightsPanel: React.FC<JobSideInsightsPanelProps> = ({
                               );
                             })()}
                           </div>
+
+                          {profile.tagline && (
+                            <div className="mt-1">
+                              <span
+                                className={`inline-flex items-center text-[10px] font-bold px-2 py-0.5 rounded-md truncate max-w-full ${
+                                  profile.subscriptionType === "Business"
+                                    ? "animate-rainbow"
+                                    : profile.subscriptionType === "Premium"
+                                    ? "animate-gold-solid"
+                                    : "silver-solid"
+                                }`}
+                              >
+                                {profile.tagline}
+                              </span>
+                            </div>
+                          )}
                         </div>
                       </div>
 

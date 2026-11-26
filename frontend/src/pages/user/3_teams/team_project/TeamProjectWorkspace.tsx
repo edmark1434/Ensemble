@@ -15,6 +15,7 @@ import {
   Film,
   Flag,
   Info,
+  Image as ImageIcon,
   Kanban,
   Layers,
   Lock,
@@ -34,6 +35,7 @@ import useGlobalState from '@/lib/global_state';
 import socket from '@/lib/socket';
 import { showErrorToast, showSuccessToast } from '@/components/utility/toast';
 import { constructAvatarUrl, getFallbackAvatarUrl } from '@/lib/accountAvatars';
+import { uploadFileWithIntent } from '@/lib/uploadFile';
 import { ProjectOverviewTab } from './ProjectOverviewTab';
 import { ProjectTaskboardTab } from './ProjectTaskboardTab';
 import { ProjectVideoTab } from './ProjectVideoTab';
@@ -43,6 +45,7 @@ import { ProjectContractAndMembersTab } from './ProjectContractAndMembersTab';
 import { ProjectHistoryTab } from './ProjectHistoryTab';
 import { ProjectChatTab } from './ProjectChatTab';
 import ReportTeamModal from '../team_modals/ReportTeamModal';
+import ReportMemberModal from '../team_modals/ReportMemberModal';
 import { RateReviewModal } from '@/pages/user/8_dashboard/dashboard_components/RateReviewModal';
 import { ProjectCompletionModal } from '@/components/ui/ProjectCompletionModal';
 import { ReviewThankYouModal } from '@/components/ui/ReviewThankYouModal';
@@ -119,7 +122,7 @@ export const TeamProjectWorkspace: React.FC = () => {
   const initialTab: TabType =
     rawTab === 'info'
       ? 'info'
-      : rawTab === 'members' || rawTab === 'contract'
+      : rawTab === 'members' || rawTab === 'contract' || rawTab === 'contracts'
       ? 'contract'
       : rawTab === 'submissions' || rawTab === 'submission'
       ? 'submissions'
@@ -133,7 +136,7 @@ export const TeamProjectWorkspace: React.FC = () => {
     const resolved: TabType =
       raw === 'info'
         ? 'info'
-        : raw === 'members' || raw === 'contract'
+        : raw === 'members' || raw === 'contract' || raw === 'contracts'
         ? 'contract'
         : raw === 'submissions' || raw === 'submission'
         ? 'submissions'
@@ -265,6 +268,55 @@ export const TeamProjectWorkspace: React.FC = () => {
     }
   });
 
+  // Edit banner modal state
+  const [isBannerModalOpen, setIsBannerModalOpen] = useState(false);
+  const [bannerFile, setBannerFile] = useState<File | null>(null);
+  const [bannerPreviewUrl, setBannerPreviewUrl] = useState<string | null>(null);
+  const [isUploadingBanner, setIsUploadingBanner] = useState(false);
+  const bannerInputRef = useRef<HTMLInputElement | null>(null);
+
+  const openBannerModal = () => {
+    setBannerFile(null);
+    setBannerPreviewUrl(null);
+    setIsBannerModalOpen(true);
+  };
+
+  const handleBannerFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      showErrorToast('Please select an image file (PNG, JPG, WebP, or GIF).');
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      showErrorToast('Banner image must be 5MB or smaller.');
+      return;
+    }
+    setBannerFile(file);
+    setBannerPreviewUrl(URL.createObjectURL(file));
+  };
+
+  const handleSaveBanner = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!project?.team_id || !bannerFile) return;
+    setIsUploadingBanner(true);
+    try {
+      const uploaded = await uploadFileWithIntent(bannerFile, 'profile');
+      await api.patch(`/api/team-projects/${project.team_id}`, {
+        avatar_file_id: uploaded.fileId,
+      });
+      showSuccessToast('Workspace banner updated');
+      setIsBannerModalOpen(false);
+      setBannerFile(null);
+      setBannerPreviewUrl(null);
+      loadProjectData();
+    } catch (err: any) {
+      showErrorToast(err?.response?.data?.message || 'Failed to update workspace banner');
+    } finally {
+      setIsUploadingBanner(false);
+    }
+  };
+
   const toggleBannerCollapse = () => {
     setIsBannerCollapsed((prev) => {
       const next = !prev;
@@ -285,6 +337,8 @@ export const TeamProjectWorkspace: React.FC = () => {
   const [isDeleting, setIsDeleting] = useState(false);
 
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
+  const [isReportTargetModalOpen, setIsReportTargetModalOpen] = useState(false);
+  const [reportTargetMember, setReportTargetMember] = useState<any | null>(null);
   const [isActionMenuOpen, setIsActionMenuOpen] = useState(false);
 
   const [rateModalConfig, setRateModalConfig] = useState<{
@@ -525,6 +579,19 @@ export const TeamProjectWorkspace: React.FC = () => {
       await api.post(`/api/team-projects/${project.team_id}/report`, {
         category: reason,
         description,
+      });
+    } catch (err: any) {
+      throw new Error(err?.response?.data?.message || err?.message || 'Failed to submit report');
+    }
+  };
+
+  const handleReportMember = async (reason: string, description: string) => {
+    if (!project?.team_id || !reportTargetMember?.account_id) return;
+    try {
+      await api.post(`/api/team-projects/${project.team_id}/report`, {
+        category: reason,
+        description,
+        target_account_id: reportTargetMember.account_id,
       });
     } catch (err: any) {
       throw new Error(err?.response?.data?.message || err?.message || 'Failed to submit report');
@@ -865,6 +932,18 @@ export const TeamProjectWorkspace: React.FC = () => {
                 <Briefcase className="w-16 h-16 text-zinc-600 dark:text-zinc-700" />
               </div>
             )}
+
+            {!isBannerCollapsed && (
+              <button
+                type="button"
+                onClick={openBannerModal}
+                className="absolute top-3 right-3 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-white bg-black/60 hover:bg-black/80 border border-white/15 backdrop-blur-sm transition cursor-pointer"
+                title="Edit Workspace Banner"
+              >
+                <ImageIcon className="w-3.5 h-3.5" />
+                <span>Edit Banner</span>
+              </button>
+            )}
           </div>
 
           {/* Header Metadata */}
@@ -930,6 +1009,17 @@ export const TeamProjectWorkspace: React.FC = () => {
                       onClick={() => setIsActionMenuOpen(false)}
                     />
                     <div className="absolute right-0 mt-2 w-48 rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 shadow-xl py-1.5 z-50 animate-in fade-in zoom-in-95 duration-100">
+                      <button
+                        onClick={() => {
+                          setIsActionMenuOpen(false);
+                          openBannerModal();
+                        }}
+                        className="w-full flex items-center gap-2.5 px-4 py-2.5 text-xs font-semibold text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition cursor-pointer text-left"
+                      >
+                        <ImageIcon className="w-4 h-4 text-zinc-500 dark:text-zinc-400" />
+                        <span>Edit Banner</span>
+                      </button>
+
                       {isClient ? (
                         <>
                           <button
@@ -958,12 +1048,12 @@ export const TeamProjectWorkspace: React.FC = () => {
                         <button
                           onClick={() => {
                             setIsActionMenuOpen(false);
-                            setIsReportModalOpen(true);
+                            setIsReportTargetModalOpen(true);
                           }}
                           className="w-full flex items-center gap-2.5 px-4 py-2.5 text-xs font-semibold text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition cursor-pointer text-left"
                         >
                           <Flag className="w-4 h-4" />
-                          <span>Report Team Project</span>
+                          <span>Report a Member / Team</span>
                         </button>
                       )}
                     </div>
@@ -1159,7 +1249,8 @@ export const TeamProjectWorkspace: React.FC = () => {
               currentUserAccountId={currentUserAccountId}
               isClient={isClient}
               milestones={milestones}
-              defaultSubTab={searchParams.get('tab') === 'members' ? 'members' : 'contracts'}
+              requiredSkills={Array.isArray(project.required_skills) ? project.required_skills : []}
+              defaultSubTab={searchParams.get('tab') === 'contracts' ? 'contracts' : 'members'}
               onContractsUpdated={loadProjectData}
               onOpenRateModal={(contractId, targetName) => {
                 setRateModalConfig({
@@ -1168,7 +1259,7 @@ export const TeamProjectWorkspace: React.FC = () => {
                   targetName,
                 });
               }}
-              onOpenReportModal={() => setIsReportModalOpen(true)}
+              onOpenReportModal={() => setIsReportTargetModalOpen(true)}
             />
           )}
 
@@ -1183,6 +1274,74 @@ export const TeamProjectWorkspace: React.FC = () => {
           )}
         </div>
       </main>
+
+      {/* EDIT BANNER MODAL */}
+      {isBannerModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs">
+          <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl w-full max-w-md p-6 shadow-xl space-y-4">
+            <h3 className="text-base font-bold text-zinc-900 dark:text-white">
+              Edit Workspace Banner
+            </h3>
+
+            <form onSubmit={handleSaveBanner} className="space-y-4">
+              <div
+                onClick={() => bannerInputRef.current?.click()}
+                className="relative h-36 w-full rounded-xl overflow-hidden border border-dashed border-zinc-300 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-950 cursor-pointer group flex items-center justify-center"
+              >
+                {bannerPreviewUrl ? (
+                  <img src={bannerPreviewUrl} alt="Banner preview" className="w-full h-full object-cover" />
+                ) : project.thumbnail_path ? (
+                  <img
+                    src={constructAvatarUrl(project.thumbnail_path, project.project_title)}
+                    alt="Current banner"
+                    className="w-full h-full object-cover opacity-80 group-hover:opacity-60 transition"
+                  />
+                ) : (
+                  <div className="flex flex-col items-center gap-1.5 text-zinc-500 dark:text-zinc-400">
+                    <ImageIcon className="w-7 h-7" />
+                    <span className="text-xs font-medium">Click to choose a banner image</span>
+                  </div>
+                )}
+
+                <div className="absolute inset-0 bg-black/45 opacity-0 group-hover:opacity-100 transition flex items-center justify-center">
+                  <span className="px-3 py-1.5 rounded-lg bg-black/75 text-white text-xs font-semibold border border-white/15">
+                    Choose Image
+                  </span>
+                </div>
+              </div>
+
+              <input
+                ref={bannerInputRef}
+                type="file"
+                accept="image/png,image/jpeg,image/webp,image/gif"
+                onChange={handleBannerFileChange}
+                className="hidden"
+              />
+
+              <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
+                Recommended wide image (PNG, JPG, WebP, or GIF, up to 5MB).
+              </p>
+
+              <div className="flex items-center justify-end gap-3 pt-3 border-t border-zinc-100 dark:border-zinc-800">
+                <button
+                  type="button"
+                  onClick={() => setIsBannerModalOpen(false)}
+                  className="px-4 py-2 text-xs font-bold text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-lg transition cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={!bannerFile || isUploadingBanner}
+                  className="px-4 py-2 text-xs font-bold text-white bg-blue-600 hover:bg-blue-500 rounded-lg transition shadow-xs disabled:opacity-50 cursor-pointer"
+                >
+                  {isUploadingBanner ? 'Uploading...' : 'Save Banner'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* EDIT PROJECT MODAL */}
       {isEditModalOpen && (
@@ -1270,6 +1429,106 @@ export const TeamProjectWorkspace: React.FC = () => {
         </div>
       )}
 
+      {/* REPORT TARGET PICKER MODAL */}
+      {isReportTargetModalOpen && (
+        <div
+          onClick={() => setIsReportTargetModalOpen(false)}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl w-full max-w-md p-6 shadow-xl space-y-4"
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-800/70 flex items-center justify-center shrink-0">
+                  <Flag className="w-4 h-4 text-rose-600 dark:text-rose-400" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-zinc-900 dark:text-white">
+                    Who are you reporting?
+                  </h3>
+                  <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                    Choose the team project or a specific workspace member.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsReportTargetModalOpen(false);
+                  setIsReportModalOpen(true);
+                }}
+                className="w-full flex items-center justify-between gap-3 p-3 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950/60 hover:border-rose-300 dark:hover:border-rose-700/70 transition cursor-pointer text-left"
+              >
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-9 h-9 rounded-full bg-zinc-200 dark:bg-zinc-800 flex items-center justify-center shrink-0">
+                    <Briefcase className="w-4 h-4 text-zinc-600 dark:text-zinc-300" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-xs font-bold text-zinc-900 dark:text-white truncate">
+                      {project.project_title || 'This Team Project'}
+                    </p>
+                    <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
+                      Team Project Workspace
+                    </p>
+                  </div>
+                </div>
+                <ArrowRight className="w-4 h-4 text-zinc-400 shrink-0" />
+              </button>
+
+              {members
+                .filter((m) => String(m.account_id) !== String(currentUserAccountId))
+                .map((m) => (
+                  <button
+                    key={m.account_id}
+                    type="button"
+                    onClick={() => {
+                      setIsReportTargetModalOpen(false);
+                      setReportTargetMember(m);
+                    }}
+                    className="w-full flex items-center justify-between gap-3 p-3 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950/60 hover:border-rose-300 dark:hover:border-rose-700/70 transition cursor-pointer text-left"
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <img
+                        src={constructAvatarUrl(m.avatar_path, m.display_name)}
+                        alt={m.display_name}
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).src = getFallbackAvatarUrl(m.display_name);
+                        }}
+                        className="w-9 h-9 rounded-full object-cover border border-zinc-200 dark:border-zinc-700 shrink-0"
+                      />
+                      <div className="min-w-0">
+                        <p className="text-xs font-bold text-zinc-900 dark:text-white truncate">
+                          {m.display_name}
+                        </p>
+                        <p className="text-[11px] text-zinc-500 dark:text-zinc-400 truncate">
+                          {m.handle ? `@${m.handle} · ` : ''}
+                          {m.team_role === 'Owner' ? 'Client Owner' : m.team_role || 'Member'}
+                        </p>
+                      </div>
+                    </div>
+                    <ArrowRight className="w-4 h-4 text-zinc-400 shrink-0" />
+                  </button>
+                ))}
+            </div>
+
+            <div className="flex justify-end pt-2 border-t border-zinc-100 dark:border-zinc-800">
+              <button
+                type="button"
+                onClick={() => setIsReportTargetModalOpen(false)}
+                className="px-4 py-2 text-xs font-bold text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-lg transition cursor-pointer"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* REPORT TEAM MODAL */}
       <ReportTeamModal
         isOpen={isReportModalOpen}
@@ -1278,6 +1537,16 @@ export const TeamProjectWorkspace: React.FC = () => {
         title="Report team project"
         onSubmit={handleReportTeam}
       />
+
+      {/* REPORT MEMBER MODAL */}
+      {reportTargetMember && (
+        <ReportMemberModal
+          isOpen={Boolean(reportTargetMember)}
+          onClose={() => setReportTargetMember(null)}
+          memberName={reportTargetMember.display_name}
+          onSubmit={handleReportMember}
+        />
+      )}
 
       {/* CELEBRATION MODAL (ALL MILESTONES COMPLETED) */}
       <ProjectCompletionModal

@@ -58,6 +58,7 @@ export const FreelancerPreviewModal: React.FC<FreelancerPreviewModalProps> = ({
   const [introduction, setIntroduction] = useState("");
   const [bio, setBio] = useState(freelancer.bio || "");
   const [tagline, setTagline] = useState(freelancer.tagline || "");
+  const [subscriptionPlan, setSubscriptionPlan] = useState(freelancer.subscriptionType || "Free");
   const [portfolioItems, setPortfolioItems] = useState<any[]>([]);
   const [galleryItems, setGalleryItems] = useState<GalleryItem[]>([]);
   const [selectedGalleryItem, setSelectedGalleryItem] = useState<GalleryItem | null>(null);
@@ -82,6 +83,7 @@ export const FreelancerPreviewModal: React.FC<FreelancerPreviewModalProps> = ({
           setIntroduction(p.introduction || "");
           setBio(p.bio ?? freelancer.bio ?? "");
           setTagline(p.tagline ?? freelancer.tagline ?? "");
+          setSubscriptionPlan(p.subscriptionType || p.subscriptiontype || freelancer.subscriptionType || "Free");
         }
         const attachments = attachmentsRes?.data?.attachments || [];
         setPortfolioItems(Array.isArray(attachments) ? attachments : []);
@@ -195,13 +197,21 @@ export const FreelancerPreviewModal: React.FC<FreelancerPreviewModalProps> = ({
         ) : activeTab === "introduction" ? (
           <div className="space-y-3">
             {tagline && (
-              <div className="p-2.5 rounded-xl bg-gray-50 dark:bg-white/[0.03] border border-gray-200/80 dark:border-white/5">
-                <div className="text-[10px] uppercase tracking-wider text-gray-500 dark:text-zinc-400 font-semibold">
+              <div className="p-2.5 rounded-xl bg-gray-50 dark:bg-white/[0.03] border border-gray-200/80 dark:border-white/5 flex items-center justify-between gap-2">
+                <div className="text-[10px] uppercase tracking-wider text-gray-500 dark:text-zinc-400 font-semibold shrink-0">
                   Tagline
                 </div>
-                <p className="text-xs font-medium text-gray-900 dark:text-white mt-0.5">
+                <span
+                  className={`inline-flex items-center gap-1 text-xs font-bold px-2.5 py-0.5 rounded-lg ${
+                    subscriptionPlan === "Business"
+                      ? "animate-rainbow"
+                      : subscriptionPlan === "Premium"
+                      ? "animate-gold-solid"
+                      : "silver-solid"
+                  }`}
+                >
                   {tagline}
-                </p>
+                </span>
               </div>
             )}
 
@@ -289,9 +299,9 @@ export const FreelancerPreviewModal: React.FC<FreelancerPreviewModalProps> = ({
                 <div
                   key={item.gallery_id || rawPath}
                   onClick={() => setSelectedGalleryItem(item)}
-                  className="rounded-xl overflow-hidden border border-gray-200/80 dark:border-white/10 bg-gray-100 dark:bg-white/[0.03] group cursor-pointer hover:border-gray-300 dark:hover:border-white/25 transition"
+                  className="rounded-xl overflow-hidden border border-gray-200/80 dark:border-white/10 bg-zinc-900 group cursor-pointer hover:border-gray-300 dark:hover:border-white/25 transition relative"
                 >
-                  <div className="aspect-video bg-zinc-900 relative overflow-hidden">
+                  <div className="aspect-[4/3] bg-zinc-900 relative overflow-hidden">
                     {isVideo && mediaUrl ? (
                       <video
                         src={mediaUrl}
@@ -311,17 +321,21 @@ export const FreelancerPreviewModal: React.FC<FreelancerPreviewModalProps> = ({
                         <ImageIcon className="h-5 w-5" />
                       </div>
                     )}
-                    <div className="absolute top-1.5 right-1.5 p-1 rounded-md bg-black/55 text-white opacity-0 group-hover:opacity-100 transition-opacity">
-                      <Maximize2 className="h-3 w-3" />
+
+                    {/* Hover Overlay (title + expand icon shown only on hover) */}
+                    <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex flex-col justify-between p-2.5">
+                      <div className="flex justify-end">
+                        <span className="p-1 rounded-md bg-black/50 text-white">
+                          <Maximize2 className="h-3 w-3" />
+                        </span>
+                      </div>
+                      {item.title && (
+                        <p className="text-[11px] font-semibold text-white truncate">
+                          {item.title}
+                        </p>
+                      )}
                     </div>
                   </div>
-                  {item.title && (
-                    <div className="px-2 py-1.5">
-                      <p className="text-[11px] font-semibold text-gray-900 dark:text-white truncate">
-                        {item.title}
-                      </p>
-                    </div>
-                  )}
                 </div>
               );
             })}

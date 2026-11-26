@@ -707,6 +707,24 @@ async function getTeamProjectDetails(projectIdentifier, viewerAccountId) {
            f.path as thumbnail_path,
            COALESCE(j.title, g.title) as job_title,
            COALESCE(j.category, g.category) as job_category,
+           COALESCE(
+             CASE
+               WHEN t.job_id IS NOT NULL THEN (
+                 SELECT json_agg(tg.name)
+                   FROM job_tags jt
+                   JOIN tags tg ON jt.tag_id = tg.tag_id
+                  WHERE jt.job_id = t.job_id
+               )
+               WHEN COALESCE(t.gig_id, g.gig_id) IS NOT NULL THEN (
+                 SELECT json_agg(tg.name)
+                   FROM gig_tags gt2
+                   JOIN tags tg ON gt2.tag_id = tg.tag_id
+                  WHERE gt2.gig_id = COALESCE(t.gig_id, g.gig_id)
+               )
+               ELSE '[]'::json
+             END,
+             '[]'::json
+           ) as required_skills,
            j.timeline_min, j.timeline_max,
            COALESCE(j.rate_credits_min, gt.rate_credits) as rate_credits_min,
            COALESCE(j.rate_credits_max, gt.rate_credits) as rate_credits_max,
@@ -1505,31 +1523,55 @@ async function syncContractWorkspacesArchived(dbClientOrPool, contractId, actorA
 }
 
 /**
- * Edit team project details (Only client owner).
+ * Edit team project details (Client owner for title/description; client or active member for banner).
  */
-async function updateProjectDetails(teamId, viewerAccountId, { title, description }) {
+async function updateProjectDetails(teamId, viewerAccountId, { title, description, avatar_file_id, file_id }) {
   const permRes = await pool.query(`
-    SELECT t.team_id, t.account_id, COALESCE(j.client_account_id, gr.client_account_id) as client_account_id
+    SELECT t.team_id,
+           t.account_id,
+           COALESCE(j.client_account_id, gr.client_account_id) as client_account_id,
+           EXISTS (
+             SELECT 1
+               FROM team_members tm
+               JOIN users u ON u.user_id = tm.user_id
+              WHERE tm.team_id = t.team_id
+                AND u.account_id = $2
+                AND tm.status = 'Active'
+           ) as is_active_member
       FROM teams t
       LEFT JOIN jobs j ON j.job_id = t.job_id
       LEFT JOIN team_contract_workspaces tcw ON tcw.team_id = t.team_id
       LEFT JOIN gig_contracts gc ON gc.contract_id = tcw.contract_id
       LEFT JOIN gig_requests gr ON gr.gig_request_id = gc.gig_request_id
      WHERE t.team_id = $1 AND t.team_type = 'contractual'
-  `, [teamId]);
+  `, [teamId, viewerAccountId]);
 
   if (permRes.rows.length === 0) throw new Error('Project not found');
-  if (String(permRes.rows[0].client_account_id) !== String(viewerAccountId)) {
-    throw new Error('Only the client owner can edit this project.');
+  const row = permRes.rows[0];
+  const isOwner = String(row.client_account_id) === String(viewerAccountId);
+  const isMember = Boolean(row.is_active_member);
+  const nextAvatarFileId = avatar_file_id || file_id || null;
+  const isEditingText = title !== undefined || description !== undefined;
+
+  if (isEditingText && !isOwner) {
+    throw new Error('Only the client owner can edit project title or description.');
+  }
+  if (!isOwner && !isMember) {
+    throw new Error('You do not have permission to edit this workspace.');
   }
 
   await pool.query(`
     UPDATE accounts
        SET display_name = COALESCE($1, display_name),
            description = COALESCE($2, description),
-           updated_at = NOW()
-     WHERE account_id = $3
-  `, [title || null, description !== undefined ? description : null, permRes.rows[0].account_id]);
+           avatar_file_id = COALESCE($3, avatar_file_id)
+     WHERE account_id = $4
+  `, [
+    title || null,
+    description !== undefined ? description : null,
+    nextAvatarFileId,
+    row.account_id,
+  ]);
 
   return { success: true };
 }

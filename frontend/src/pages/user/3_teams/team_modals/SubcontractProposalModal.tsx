@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
   X,
   Search,
@@ -14,12 +16,18 @@ import {
   Info,
   ChevronDown,
   Check,
+  Wrench,
 } from 'lucide-react';
 import api from '@/lib/axios';
 import { showErrorToast, showSuccessToast } from '@/components/utility/toast';
 import { constructAvatarUrl, getFallbackAvatarUrl } from '@/lib/accountAvatars';
 // Glide-style multi-milestone selector used inline for candidate milestone scope
 import useGlobalState from '@/lib/global_state';
+import {
+  FreelancerPreviewModal,
+  type SelectedFreelancerPreview,
+} from '@/pages/user/6_job_market/job_components/FreelancerPreviewModal';
+import { SubscriptionIcon } from '@/components/ui/SubscriptionIcon';
 
 export interface CandidateDraft {
   candidate_account_id: string;
@@ -27,6 +35,7 @@ export interface CandidateDraft {
   handle: string;
   avatar_path?: string;
   is_verified?: boolean;
+  subscription_type?: string;
   is_following?: boolean;
   is_followed_by?: boolean;
   role_title: string;
@@ -57,10 +66,55 @@ interface SubcontractProposalModalProps {
     index?: number;
   }>;
   existingMemberAccountIds?: string[];
+  requiredSkills?: string[];
   onProposalCreated?: () => void;
 }
 
 const MAX_NOTE_CHARS = 500;
+
+const CircularMatchRing: React.FC<{
+  percentage: number;
+  size?: number;
+  strokeWidth?: number;
+}> = ({ percentage, size = 32, strokeWidth = 3 }) => {
+  const clamped = Math.max(0, Math.min(100, Math.round(percentage)));
+  const radius = (size - strokeWidth) / 2;
+  const circumference = 2 * Math.PI * radius;
+  const strokeDashoffset = circumference - (clamped / 100) * circumference;
+
+  return (
+    <div
+      className="relative inline-flex items-center justify-center shrink-0 select-none"
+      style={{ width: size, height: size }}
+      title={`${clamped}% skill match`}
+    >
+      <svg width={size} height={size} className="-rotate-90">
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={radius}
+          className="stroke-zinc-200 dark:stroke-white/10"
+          strokeWidth={strokeWidth}
+          fill="none"
+        />
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={radius}
+          className="stroke-blue-600 dark:stroke-blue-500 transition-all duration-500 ease-out"
+          strokeWidth={strokeWidth}
+          strokeDasharray={circumference}
+          strokeDashoffset={strokeDashoffset}
+          strokeLinecap="round"
+          fill="none"
+        />
+      </svg>
+      <span className="absolute inset-0 flex items-center justify-center text-[9px] font-bold font-mono text-zinc-900 dark:text-zinc-100">
+        {clamped}%
+      </span>
+    </div>
+  );
+};
 
 const COMMON_ROLES = [
   'Video Editor',
@@ -79,6 +133,7 @@ export const SubcontractProposalModal: React.FC<SubcontractProposalModalProps> =
   contractTitle,
   milestones = [],
   existingMemberAccountIds = [],
+  requiredSkills = [],
   onProposalCreated,
 }) => {
   const { user: currentUser } = useGlobalState();
@@ -94,11 +149,13 @@ export const SubcontractProposalModal: React.FC<SubcontractProposalModalProps> =
   const [isLoadingSuggested, setIsLoadingSuggested] = useState(false);
   const [hoveredSuggestedIdx, setHoveredSuggestedIdx] = useState<number | null>(null);
   const [openMilestoneIdx, setOpenMilestoneIdx] = useState<number | null>(null);
+  const [milestoneMenuRect, setMilestoneMenuRect] = useState<{ top: number; left: number; width: number } | null>(null);
   const [hoveredMilestoneOptIdx, setHoveredMilestoneOptIdx] = useState<number | null>(null);
 
   const [proposalNotes, setProposalNotes] = useState('');
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [previewFreelancer, setPreviewFreelancer] = useState<SelectedFreelancerPreview | null>(null);
 
   // Reset form when modal opens
   useEffect(() => {
@@ -112,10 +169,11 @@ export const SubcontractProposalModal: React.FC<SubcontractProposalModalProps> =
       setHoveredMilestoneOptIdx(null);
       setProposalNotes('');
       setTermsAccepted(false);
+      setPreviewFreelancer(null);
     }
   }, [isOpen]);
 
-  // Fetch following & followers as suggested specialists when modal opens
+  // Fetch skill-matched freelancers (+ following/followers info) when modal opens
   useEffect(() => {
     if (!isOpen || !currentAccountId) {
       setSuggestedUsers([]);
@@ -126,35 +184,52 @@ export const SubcontractProposalModal: React.FC<SubcontractProposalModalProps> =
     const loadSuggested = async () => {
       setIsLoadingSuggested(true);
       try {
-        const [followingRes, followersRes] = await Promise.all([
+        const [freelancersRes, followingRes, followersRes] = await Promise.all([
+          api.get('/api/accounts/search-users', { params: { role: 'Freelancer' } }).catch(() => ({ data: { data: [] } })),
           api.get(`/api/accounts/${currentAccountId}/following`).catch(() => ({ data: { data: [] } })),
           api.get(`/api/accounts/${currentAccountId}/followers`).catch(() => ({ data: { data: [] } })),
         ]);
 
         if (cancelled) return;
 
+        const followingIds = new Set<string>(
+          (followingRes.data?.data || []).map((u: any) => String(u?.account_id || '')).filter(Boolean)
+        );
+        const followerIds = new Set<string>(
+          (followersRes.data?.data || []).map((u: any) => String(u?.account_id || '')).filter(Boolean)
+        );
+
+        const wantedSet = new Set(requiredSkills.map((s) => String(s).trim().toLowerCase()).filter(Boolean));
+
         const merged = new Map<string, any>();
-        for (const u of followingRes.data?.data || []) {
+        for (const u of freelancersRes.data?.data || []) {
           if (!u?.account_id) continue;
-          merged.set(u.account_id, { ...u, is_following: true, is_followed_by: false });
-        }
-        for (const u of followersRes.data?.data || []) {
-          if (!u?.account_id) continue;
-          const prev = merged.get(u.account_id);
-          if (prev) {
-            merged.set(u.account_id, { ...prev, ...u, is_following: true, is_followed_by: true });
-          } else {
-            merged.set(u.account_id, { ...u, is_following: false, is_followed_by: true });
-          }
+          if (String(u.status || '').toLowerCase() === 'deactivated') continue;
+          const id = String(u.account_id);
+          const userSkillNames: string[] = Array.isArray(u.skills)
+            ? u.skills.map((s: any) => s?.name).filter(Boolean)
+            : [];
+          const matchedSkills = userSkillNames.filter((s) => wantedSet.has(s.trim().toLowerCase()));
+          const matchPercent =
+            wantedSet.size > 0 ? Math.round((matchedSkills.length / wantedSet.size) * 100) : 0;
+
+          merged.set(id, {
+            ...u,
+            is_following: followingIds.has(id) || Boolean(u.is_following),
+            is_followed_by: followerIds.has(id) || Boolean(u.is_followed_by),
+            matchedSkills,
+            matchPercent,
+          });
         }
 
         const list = Array.from(merged.values()).sort((a, b) => {
-          const aMutual = a.is_following && a.is_followed_by ? 1 : 0;
-          const bMutual = b.is_following && b.is_followed_by ? 1 : 0;
-          if (aMutual !== bMutual) return bMutual - aMutual;
+          if (b.matchPercent !== a.matchPercent) return b.matchPercent - a.matchPercent;
           const aVer = a.verification_status ? 1 : 0;
           const bVer = b.verification_status ? 1 : 0;
-          return bVer - aVer;
+          if (bVer !== aVer) return bVer - aVer;
+          const aRating = parseFloat(a.overall_rating || '0') || 0;
+          const bRating = parseFloat(b.overall_rating || '0') || 0;
+          return bRating - aRating;
         });
         setSuggestedUsers(list);
       } finally {
@@ -166,7 +241,7 @@ export const SubcontractProposalModal: React.FC<SubcontractProposalModalProps> =
     return () => {
       cancelled = true;
     };
-  }, [isOpen, currentAccountId]);
+  }, [isOpen, currentAccountId, requiredSkills]);
 
   // Debounced search for platform editors
   useEffect(() => {
@@ -184,10 +259,19 @@ export const SubcontractProposalModal: React.FC<SubcontractProposalModalProps> =
 
         const selectedIds = new Set(candidates.map((c) => c.candidate_account_id));
         const excludedIds = new Set([...existingMemberAccountIds, ...selectedIds]);
+        const wantedSet = new Set(requiredSkills.map((s) => String(s).trim().toLowerCase()).filter(Boolean));
 
-        const filtered = (data.data || []).filter(
-          (u: any) => !excludedIds.has(u.account_id)
-        );
+        const filtered = (data.data || [])
+          .filter((u: any) => !excludedIds.has(u.account_id))
+          .map((u: any) => {
+            const userSkillNames: string[] = Array.isArray(u.skills)
+              ? u.skills.map((s: any) => s?.name).filter(Boolean)
+              : [];
+            const matchedSkills = userSkillNames.filter((s) => wantedSet.has(s.trim().toLowerCase()));
+            const matchPercent =
+              wantedSet.size > 0 ? Math.round((matchedSkills.length / wantedSet.size) * 100) : 0;
+            return { ...u, matchedSkills, matchPercent };
+          });
         setSearchResults(filtered);
       } catch (err) {
         console.error('Failed to search users:', err);
@@ -216,6 +300,7 @@ export const SubcontractProposalModal: React.FC<SubcontractProposalModalProps> =
       handle: user.handle || 'user',
       avatar_path: user.avatar_preset_url || user.avatar_path || user.avatar_url,
       is_verified: true,
+      subscription_type: user.subscriptiontype || user.subscriptionType || 'Free',
       is_following: Boolean(user.is_following),
       is_followed_by: Boolean(user.is_followed_by),
       role_title: 'Video Editor',
@@ -386,148 +471,267 @@ export const SubcontractProposalModal: React.FC<SubcontractProposalModalProps> =
 
   const renderSpecialistList = (
     users: any[],
-    hoveredIdx: number | null,
-    setHoveredIdx: (idx: number | null) => void,
+    _hoveredIdx: number | null,
+    _setHoveredIdx: (idx: number | null) => void,
     ariaLabel: string
-  ) => (
-    <div
-      role="listbox"
-      aria-label={ariaLabel}
-      onMouseLeave={() => setHoveredIdx(null)}
-      className="gs-listbox-scroll relative grid gap-0.5 max-h-52 overflow-y-auto overflow-x-hidden p-1.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-xl"
-    >
-      <span
-        aria-hidden="true"
-        style={{
-          transform: `translateY(${(hoveredIdx ?? 0) * 58}px)`,
-          opacity: hoveredIdx !== null ? 1 : 0,
-        }}
-        className="pointer-events-none absolute top-1.5 right-1.5 left-1.5 h-14 rounded-lg bg-zinc-100 dark:bg-zinc-800/80 transition-[transform,opacity] duration-200 ease-[cubic-bezier(0.23,1,0.32,1)]"
-      />
-      {users.map((user, idx) => {
-        const isVerified = isUserVerified(user);
-        return (
-          <button
-            key={user.account_id}
-            type="button"
-            role="option"
-            aria-selected={false}
-            aria-disabled={!isVerified}
-            disabled={!isVerified}
-            onClick={() => handleAddCandidate(user)}
-            onMouseEnter={() => setHoveredIdx(isVerified ? idx : null)}
-            title={
-              isVerified
-                ? 'Add verified specialist'
-                : 'Cannot select: account is not verified on the platform'
-            }
-            className={`relative z-[1] h-14 w-full flex items-center justify-between gap-3 px-2.5 rounded-lg text-left transition-opacity ${
-              isVerified
-                ? 'cursor-pointer'
-                : 'opacity-50 cursor-not-allowed'
-            }`}
-          >
-            <div className="flex items-center gap-3 min-w-0">
-              <img
-                src={constructAvatarUrl(
-                  user.avatar_preset_url || user.avatar_path || user.avatar_url,
-                  user.display_name || user.name
-                )}
-                alt=""
-                onError={(e) => {
-                  (e.target as HTMLImageElement).src = getFallbackAvatarUrl(
+  ) => {
+    const wantedSet = new Set(requiredSkills.map((s) => String(s).trim().toLowerCase()).filter(Boolean));
+
+    return (
+      <div
+        role="listbox"
+        aria-label={ariaLabel}
+        className="gs-listbox-scroll grid gap-2 max-h-72 overflow-y-auto overflow-x-hidden pr-1"
+      >
+        {users.map((user) => {
+          const isVerified = isUserVerified(user);
+          const rawSkills: { name: string; proficiency?: string; years?: number }[] = Array.isArray(user.skills)
+            ? user.skills.filter((s: any) => s?.name)
+            : [];
+          const sortedSkills = [...rawSkills]
+            .map((sk) => ({
+              name: String(sk.name),
+              proficiency: sk.proficiency || '',
+              years: Number(sk.years) || 0,
+              isMatched: wantedSet.has(String(sk.name).trim().toLowerCase()),
+            }))
+            .sort((a, b) => Number(b.isMatched) - Number(a.isMatched));
+
+          return (
+            <div
+              key={user.account_id}
+              role="option"
+              aria-selected={false}
+              aria-disabled={!isVerified}
+              onClick={() =>
+                setPreviewFreelancer({
+                  id: String(user.account_id),
+                  name: user.display_name || user.name || 'Freelancer',
+                  username: user.handle || '',
+                  avatar: constructAvatarUrl(
+                    user.avatar_preset_url || user.avatar_path || user.avatar_url,
                     user.display_name || user.name
-                  );
-                }}
-                className={`w-8 h-8 rounded-full object-cover border border-zinc-200 dark:border-zinc-700 shrink-0 ${
-                  !isVerified ? 'grayscale' : ''
-                }`}
-              />
-              <div className="min-w-0">
-                <div className="flex items-center gap-1.5">
-                  <span className="text-xs font-bold text-zinc-900 dark:text-white truncate">
-                    {user.display_name || user.name}
-                  </span>
-                  {isVerified && (
-                    <img
-                      src="/icons/verification/lvl2_verified.png"
-                      alt="Verified User"
-                      title="Verified on platform"
-                      className="w-4 h-4 shrink-0 object-contain"
-                    />
-                  )}
-                  {renderFollowBadge(user.is_following, user.is_followed_by)}
+                  ),
+                  bio: user.bio || '',
+                  tagline: user.tagline || '',
+                  verified: isVerified,
+                  subscriptionType: user.subscriptiontype || 'Free',
+                })
+              }
+              title="Click to preview introduction, portfolio & gallery"
+              className={`p-3 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/70 dark:bg-zinc-950/50 transition space-y-2 cursor-pointer hover:border-zinc-300 dark:hover:border-white/20 ${
+                !isVerified ? 'opacity-65' : ''
+              }`}
+            >
+              <div className="flex items-center justify-between gap-2.5">
+                <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                  <img
+                    src={constructAvatarUrl(
+                      user.avatar_preset_url || user.avatar_path || user.avatar_url,
+                      user.display_name || user.name
+                    )}
+                    alt=""
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).src = getFallbackAvatarUrl(
+                        user.display_name || user.name
+                      );
+                    }}
+                    className={`w-8 h-8 rounded-full object-cover border border-zinc-200 dark:border-zinc-700 shrink-0 ${
+                      !isVerified ? 'grayscale' : ''
+                    }`}
+                  />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-1.5 min-w-0 flex-wrap">
+                      <span className="text-xs font-bold text-zinc-900 dark:text-white truncate">
+                        {user.display_name || user.name}
+                      </span>
+                      {isVerified && (
+                        <img
+                          src="/icons/verification/lvl2_verified.png"
+                          alt="Verified User"
+                          title="Verified on platform"
+                          className="w-3.5 h-3.5 shrink-0 object-contain"
+                        />
+                      )}
+                      {(user.subscriptiontype || user.subscriptionType) &&
+                        (user.subscriptiontype || user.subscriptionType) !== 'Free' && (
+                          <SubscriptionIcon
+                            plan={user.subscriptiontype || user.subscriptionType}
+                            className="w-3.5 h-3.5 shrink-0"
+                          />
+                        )}
+                      {renderFollowBadge(user.is_following, user.is_followed_by)}
+                    </div>
+                    <div className="text-[11px] text-zinc-500 truncate mt-0.5">
+                      @{user.handle || 'user'}
+                      {!isVerified && (
+                        <span className="ml-1.5 text-amber-600 dark:text-amber-400">
+                          · Not verified
+                        </span>
+                      )}
+                    </div>
+                  </div>
                 </div>
-                <div className="text-[11px] text-zinc-500 truncate">
-                  @{user.handle || 'user'}
-                  {!isVerified && (
-                    <span className="ml-1.5 text-amber-600 dark:text-amber-400">
-                      · Not verified on platform
+
+                <div className="flex items-center gap-2 shrink-0">
+                  {user.matchPercent > 0 && (
+                    <CircularMatchRing percentage={user.matchPercent} size={32} strokeWidth={3} />
+                  )}
+                  {isVerified ? (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleAddCandidate(user);
+                      }}
+                      className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-bold bg-zinc-100 hover:bg-zinc-200 dark:bg-white/10 dark:hover:bg-white/15 text-zinc-900 dark:text-white border border-zinc-200 dark:border-white/15 transition cursor-pointer shrink-0"
+                    >
+                      <UserPlus className="w-3 h-3" />
+                      <span>Add</span>
+                    </button>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-medium text-zinc-500 dark:text-zinc-400 bg-zinc-100 dark:bg-zinc-800/80 border border-zinc-200 dark:border-zinc-700 shrink-0">
+                      <AlertCircle className="w-3 h-3 text-amber-500/80" />
+                      <span>Unverified</span>
                     </span>
                   )}
                 </div>
               </div>
+
+              {sortedSkills.length > 0 && (
+                <div className="flex items-center flex-wrap gap-1 pt-1.5 border-t border-zinc-200/60 dark:border-white/5">
+                  <Wrench className="w-3 h-3 text-zinc-400 dark:text-zinc-500 shrink-0 mr-0.5" />
+                  {sortedSkills.slice(0, 5).map((sk) => {
+                    const meta = [
+                      sk.proficiency ? sk.proficiency : '',
+                      sk.years > 0 ? `${sk.years}y` : '',
+                    ].filter(Boolean);
+                    return (
+                      <span
+                        key={sk.name}
+                        className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded border text-[10px] ${
+                          sk.isMatched
+                            ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30 font-medium'
+                            : 'bg-zinc-100 dark:bg-white/5 text-zinc-500 dark:text-zinc-400 border-zinc-200 dark:border-white/10'
+                        }`}
+                      >
+                        <span>{sk.name}</span>
+                        {meta.length > 0 && (
+                          <span className="text-[9px] opacity-75">· {meta.join(' · ')}</span>
+                        )}
+                      </span>
+                    );
+                  })}
+                </div>
+              )}
             </div>
-            {isVerified ? (
-              <div className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-800 shrink-0">
-                <UserPlus className="w-3.5 h-3.5" />
-                <span>Add</span>
-              </div>
-            ) : (
-              <div className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-medium text-zinc-500 dark:text-zinc-400 bg-zinc-100 dark:bg-zinc-800/80 border border-zinc-200 dark:border-zinc-700 shrink-0">
-                <AlertCircle className="w-3.5 h-3.5 text-amber-500/80" />
-                <span>Unverified</span>
-              </div>
-            )}
-          </button>
-        );
-      })}
-    </div>
-  );
+          );
+        })}
+      </div>
+    );
+  };
 
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs overflow-y-auto">
-      <div className="relative w-full max-w-4xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl shadow-2xl p-6 sm:p-7 space-y-5 my-8">
-        {/* Header */}
-        <div className="flex items-start justify-between gap-4 border-b border-zinc-100 dark:border-zinc-800/80 pb-4">
-          <div>
-              <h2 className="text-lg font-bold text-zinc-900 dark:text-white flex items-center gap-2">
+    <div
+      onClick={onClose}
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs overflow-y-auto"
+    >
+      <form
+        onSubmit={handleSubmit}
+        onClick={(e) => e.stopPropagation()}
+        className="w-full max-w-[1560px] flex flex-col lg:flex-row items-stretch lg:items-center justify-center gap-4 lg:gap-0 my-auto"
+      >
+        {/* LEFT CONNECTED MODAL (lg:order-1): Freelancer Profile Preview */}
+        <AnimatePresence>
+          {previewFreelancer && (
+            <motion.div
+              key={previewFreelancer.id}
+              initial={{ opacity: 0, x: 20, scale: 0.97 }}
+              animate={{ opacity: 1, x: 0, scale: 1 }}
+              exit={{ opacity: 0, x: 14, scale: 0.97 }}
+              transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+              className="lg:order-1 flex flex-col lg:flex-row items-stretch lg:items-center shrink-0"
+            >
+              <FreelancerPreviewModal
+                freelancer={previewFreelancer}
+                onClose={() => setPreviewFreelancer(null)}
+                onCloseDrawer={onClose}
+              />
+              {/* Connector: Preview -> Search */}
+              <motion.div
+                initial={{ scaleX: 0, opacity: 0 }}
+                animate={{ scaleX: 1, opacity: 1 }}
+                transition={{ duration: 0.18, delay: 0.06, ease: 'easeOut' }}
+                style={{ transformOrigin: 'right center' }}
+                className="hidden lg:flex items-center shrink-0 pointer-events-none"
+                aria-hidden="true"
+              >
+                <div className="h-2 w-2 rounded-full bg-zinc-400 dark:bg-white/40 -ml-1 z-10" />
+                <div className="w-5 h-[1.5px] bg-zinc-300 dark:bg-white/25" />
+                <div className="h-2 w-2 rounded-full bg-zinc-400 dark:bg-white/40 -mr-1 z-10" />
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* CENTER PANEL (lg:order-2): Search & Add */}
+        <div className="lg:order-2 w-full lg:w-[370px] xl:w-[400px] shrink-0 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl shadow-2xl p-5 space-y-4">
+          {/* Header */}
+          <div className="flex items-start justify-between gap-4 border-b border-zinc-100 dark:border-zinc-800/80 pb-3.5">
+            <div>
+              <h2 className="text-base font-bold text-zinc-900 dark:text-white flex items-center gap-2 flex-wrap">
                 <span>Nominate Team Subcontractors</span>
                 <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300 uppercase tracking-wide">
                   Batch Invitation
                 </span>
               </h2>
-              <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
-                Add specialists to assist on your contract milestones. The client must review and approve them before they gain workspace access.
+              <p className="text-[11px] text-zinc-500 dark:text-zinc-400 mt-0.5">
+                Add specialists to assist on your contract milestones.
               </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={onClose}
+              className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition cursor-pointer shrink-0"
+            >
+              <X className="w-4 h-4" />
+            </button>
           </div>
 
-          <button
-            type="button"
-            onClick={onClose}
-            className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
+          {/* Contract Scope & Required Skills */}
+          {(contractTitle || requiredSkills.length > 0) && (
+            <div className="px-3 py-2.5 rounded-xl bg-zinc-50 dark:bg-zinc-800/40 border border-zinc-200/80 dark:border-zinc-800 space-y-2 text-xs">
+              {contractTitle && (
+                <div className="flex items-center gap-2">
+                  <Briefcase className="w-4 h-4 text-zinc-500 dark:text-zinc-400 shrink-0" />
+                  <span className="text-zinc-500 dark:text-zinc-400 shrink-0">Scope:</span>
+                  <span className="font-semibold text-zinc-800 dark:text-zinc-200 truncate">
+                    {contractTitle}
+                  </span>
+                </div>
+              )}
+              {requiredSkills.length > 0 && (
+                <div className="flex items-center flex-wrap gap-1.5 pt-1.5 border-t border-zinc-200/60 dark:border-zinc-700/50">
+                  <Wrench className="w-3 h-3 text-zinc-400 dark:text-zinc-500 shrink-0" />
+                  <span className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400 mr-0.5">
+                    Required:
+                  </span>
+                  {requiredSkills.map((skill) => (
+                    <span
+                      key={skill}
+                      className="px-1.5 py-0.5 rounded bg-zinc-100 dark:bg-white/5 text-zinc-700 dark:text-zinc-300 border border-zinc-200 dark:border-white/10 text-[10px] font-medium"
+                    >
+                      {skill}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
 
-        {/* Contract Scope Badge */}
-        {contractTitle && (
-          <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-zinc-50 dark:bg-zinc-800/40 border border-zinc-200/80 dark:border-zinc-800 text-xs">
-            <Briefcase className="w-4 h-4 text-blue-500 shrink-0" />
-            <span className="text-zinc-500 dark:text-zinc-400">Contract Scope:</span>
-            <span className="font-semibold text-zinc-800 dark:text-zinc-200 truncate">
-              {contractTitle}
-            </span>
-          </div>
-        )}
-
-        <form onSubmit={handleSubmit} className="space-y-6">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
-            {/* Left Column: Search & Candidate Configuration */}
-            <div className="space-y-5 min-w-0">
           {/* Member Search & Selection */}
           <div className="space-y-2">
             <label className="text-xs font-bold text-zinc-800 dark:text-zinc-200 flex items-center justify-between">
@@ -559,42 +763,84 @@ export const SubcontractProposalModal: React.FC<SubcontractProposalModalProps> =
               'Platform specialists search results'
             )}
 
-            {/* Suggested Connections (Following / Followers) when not searching */}
+            {/* Suggested Freelancers (Matched by Job / Gig Skills) when not searching */}
             {!searchQuery.trim() && (isLoadingSuggested || visibleSuggested.length > 0) && (
               <div className="space-y-1.5 pt-1">
                 <div className="flex items-center justify-between text-[11px] font-semibold text-zinc-500 dark:text-zinc-400">
-                  <span>Suggested (Following &amp; Followers)</span>
+                  <span>
+                    {requiredSkills.length > 0
+                      ? 'Suggested Freelancers (Skill Matched)'
+                      : 'Suggested Freelancers'}
+                  </span>
                   {visibleSuggested.length > 0 && (
                     <span className="text-[10px] font-normal">
-                      {visibleSuggested.length} connection(s)
+                      {visibleSuggested.length} freelancer(s)
                     </span>
                   )}
                 </div>
                 {isLoadingSuggested ? (
                   <div className="flex items-center justify-center gap-2 py-4 text-xs text-zinc-500 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-950/40">
                     <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                    <span>Loading connections...</span>
+                    <span>Finding matching freelancers...</span>
                   </div>
                 ) : (
                   renderSpecialistList(
                     visibleSuggested,
                     hoveredSuggestedIdx,
                     setHoveredSuggestedIdx,
-                    'Suggested connections'
+                    'Suggested freelancers'
                   )
                 )}
               </div>
             )}
           </div>
+        </div>
 
-          {/* Selected Candidates List */}
+        {/* SELECTED SPECIALISTS PANEL (lg:order-3, left of Note/Terms modal) */}
+        <AnimatePresence>
           {candidates.length > 0 && (
-            <div className="space-y-3">
-              <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
-                Configuring Candidates ({candidates.length})
-              </h3>
+            <motion.div
+              key="selected-specialists-panel"
+              initial={{ opacity: 0, x: -20, scale: 0.97 }}
+              animate={{ opacity: 1, x: 0, scale: 1 }}
+              exit={{ opacity: 0, x: -14, scale: 0.97 }}
+              transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
+              className="lg:order-3 flex flex-col lg:flex-row items-stretch lg:items-center shrink-0"
+            >
+              {/* Connector: Search -> Selected */}
+              <motion.div
+                initial={{ scaleX: 0, opacity: 0 }}
+                animate={{ scaleX: 1, opacity: 1 }}
+                transition={{ duration: 0.18, delay: 0.06, ease: 'easeOut' }}
+                style={{ transformOrigin: 'left center' }}
+                className="hidden lg:flex items-center shrink-0 pointer-events-none"
+                aria-hidden="true"
+              >
+                <div className="h-2 w-2 rounded-full bg-zinc-400 dark:bg-white/40 -ml-1 z-10" />
+                <div className="w-5 h-[1.5px] bg-zinc-300 dark:bg-white/25" />
+                <div className="h-2 w-2 rounded-full bg-zinc-400 dark:bg-white/40 -mr-1 z-10" />
+              </motion.div>
 
-              <div className="space-y-3 max-h-80 overflow-y-auto pr-1 scroll-thin">
+              <div className="w-full lg:w-[330px] xl:w-[355px] shrink-0 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl shadow-2xl p-5 space-y-3">
+                <div className="border-b border-zinc-100 dark:border-zinc-800/80 pb-3 flex items-start justify-between gap-2">
+                  <div>
+                    <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-900 dark:text-white">
+                      Selected Specialists ({candidates.length})
+                    </h3>
+                    <p className="text-[11px] text-zinc-500 dark:text-zinc-400 mt-0.5">
+                      Configure role, milestone &amp; permissions
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setCandidates([])}
+                    className="px-2 py-1 rounded-lg text-[11px] font-semibold text-zinc-500 dark:text-zinc-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition cursor-pointer shrink-0"
+                  >
+                    Unselect All
+                  </button>
+                </div>
+
+                <div className="space-y-3 max-h-[460px] overflow-y-auto pr-1 scroll-thin">
                 {candidates.map((cand, idx) => (
                   <div
                     key={cand.candidate_account_id}
@@ -623,6 +869,12 @@ export const SubcontractProposalModal: React.FC<SubcontractProposalModalProps> =
                                 className="w-4 h-4 shrink-0 object-contain"
                               />
                             )}
+                            {cand.subscription_type && cand.subscription_type !== 'Free' && (
+                              <SubscriptionIcon
+                                plan={cand.subscription_type}
+                                className="w-3.5 h-3.5 shrink-0"
+                              />
+                            )}
                             {renderFollowBadge(cand.is_following, cand.is_followed_by)}
                           </div>
                           <div className="text-[11px] text-zinc-500">
@@ -642,22 +894,6 @@ export const SubcontractProposalModal: React.FC<SubcontractProposalModalProps> =
                     </div>
 
                     <div className="space-y-3 text-xs">
-                      {/* Role selection */}
-                      <div>
-                        <label className="block text-[11px] font-semibold text-zinc-600 dark:text-zinc-300 mb-1">
-                          Specialist Role
-                        </label>
-                        <input
-                          type="text"
-                          value={cand.role_title}
-                          onChange={(e) =>
-                            handleUpdateCandidate(idx, 'role_title', e.target.value)
-                          }
-                          placeholder="e.g. Colorist, Sound Designer"
-                          className="w-full px-3 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-xs text-zinc-900 dark:text-white focus:outline-none focus:border-blue-500"
-                        />
-                      </div>
-
                       {/* Multi-milestone mapping (full width with M1, M2, M3 badges) */}
                       <div className="relative">
                         <label className="flex items-center justify-between text-[11px] font-semibold text-zinc-600 dark:text-zinc-300 mb-1">
@@ -670,14 +906,25 @@ export const SubcontractProposalModal: React.FC<SubcontractProposalModalProps> =
                         </label>
                         <button
                           type="button"
-                          onClick={() => {
+                          onClick={(e) => {
                             setHoveredMilestoneOptIdx(null);
-                            setOpenMilestoneIdx((prev) => (prev === idx ? null : idx));
+                            if (openMilestoneIdx === idx) {
+                              setOpenMilestoneIdx(null);
+                              setMilestoneMenuRect(null);
+                            } else {
+                              const rect = e.currentTarget.getBoundingClientRect();
+                              setMilestoneMenuRect({
+                                top: rect.bottom + 6,
+                                left: rect.left,
+                                width: rect.width,
+                              });
+                              setOpenMilestoneIdx(idx);
+                            }
                           }}
                           aria-expanded={openMilestoneIdx === idx}
                           className="w-full flex items-center justify-between gap-2 px-3 py-2 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-xs text-zinc-900 dark:text-white hover:border-zinc-300 dark:hover:border-zinc-600 focus:outline-none focus:border-blue-500 transition cursor-pointer"
                         >
-                          <div className="flex items-center gap-1.5 min-w-0 flex-wrap">
+                          <div className="flex items-center gap-1.5 min-w-0 flex-1 flex-nowrap overflow-hidden">
                             {cand.assigned_milestone_ids.length === 0 ? (
                               <span className="truncate font-medium">Full Contract Scope (All Milestones)</span>
                             ) : cand.assigned_milestone_ids.length === 1 ? (
@@ -717,14 +964,32 @@ export const SubcontractProposalModal: React.FC<SubcontractProposalModalProps> =
                           />
                         </button>
 
-                        {openMilestoneIdx === idx && (
-                          <div
-                            role="listbox"
-                            aria-multiselectable="true"
-                            aria-label="Assigned Milestone Scope"
-                            onMouseLeave={() => setHoveredMilestoneOptIdx(null)}
-                            className="gs-listbox-scroll relative mt-1.5 grid gap-0.5 max-h-48 overflow-y-auto overflow-x-hidden p-1.5 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 shadow-xl z-20"
-                          >
+                        {openMilestoneIdx === idx &&
+                          milestoneMenuRect &&
+                          createPortal(
+                            <>
+                              <div
+                                className="fixed inset-0 z-[79]"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setOpenMilestoneIdx(null);
+                                  setMilestoneMenuRect(null);
+                                }}
+                              />
+                              <div
+                                role="listbox"
+                                aria-multiselectable="true"
+                                aria-label="Assigned Milestone Scope"
+                                onClick={(e) => e.stopPropagation()}
+                                onMouseLeave={() => setHoveredMilestoneOptIdx(null)}
+                                style={{
+                                  position: 'fixed',
+                                  top: milestoneMenuRect.top,
+                                  left: milestoneMenuRect.left,
+                                  width: milestoneMenuRect.width,
+                                }}
+                                className="gs-listbox-scroll z-[80] grid gap-0.5 max-h-48 overflow-y-auto overflow-x-hidden p-1.5 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 shadow-2xl"
+                              >
                             <span
                               aria-hidden="true"
                               style={{
@@ -774,7 +1039,9 @@ export const SubcontractProposalModal: React.FC<SubcontractProposalModalProps> =
                               );
                             })}
                           </div>
-                        )}
+                            </>,
+                            document.body
+                          )}
                       </div>
                     </div>
 
@@ -820,13 +1087,29 @@ export const SubcontractProposalModal: React.FC<SubcontractProposalModalProps> =
                   </div>
                 ))}
               </div>
-            </div>
+              </div>
+            </motion.div>
           )}
+        </AnimatePresence>
 
-            </div>
+        {/* RIGHT PANEL (lg:order-4, always shown by default): Note, Terms & Submit */}
+        <div className="hidden lg:flex lg:order-4 items-center shrink-0 pointer-events-none" aria-hidden="true">
+          <div className="h-2 w-2 rounded-full bg-zinc-400 dark:bg-white/40 -ml-1 z-10" />
+          <div className="w-5 h-[1.5px] bg-zinc-300 dark:bg-white/25" />
+          <div className="h-2 w-2 rounded-full bg-zinc-400 dark:bg-white/40 -mr-1 z-10" />
+        </div>
 
-            {/* Right Column: Note & Subcontracting Agreement */}
-            <div className="space-y-5 min-w-0">
+        <div className="lg:order-5 w-full lg:w-[350px] xl:w-[380px] shrink-0 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl shadow-2xl p-5 space-y-4">
+              {/* Notification Notice */}
+              <div className="p-3 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950/60 flex items-start gap-2.5 text-xs text-zinc-600 dark:text-zinc-300">
+                <Info className="w-4 h-4 text-zinc-500 dark:text-zinc-400 shrink-0 mt-0.5" />
+                <p className="leading-relaxed">
+                  Selected specialist{candidates.length === 1 ? '' : 's'} will be{' '}
+                  <strong className="text-zinc-900 dark:text-white">notified</strong> of your
+                  nomination and will join the workspace once the client approves.
+                </p>
+              </div>
+
           {/* Proposal Justification Note */}
           <div className="space-y-1.5">
             <label className="text-xs font-bold text-zinc-800 dark:text-zinc-200 flex items-center justify-between">
@@ -854,13 +1137,13 @@ export const SubcontractProposalModal: React.FC<SubcontractProposalModalProps> =
           </div>
 
           {/* Real Business Standard Terms & Conditions Box */}
-          <div className="p-4 rounded-xl border border-blue-200 dark:border-blue-900/60 bg-blue-50/50 dark:bg-blue-950/20 space-y-2.5">
-            <div className="flex items-center gap-2 text-xs font-bold text-blue-900 dark:text-blue-200">
-              <ShieldCheck className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+          <div className="p-4 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950/60 space-y-2.5">
+            <div className="flex items-center gap-2 text-xs font-bold text-zinc-900 dark:text-zinc-100">
+              <ShieldCheck className="w-4 h-4 text-zinc-500 dark:text-zinc-400 shrink-0" />
               <span>Subcontracting Agreement & Lead Liability Terms</span>
             </div>
 
-            <ul className="text-[11px] text-zinc-600 dark:text-zinc-400 space-y-1 list-disc pl-4 leading-relaxed">
+            <ul className="text-[11px] text-zinc-600 dark:text-zinc-400 space-y-1 list-disc pl-4 leading-relaxed max-h-36 overflow-y-auto pr-1 scroll-thin">
               <li>
                 <strong className="text-zinc-800 dark:text-zinc-200">Lead Contractor Accountability:</strong> You remain 100% accountable to the client for the quality, deadlines, and deliverables produced by all nominated specialists.
               </li>
@@ -878,7 +1161,7 @@ export const SubcontractProposalModal: React.FC<SubcontractProposalModalProps> =
               </li>
             </ul>
 
-            <label className="flex items-center gap-2.5 pt-2 border-t border-blue-200/60 dark:border-blue-900/40 text-xs font-semibold text-zinc-900 dark:text-white cursor-pointer select-none">
+            <label className="flex items-center gap-2.5 pt-2 border-t border-zinc-200 dark:border-zinc-800 text-xs font-semibold text-zinc-900 dark:text-white cursor-pointer select-none">
               <input
                 type="checkbox"
                 checked={termsAccepted}
@@ -888,30 +1171,28 @@ export const SubcontractProposalModal: React.FC<SubcontractProposalModalProps> =
               <span>I acknowledge and accept the subcontracting terms and lead accountability</span>
             </label>
           </div>
+
+              {/* Footer Actions inside Right Panel */}
+              <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-zinc-100 dark:border-zinc-800">
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="px-3.5 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 text-xs font-semibold text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition cursor-pointer"
+                >
+                  Cancel
+                </button>
+
+                <button
+                  type="submit"
+                  disabled={isSubmitting || candidates.length === 0 || !termsAccepted}
+                  className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 transition shadow-xs disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                >
+                  {isSubmitting && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                  <span>Submit Proposal ({candidates.length})</span>
+                </button>
+              </div>
             </div>
-          </div>
-
-          {/* Footer Actions */}
-          <div className="flex items-center justify-end gap-3 pt-3 border-t border-zinc-100 dark:border-zinc-800">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 text-xs font-semibold text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition cursor-pointer"
-            >
-              Cancel
-            </button>
-
-            <button
-              type="submit"
-              disabled={isSubmitting || candidates.length === 0 || !termsAccepted}
-              className="inline-flex items-center gap-2 px-5 py-2 rounded-xl text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 transition shadow-xs disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
-            >
-              {isSubmitting && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-              <span>Submit Proposal for Client Approval ({candidates.length})</span>
-            </button>
-          </div>
-        </form>
-      </div>
+      </form>
     </div>
   );
 };
