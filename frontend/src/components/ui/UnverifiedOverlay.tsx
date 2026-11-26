@@ -6,8 +6,11 @@ import { isStaffPlatformViewer } from "@/lib/staffPlatformView";
 
 export const UnverifiedOverlay = ({ featureName = "this area" }: { featureName?: string }) => {
   const navigate = useNavigate();
-  const isStaffPreview = isStaffPlatformViewer(useGlobalState((state) => state.user));
-  if (isStaffPreview) return null;
+  const user = useGlobalState((state) => state.user);
+  const isVerified = useGlobalState((state) => state.isVerified);
+  const isVerificationLoaded = useGlobalState((state) => state.isVerificationLoaded);
+  const isStaffPreview = isStaffPlatformViewer(user);
+  if (isStaffPreview || !isVerificationLoaded || isVerified) return null;
   return (
     <div className="absolute inset-0 z-40 bg-gray-50 dark:bg-dark-base">
       <div className="sticky top-[73px] h-[calc(100vh-73px)] w-full flex flex-col items-center justify-center p-4 text-center pb-32">

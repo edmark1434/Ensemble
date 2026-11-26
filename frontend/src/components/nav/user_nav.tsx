@@ -116,6 +116,7 @@ const UserNav: React.FC<UserNavProps> = () => {
     const location = useLocation();
     const user = useGlobalState((state) => state.user);
     const isVerified = useGlobalState((state) => state.isVerified);
+    const isVerificationLoaded = useGlobalState((state) => state.isVerificationLoaded);
     const isCollapsed = useGlobalState((state) => state.isSidebarCollapsed);
     const setIsCollapsed = useGlobalState((state) => state.setIsSidebarCollapsed);
     const isGuestMode = useGlobalState((state) => state.isGuestMode);
@@ -130,8 +131,8 @@ const UserNav: React.FC<UserNavProps> = () => {
         user?.verification_status === "Verified" ||
         (typeof window !== "undefined" && localStorage.getItem('ensemble:is_verified') === 'true')
     );
-    // Never show verify ad while session is resolving (user is null) or if verified/guest/staff
-    const showVerificationAd = Boolean(user) && !isAccountVerified && !hidePersonalNav;
+    // Never show verify ad while session/verification is resolving or if verified/guest/staff
+    const showVerificationAd = Boolean(user) && isVerificationLoaded && !isAccountVerified && !hidePersonalNav;
     const [isJobsOpen, setIsJobsOpen] = useState(false);
     const [isGigsOpen, setIsGigsOpen] = useState(false);
     const isTourActive = useTourStore((state) => state.isWalkthroughActive);

@@ -23,6 +23,7 @@ interface GlobalState {
   isVerificationModalOpen: boolean
   verificationModalMessage?: string
   isVerified: boolean
+  isVerificationLoaded: boolean
   subscriptionPlan: string | null
   isFloatingChatHidden: boolean
   isDevModeOpen: boolean
@@ -58,6 +59,7 @@ const useGlobalState = create<GlobalState>((set) => ({
   isVerificationModalOpen: false,
   verificationModalMessage: undefined,
   isVerified: typeof window !== 'undefined' ? localStorage.getItem('ensemble:is_verified') === 'true' : false,
+  isVerificationLoaded: typeof window !== 'undefined' ? localStorage.getItem('ensemble:is_verified') !== null : false,
   subscriptionPlan: null,
   isFloatingChatHidden: false,
   isDevModeOpen: false,
@@ -69,17 +71,28 @@ const useGlobalState = create<GlobalState>((set) => ({
   setSubscriptionPlan: (plan: string) => set({ subscriptionPlan: plan }),
   setUser:            (user) => {
     localStorage.setItem('isGuestMode', 'false');
-    const isVerified = user?.is_verified ?? user?.isVerified ?? (user?.verification_status === true || user?.verification_status === "Verified");
-    if (typeof isVerified === 'boolean') {
+    const explicitVerified =
+      typeof user?.is_verified === 'boolean'
+        ? user.is_verified
+        : typeof user?.isVerified === 'boolean'
+        ? user.isVerified
+        : typeof user?.verification_status === 'boolean'
+        ? user.verification_status
+        : typeof user?.verification_status === 'string'
+        ? user.verification_status.toLowerCase() === 'verified'
+        : undefined;
+    if (typeof explicitVerified === 'boolean') {
       try {
-        localStorage.setItem('ensemble:is_verified', String(isVerified));
+        localStorage.setItem('ensemble:is_verified', String(explicitVerified));
       } catch (_) {}
     }
     set({
       user,
       isAuthenticated: true,
       isGuestMode: false,
-      ...(typeof isVerified === 'boolean' ? { isVerified } : {}),
+      ...(typeof explicitVerified === 'boolean'
+        ? { isVerified: explicitVerified, isVerificationLoaded: true }
+        : {}),
     });
   },
   setIsGuestMode:     (isGuestMode) => {
@@ -100,6 +113,7 @@ const useGlobalState = create<GlobalState>((set) => ({
       accessToken: null,
       signUpData: null,
       isVerified: false,
+      isVerificationLoaded: false,
     });
   },
   setAccessToken: (accessToken) => set({ accessToken }),
@@ -118,7 +132,7 @@ const useGlobalState = create<GlobalState>((set) => ({
     try {
       localStorage.setItem('ensemble:is_verified', String(isVerified));
     } catch (_) {}
-    set({ isVerified });
+    set({ isVerified, isVerificationLoaded: true });
   },
 }))
 
