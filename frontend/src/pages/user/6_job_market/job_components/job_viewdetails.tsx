@@ -13,6 +13,8 @@ import { continueIfAccountVerified } from "@/lib/accountVerification";
 import { motion, AnimatePresence } from "framer-motion";
 import { computeJobRankingBreakdown } from "../job_ranking";
 import { ApplicationWindowTimer } from "./job_utilities/ApplicationWindowTimer";
+import { JobSideInsightsPanel } from "./JobSideInsightsPanel";
+import { FreelancerPreviewModal, type SelectedFreelancerPreview } from "./FreelancerPreviewModal";
 
 interface JobViewDetailsProps {
   selectedJob: Job | null;
@@ -68,6 +70,21 @@ const JobViewDetails: React.FC<JobViewDetailsProps> = ({ selectedJob, onClose, o
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isScoreOpen, setIsScoreOpen] = useState(false);
   const [isCheckingAccess, setIsCheckingAccess] = useState(false);
+  const [showSideInsights, setShowSideInsights] = useState(false);
+  const [selectedFreelancer, setSelectedFreelancer] = useState<SelectedFreelancerPreview | null>(null);
+
+  React.useEffect(() => {
+    setSelectedFreelancer(null);
+    if (!selectedJob) {
+      setShowSideInsights(false);
+      return;
+    }
+    setShowSideInsights(false);
+    const timer = window.setTimeout(() => {
+      setShowSideInsights(true);
+    }, 340);
+    return () => window.clearTimeout(timer);
+  }, [selectedJob?.id]);
   const rankInfo = selectedJob ? computeJobRankingBreakdown(selectedJob) : null;
   const navigate = useNavigate();
   const isGuestMode = useGlobalState((state) => state.isGuestMode);
@@ -110,16 +127,88 @@ const JobViewDetails: React.FC<JobViewDetailsProps> = ({ selectedJob, onClose, o
   return (
     <>
       <div
-        className={`fixed inset-0 bg-black/60 backdrop-blur-xs z-[100] transition-opacity flex items-center justify-start pl-8 ${
+        className={`fixed inset-0 bg-black/60 backdrop-blur-xs z-[100] transition-opacity flex items-center justify-end lg:pr-[560px] ${
           selectedJob ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"
         }`}
         onClick={onClose}
       >
         {selectedJob && (
-          <div data-tour="job-detail-exit-pill" className="hidden lg:flex items-center gap-2 px-3 py-1.5 rounded-full bg-gray-100 dark:bg-white/10 border border-gray-200 dark:border-white/10 text-gray-600 dark:text-zinc-300 text-xs font-medium animate-pulse backdrop-blur-md cursor-pointer">
-            <MousePointerClick className="h-3.5 w-3.5 text-gray-500 dark:text-zinc-400" />
-            <span>Click anywhere outside to close</span>
-          </div>
+          <>
+            <div data-tour="job-detail-exit-pill" className="hidden lg:inline-flex fixed bottom-6 left-8 items-center gap-2 px-3 py-1.5 rounded-full bg-gray-100 dark:bg-white/10 border border-gray-200 dark:border-white/10 text-gray-600 dark:text-zinc-300 text-xs font-medium animate-pulse backdrop-blur-md cursor-pointer shrink-0">
+              <MousePointerClick className="h-3.5 w-3.5 text-gray-500 dark:text-zinc-400" />
+              <span>Click anywhere outside to close</span>
+            </div>
+
+            <AnimatePresence>
+              {showSideInsights && (
+                <motion.div
+                  key={selectedJob.id}
+                  initial={{ opacity: 0, x: 24, scale: 0.97 }}
+                  animate={{ opacity: 1, x: 0, scale: 1 }}
+                  exit={{ opacity: 0, x: 16, scale: 0.97 }}
+                  transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+                  className="hidden lg:flex items-center ml-auto pl-4"
+                >
+                  <AnimatePresence>
+                    {selectedFreelancer && (
+                      <motion.div
+                        key={selectedFreelancer.id}
+                        initial={{ opacity: 0, x: 20, scale: 0.97 }}
+                        animate={{ opacity: 1, x: 0, scale: 1 }}
+                        exit={{ opacity: 0, x: 14, scale: 0.97 }}
+                        transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+                        className="flex items-center"
+                      >
+                        <FreelancerPreviewModal
+                          freelancer={selectedFreelancer}
+                          onClose={() => setSelectedFreelancer(null)}
+                          onCloseDrawer={onClose}
+                        />
+                        {/* Connector line attaching preview modal to Suggested Freelancers */}
+                        <motion.div
+                          initial={{ scaleX: 0, opacity: 0 }}
+                          animate={{ scaleX: 1, opacity: 1 }}
+                          transition={{ duration: 0.18, delay: 0.06, ease: "easeOut" }}
+                          style={{ transformOrigin: "right center" }}
+                          onClick={(e) => e.stopPropagation()}
+                          className="flex items-center shrink-0 pointer-events-none"
+                          aria-hidden="true"
+                        >
+                          <div className="h-2 w-2 rounded-full bg-gray-300 dark:bg-white/40 -ml-1 z-10" />
+                          <div className="w-5 h-[1.5px] bg-gray-300 dark:bg-white/25" />
+                          <div className="h-2 w-2 rounded-full bg-gray-300 dark:bg-white/40 -mr-1 z-10" />
+                        </motion.div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+
+                  <JobSideInsightsPanel
+                    job={selectedJob}
+                    onCloseDrawer={onClose}
+                    onOpenLogin={() => setIsModalOpen(true)}
+                    selectedFreelancerId={selectedFreelancer?.id ?? null}
+                    onSelectFreelancer={(f) =>
+                      setSelectedFreelancer((prev) => (prev?.id === f.id ? null : f))
+                    }
+                  />
+                  {/* Connector line attaching the insights panel to the side drawer */}
+                  <motion.div
+                    initial={{ scaleX: 0, opacity: 0 }}
+                    animate={{ scaleX: 1, opacity: 1 }}
+                    transition={{ duration: 0.22, delay: 0.1, ease: "easeOut" }}
+                    style={{ transformOrigin: "right center" }}
+                    onClick={(e) => e.stopPropagation()}
+                    className="flex items-center shrink-0 pointer-events-none"
+                    aria-hidden="true"
+                  >
+                    <div className="h-2 w-2 rounded-full bg-gray-300 dark:bg-white/40 -ml-1 z-10" />
+                    <div className="w-6 h-[1.5px] bg-gray-300 dark:bg-white/25" />
+                    <div className="h-2 w-2 rounded-full bg-gray-300 dark:bg-white/40 -mr-1" />
+                  </motion.div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </>
         )}
       </div>
 
